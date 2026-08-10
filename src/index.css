@@ -1,0 +1,198 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 97%;
+    --foreground: 0 0% 8%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 8%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 8%;
+
+    /* Raudt frå HM-logoen */
+    --primary: 357 84% 45%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 0 0% 9%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 0 0% 93%;
+    --muted-foreground: 0 0% 36%;
+
+    --accent: 0 0% 18%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 0 0% 87%;
+    --input: 0 0% 87%;
+    --ring: 0 75% 45%;
+
+    --radius: 0.625rem;
+
+    --sidebar-background: 0 0% 8%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 75% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 15%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 18%;
+    --sidebar-ring: 0 75% 50%;
+
+    --success: 160 60% 40%;
+    --success-foreground: 0 0% 100%;
+    --warning: 35 90% 55%;
+    --warning-foreground: 0 0% 100%;
+    /* Mørk gulbrun for tekst – gul på kvitt gir for låg kontrast */
+    --warning-ink: 32 100% 24%;
+
+    /* Den svarte merkevareflata (topplinje, innloggingsside). Med vilje LIK i lys
+       og mørk modus: identiteten er svart med raud kant, og kvit tekst ligg oppå.
+       --secondary kan ikkje brukast til dette – han er lys i mørk modus. */
+    --brand-surface: 0 0% 9%;
+    --brand-surface-foreground: 0 0% 100%;
+  }
+
+  .dark {
+    --background: 0 0% 6%;
+    --foreground: 0 0% 93%;
+    --card: 0 0% 10%;
+    --card-foreground: 0 0% 93%;
+    --popover: 0 0% 10%;
+    --popover-foreground: 0 0% 93%;
+    --primary: 0 75% 50%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 18%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 0 0% 15%;
+    --muted-foreground: 0 0% 55%;
+    --accent: 0 0% 20%;
+    --accent-foreground: 0 0% 100%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 18%;
+    --input: 0 0% 18%;
+    --ring: 0 75% 50%;
+    --sidebar-background: 0 0% 5%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 0 75% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 0 0% 14%;
+    --sidebar-ring: 0 75% 50%;
+    --success: 160 55% 45%;
+    --success-foreground: 0 0% 100%;
+    --warning: 40 90% 60%;
+    --warning-foreground: 0 0% 10%;
+    --warning-ink: 40 95% 72%;
+    /* Litt lysare enn sidebakgrunnen (6 %) så linja framleis skil seg ut */
+    --brand-surface: 0 0% 11%;
+    --brand-surface-foreground: 0 0% 100%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: 'DM Sans', system-ui, sans-serif;
+  }
+
+  /* Dempa merkevare-bakgrunn: raud glød frå toppen og eit fint rutenett,
+     så flatene ikkje blir heilt kvite og tomme */
+  .hm-page {
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(48rem 24rem at 50% -8rem, hsl(var(--primary) / 0.14), transparent 70%),
+      linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+    background-size: 100% 100%, 44px 44px, 44px 44px;
+    background-attachment: fixed, fixed, fixed;
+  }
+
+  /* Synleg fokusmarkering for tastaturnavigasjon */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Tal i tabellar og statistikk skal ikkje hoppe i breidde */
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Svart topplinje med raud kant – hentar identiteten frå logoen */
+  .hm-topbar {
+    @apply border-b-4 border-primary;
+    background-color: hsl(var(--brand-surface));
+    color: hsl(var(--brand-surface-foreground));
+  }
+
+  /* Same svarte flate utan kanten – innloggingsside, skjema-topp, dagsvelgar */
+  .hm-brand-surface {
+    background-color: hsl(var(--brand-surface));
+    color: hsl(var(--brand-surface-foreground));
+  }
+
+  /* Logofila har si eiga kvite bakgrunn og "H"-en er kvit, så merket kan aldri
+     leggjast rett på ei mørk flate – det må alltid stå på ei kvit plate. */
+  .hm-logo-badge {
+    @apply bg-white rounded-lg p-1.5 flex items-center justify-center shrink-0;
+  }
+
+  /* Same sak, men diskret utgåve til botnteksten */
+  .hm-logo-badge-sm {
+    @apply bg-white rounded p-1 flex items-center justify-center shrink-0;
+  }
+
+  /* Kort med diskret djupn som løftar seg litt ved hover */
+  .hm-card {
+    @apply bg-card border border-border rounded-lg transition-shadow duration-200;
+    box-shadow: 0 1px 2px hsl(0 0% 0% / 0.06);
+  }
+
+  .hm-card-interactive:hover {
+    box-shadow: 0 4px 16px hsl(0 0% 0% / 0.1);
+  }
+
+  /* Svart skugge forsvinn på mørk flate – der markerer vi djupn med ein lysare kant i staden */
+  .dark .hm-card {
+    box-shadow: none;
+    @apply border-border;
+  }
+
+  .dark .hm-card-interactive:hover {
+    box-shadow: 0 4px 16px hsl(0 0% 0% / 0.5);
+  }
+
+  .hm-chip {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium;
+  }
+
+  /* Kompakt nøkkeltal-rute i dagsoppsummeringa */
+  .hm-stat {
+    @apply flex-1 min-w-[7rem] rounded-lg bg-card border border-border px-3 py-2.5;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
