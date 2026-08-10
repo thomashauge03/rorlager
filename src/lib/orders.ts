@@ -265,6 +265,40 @@ export async function setStock(pipeTypeId: string, stock: number, note?: string)
   return Number(data);
 }
 
+// ------------------------------------------------------------------ prisar
+
+export type MarkupScope = {
+  /** Avgrens til éi varegruppe. Utelaten = alle. */
+  categoryId?: string | null;
+  /** Avgrens til utvalde varer. Utelaten = alle. */
+  pipeTypeIds?: string[] | null;
+  /** Rund av til nærmaste: 1 = heile kroner, 0.01 = øre. */
+  roundTo?: number;
+};
+
+/**
+ * Reknar salsprisen på nytt frå innkjøpsprisen. Returnerer talet på varer som
+ * fekk ny pris – varer utan innkjøpspris blir hoppa over, og differansen mellom
+ * dette talet og lista er det grensesnittet må forklare.
+ */
+export async function applyMarkup(percent: number, scope: MarkupScope = {}): Promise<number> {
+  const { data, error } = await supabase.rpc("pipe_apply_markup", {
+    p_percent: percent,
+    p_category_id: scope.categoryId ?? null,
+    p_pipe_type_ids: scope.pipeTypeIds ?? null,
+    p_round_to: scope.roundTo ?? 1,
+  });
+  if (error) fail("Klarte ikke å oppdatere prisene", error);
+  return Number(data ?? 0);
+}
+
+/** Reknar ut same pris som databasen gjer, slik at førehandsvisinga stemmer. */
+export function previewPrice(costPrice: number | null, percent: number, roundTo = 1): number | null {
+  if (costPrice === null || costPrice === undefined) return null;
+  const step = roundTo || 1;
+  return Math.round((costPrice * (1 + percent / 100)) / step) * step;
+}
+
 export async function fetchStockLog(opts: { pipeTypeId?: string; limit?: number } = {}): Promise<PipeStockLogRow[]> {
   let query = supabase
     .from("pipe_stock_log")

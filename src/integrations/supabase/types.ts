@@ -105,6 +105,8 @@ export type PipeSettingsRow = {
   require_phone: boolean;
   require_signature: boolean;
   vat_rate: number;
+  /** Påslag i prosent frå cost_price til price. Brukt av prisjusteringa. */
+  markup_percent: number;
   updated_at: string;
 };
 
@@ -161,6 +163,16 @@ export type Database = {
         Returns: number;
       };
       pipe_delete_order: { Args: { p_order_id: string }; Returns: void };
+      pipe_apply_markup: {
+        Args: {
+          p_percent: number;
+          p_category_id?: string | null;
+          p_pipe_type_ids?: string[] | null;
+          p_round_to?: number;
+        };
+        Returns: number;
+      };
+      pipe_missing_cost_count: { Args: Record<string, never>; Returns: number };
       pipe_create_invoice: {
         Args: {
           p_customer_name: string;

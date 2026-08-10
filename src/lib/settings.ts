@@ -21,6 +21,7 @@ export const DEFAULT_SETTINGS: PipeSettingsRow = {
   require_phone: true,
   require_signature: false,
   vat_rate: 25,
+  markup_percent: 25,
   updated_at: new Date(0).toISOString(),
 };
 

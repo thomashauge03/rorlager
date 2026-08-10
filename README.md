@@ -18,8 +18,10 @@ npm run dev          # http://localhost:8080
 ### Database
 
 Åpne Supabase-prosjektet -> **SQL Editor** -> lim inn hele [`supabase-setup.sql`](supabase-setup.sql)
-og trykk Run. Den oppretter tabeller, tilgangsregler, funksjoner og en startkatalog
-med 23 rørtyper. Filen kan kjøres flere ganger uten å ødelegge data.
+og trykk Run. Den oppretter tabeller, tilgangsregler, funksjoner og varekatalogen.
+
+Har du allerede kjørt oppsettet én gang, kjør [`supabase-oppdatering.sql`](supabase-oppdatering.sql)
+i stedet — den inneholder bare det som er nytt.
 
 Sjekk at alt sitter:
 
@@ -68,6 +70,24 @@ og tilbakeføringen logges.
 
 **Fakturagrunnlaget peker begge veier:** bestillingene får `invoice_id`, så det er
 alltid mulig å se hvilket grunnlag en bestilling havnet på – og å angre.
+
+## Priser og avanse
+
+Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der
+er **netto innkjøpspris eks. mva**, og ligger i `cost_price`. Salgsprisen i
+`price` er innkjøpsprisen med et påslag oppå.
+
+Påslaget styres ett sted: **Admin → Innstillinger → Prisjustering**. Der velger du
+prosent, avrunding og om det skal gjelde alle varer eller én varegruppe, ser en
+forhåndsvisning, og oppdaterer. Utgangspunktet er 25 %.
+
+Prisen **regnes ut og lagres** — den utledes ikke ved visning. Det er med vilje:
+`pipe_submit_order` slår opp prisen i `pipe_types` når en bestilling kommer inn,
+og hver ordrelinje beholder sin egen pris. Ble prisen regnet ut på nytt ved hver
+visning, ville gamle bestillinger endret seg hver gang påslaget ble justert.
+
+Kommer det ny prisliste fra Dahl, oppdaterer du `cost_price` og kjører
+prisjusteringen på nytt.
 
 ## Struktur
 
