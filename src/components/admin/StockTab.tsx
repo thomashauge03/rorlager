@@ -164,6 +164,15 @@ export function StockTab() {
     onError: (error: Error) => toast({ title: "Varen ble ikke slettet", description: error.message, variant: "destructive" }),
   });
 
+  // Kategorifargen bur på kategorien, ikkje på varen, så lista må slå han opp
+  const kategorifarge = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of categories.data ?? []) if (c.color) map.set(c.id, c.color);
+    return map;
+  }, [categories.data]);
+
+  const fargeFor = (t: PipeType) => (t.category_id ? kategorifarge.get(t.category_id) ?? null : null);
+
   const varsel = totals.tomme + totals.snart;
 
   if (types.isError) {
@@ -348,7 +357,10 @@ export function StockTab() {
                     <TableRow key={t.id} className={cn(!t.active && "opacity-60")}>
                       <TableCell>
                         <p className="font-medium text-foreground">{label}</p>
-                        <p className="text-xs text-muted-foreground">{t.category_name ?? "Uten kategori"}</p>
+                        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                          <CategoryDot color={fargeFor(t)} />
+                          {t.category_name ?? "Uten kategori"}
+                        </p>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">{t.sku || "–"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{t.location || "–"}</TableCell>
@@ -398,10 +410,13 @@ export function StockTab() {
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground">{label}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {[t.category_name, t.sku && `Varenr. ${t.sku}`, t.location && `Hylle ${t.location}`]
-                          .filter(Boolean)
-                          .join(" · ") || "Uten kategori"}
+                      <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <CategoryDot color={fargeFor(t)} />
+                        <span className="truncate">
+                          {[t.category_name, t.sku && `Varenr. ${t.sku}`, t.location && `Hylle ${t.location}`]
+                            .filter(Boolean)
+                            .join(" · ") || "Uten kategori"}
+                        </span>
                       </p>
                     </div>
                     <StockBadge status={stockStatus(t)} />
@@ -504,6 +519,22 @@ export function StockTab() {
 }
 
 // ------------------------------------------------------------- småbitar
+
+/**
+ * Kategorifargen som ein liten prikk framfor teksten. Admin kan velje kva farge
+ * som helst, så han blir aldri lagd bak tekst – då kunne kontrasten bli borte.
+ * Kategoriar utan farge får ingen prikk, og linja ser like heil ut.
+ */
+function CategoryDot({ color }: { color: string | null }) {
+  if (!color) return null;
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-block h-2 w-2 shrink-0 rounded-full border border-foreground/15"
+      style={{ backgroundColor: color }}
+    />
+  );
+}
 
 function Stat({
   icon,

@@ -1,5 +1,6 @@
+import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
-import { cartHasUnpriced, cartLineFromType, cartTotal, clearCart, readCart, writeCart } from "@/lib/cart";
+import { cartHasUnpriced, cartLineFromType, cartTotal, clearCart, readCart, useCart, writeCart } from "@/lib/cart";
 import { parseNum, qtyLabel } from "@/lib/format";
 import type { CartLine, PipeType } from "@/lib/types";
 
@@ -39,6 +40,49 @@ describe("summering", () => {
     const lines = [line({ price: 100, quantity: 2 }), line({ pipe_type_id: "b", price: null, quantity: 5 })];
     expect(cartTotal(lines)).toBe(200);
     expect(cartHasUnpriced(lines)).toBe(true);
+  });
+});
+
+describe("setQuantity fjerner aldri en linje", () => {
+  // Talfeltet melder fra om 0 midt i tastingen – markerer man feltet og skriver
+  // om att, kommer 0 før det nye tallet. Forsvant linja da, var mengden tapt.
+  it("ignorerer 0 og negative verdier", () => {
+    writeCart([line({ quantity: 30 })]);
+    const { result } = renderHook(() => useCart());
+
+    act(() => result.current.setQuantity("a", 0));
+    expect(readCart()[0].quantity).toBe(30);
+
+    act(() => result.current.setQuantity("a", -5));
+    expect(readCart()[0].quantity).toBe(30);
+  });
+
+  it("setter mengden når den er et reelt tall", () => {
+    writeCart([line({ quantity: 30 })]);
+    const { result } = renderHook(() => useCart());
+
+    act(() => result.current.setQuantity("a", 12.5));
+    expect(readCart()[0].quantity).toBe(12.5);
+  });
+
+  it("lar søppelbøtta være eneste vei ut av kurven", () => {
+    writeCart([line({ quantity: 30 })]);
+    const { result } = renderHook(() => useCart());
+
+    act(() => result.current.remove("a"));
+    expect(readCart()).toEqual([]);
+  });
+});
+
+describe("add slår sammen samme rørtype", () => {
+  it("legger meterne oppå hverandre i stedet for å lage to linjer", () => {
+    const { result } = renderHook(() => useCart());
+    act(() => result.current.add(line({ quantity: 10 })));
+    act(() => result.current.add(line({ quantity: 5.5 })));
+
+    const kurv = readCart();
+    expect(kurv).toHaveLength(1);
+    expect(kurv[0].quantity).toBe(15.5);
   });
 });
 

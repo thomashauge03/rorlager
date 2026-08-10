@@ -92,9 +92,31 @@ supabase/migrations/   databaseskjemaet
 npm test
 ```
 
-## Utrulling
+## Utrulling til Vercel
 
-Vercel med `vercel.json` på plass (alle ruter til `index.html`). Husk å sette
-`VITE_SUPABASE_URL` og `VITE_SUPABASE_PUBLISHABLE_KEY` som miljøvariabler, og å
-generere QR-kodene på nytt med riktig adresse under **Admin -> QR-koder** hvis de
-ble laget mot localhost.
+1. Push repoet til GitHub
+2. Vercel → **Add New → Project** → importer `rorlager`
+3. Framework blir gjenkjent som Vite. Standardvalgene stemmer:
+   build `npm run build`, output `dist`
+4. **Deploy**
+
+`vercel.json` sender alle ruter til `index.html`, som er nødvendig fordi
+`/r/<kode>` og `/admin` er klientruter — uten den gir et direkte treff på en
+QR-lenke 404.
+
+### Miljøvariabler
+
+`.env` ligger i repoet, så bygget på Vercel finner Supabase-koblingen av seg
+selv. Det er trygt her: `anon`-nøkkelen er ment å være offentlig, og havner
+uansett i JavaScript-bunten som sendes til enhver besøkende. Det som beskytter
+dataene er RLS-reglene i `supabase-setup.sql`, ikke at nøkkelen er hemmelig.
+
+Vil du heller styre den fra Vercel, sett `VITE_SUPABASE_URL` og
+`VITE_SUPABASE_PUBLISHABLE_KEY` under Project Settings → Environment Variables
+og fjern `.env` fra repoet.
+
+### Etter første utrulling
+
+**Generer QR-kodene på nytt.** Koder laget mens du utviklet peker på
+`localhost:8081` og er verdiløse på en hylle. Gå til **Admin → QR-koder**, sett
+feltet «Adresse appen ligger på» til Vercel-adressen, og skriv ut på nytt.

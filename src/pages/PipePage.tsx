@@ -2,14 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, Home, Plus, Search, ShoppingCart } from "lucide-react";
+import { AlertTriangle, ArrowRight, Home, Plus, Search, ShoppingCart, WifiOff } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { CartBar } from "@/components/CartBar";
 import { StockBadge } from "@/components/StatusBadge";
 import { QuantityInput } from "@/components/QuantityInput";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { fetchPipeTypeBySlug } from "@/lib/orders";
+import { QK, fetchPipeTypeBySlug } from "@/lib/orders";
 import { useSettings } from "@/lib/settings";
 import { stockStatus } from "@/lib/stock";
 import { cartLineFromType, useCart } from "@/lib/cart";
@@ -34,8 +34,10 @@ export default function PipePage() {
 
   const [quantity, setQuantity] = useState<number | null>(null);
 
+  // Nøkkelen ligg under QK.types med vilje: då treffer invalideringane etter
+  // lagerendring denne sida òg, og kunden ser same beholdning som framsida
   const pipeQuery = useQuery({
-    queryKey: ["pipe_type", slug],
+    queryKey: [...QK.types, slug],
     queryFn: () => fetchPipeTypeBySlug(slug),
     enabled: Boolean(slug),
   });
@@ -53,7 +55,11 @@ export default function PipePage() {
     [cart.lines, pipe],
   );
 
-  const overStock = Boolean(pipe && quantity !== null && quantity > pipe.stock);
+  const alleredeIKurven = inCart?.quantity ?? 0;
+  // Kurven blir henta ut den òg, så åtvaringa må sjå det samla uttaket.
+  // Avrunding fordi desimalmeter elles gir 12.299999999999999 i teksten.
+  const samlaUttak = Math.round(((quantity ?? 0) + alleredeIKurven) * 100) / 100;
+  const overStock = Boolean(pipe && quantity !== null && quantity > 0 && samlaUttak > pipe.stock);
 
   const addToCart = (thenGoToCart: boolean) => {
     if (!pipe || quantity === null || quantity <= 0) {
@@ -80,8 +86,38 @@ export default function PipePage() {
     );
   }
 
+  /* ---------- Henting feila ---------- */
+  // Skilt frå "ukjend kode": ved dårleg dekning i lageret er det ingenting
+  // gale med etiketten, og kunden skal få prøve på nytt i staden for å gi opp
+  if (pipeQuery.isError) {
+    const detalj = pipeQuery.error instanceof Error ? pipeQuery.error.message.trim() : "";
+    return (
+      <div className="hm-page min-h-screen">
+        <TopBar title="Rørlager" back="/" showCart />
+        <main className="mx-auto max-w-2xl px-3 pt-6 pb-36 sm:px-4">
+          <div className="hm-card animate-fade-in flex flex-col items-center gap-3 p-8 text-center">
+            <WifiOff className="h-9 w-9 text-muted-foreground" aria-hidden="true" />
+            <h2 className="text-xl font-bold text-foreground">Klarte ikke å hente røret</h2>
+            <p className="text-sm text-muted-foreground">Sjekk at du har dekning, og prøv igjen.</p>
+            {detalj ? <p className="text-xs text-muted-foreground break-words">{detalj}</p> : null}
+            <Button variant="outline" className="mt-2 h-12 w-full text-base" onClick={() => pipeQuery.refetch()}>
+              Prøv igjen
+            </Button>
+            <Button asChild variant="ghost" className="h-12 w-full text-base text-muted-foreground [&_svg]:size-5">
+              <Link to="/">
+                <Home aria-hidden="true" />
+                Tilbake til oversikten
+              </Link>
+            </Button>
+          </div>
+        </main>
+        <CartBar />
+      </div>
+    );
+  }
+
   /* ---------- Ukjend kode ---------- */
-  if (pipeQuery.isError || !pipe) {
+  if (!pipe) {
     return (
       <div className="hm-page min-h-screen">
         <TopBar title="Rørlager" back="/" showCart />
@@ -166,9 +202,17 @@ export default function PipePage() {
             {overStock ? (
               <div className="mt-3 flex items-start gap-2 rounded-lg border border-warning/30 bg-warning/15 px-3 py-2.5">
                 <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />
-                <p className="text-sm text-warning-ink">
-                  Det er bare {num(pipe.stock)} {pipe.unit} registrert på lager. Du kan fortsatt ta ut mer, men si fra
-                  til lageret.
+                <p className="tabular text-sm text-warning-ink">
+                  {alleredeIKurven > 0 ? (
+                    <>
+                      Sammen med {qtyLabel(alleredeIKurven, pipe.unit)} i kurven blir dette{" "}
+                      {qtyLabel(samlaUttak, pipe.unit)}, men det er bare {num(pipe.stock)} {pipe.unit} registrert på
+                      lager.
+                    </>
+                  ) : (
+                    <>Det er bare {num(pipe.stock)} {pipe.unit} registrert på lager.</>
+                  )}{" "}
+                  Du kan fortsatt ta ut mer, men si fra til lageret.
                 </p>
               </div>
             ) : null}

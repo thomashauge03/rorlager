@@ -94,7 +94,8 @@ export function OrdersTab() {
     queryFn: () => fetchOrders(filter),
   });
 
-  const showPrices = settings?.show_prices !== false;
+  // show_prices styrer kundeflatene. Admin må sjå beløpa uansett for å kunne
+  // fakturere, så innstillinga blir ikkje lesen her.
   const company: CompanyInfo = {
     name: settings?.company_name || "Hauge Maskin AS",
     orgNumber: settings?.org_number,
@@ -203,7 +204,7 @@ export function OrdersTab() {
       downloadPickListPDF(
         selectedOrders.map((o) => ({ order: o, lines: o.lines })),
         company,
-        { showPrices },
+        { showPrices: true },
       );
     } catch (err) {
       fail(err, "Klarte ikke å lage plukklisten");
@@ -212,7 +213,7 @@ export function OrdersTab() {
 
   const orderPdf = (order: OrderWithLines) => {
     try {
-      downloadOrderPDF({ order, lines: order.lines, company }, { showPrices });
+      downloadOrderPDF({ order, lines: order.lines, company }, { showPrices: true });
     } catch (err) {
       fail(err, "Klarte ikke å lage PDF-en");
     }
@@ -277,7 +278,7 @@ export function OrdersTab() {
         <Stat label="Bestillinger" value={num(stats.count)} />
         <Stat label="Nye" value={num(stats.nye)} />
         <Stat label="Mengde" value={stats.quantity} />
-        <Stat label="Beløp" value={showPrices ? `${krShort(stats.total)} kr` : "–"} />
+        <Stat label="Beløp" value={`${krShort(stats.total)} kr`} />
       </div>
 
       {/* ---------------------------------------------------- fleirvalslinje */}
@@ -346,9 +347,7 @@ export function OrdersTab() {
                   <span>{dateTime(o.created_at)}</span>
                   <span>{unitSummary(o.lines)}</span>
                 </div>
-                {showPrices ? (
-                  <p className="text-sm font-semibold text-foreground tabular mt-1">{kr(o.total)} kr</p>
-                ) : null}
+                <p className="text-sm font-semibold text-foreground tabular mt-1">{kr(o.total)} kr</p>
               </button>
             </div>
           ))}
@@ -390,9 +389,7 @@ export function OrdersTab() {
                   <TableCell className="text-muted-foreground">{o.project || "–"}</TableCell>
                   <TableCell className="text-right tabular">{o.lines.length}</TableCell>
                   <TableCell className="tabular whitespace-nowrap">{unitSummary(o.lines)}</TableCell>
-                  <TableCell className="text-right tabular whitespace-nowrap">
-                    {showPrices ? `${kr(o.total)} kr` : "–"}
-                  </TableCell>
+                  <TableCell className="text-right tabular whitespace-nowrap">{kr(o.total)} kr</TableCell>
                   <TableCell>
                     <StatusBadge status={o.status} />
                   </TableCell>
@@ -460,21 +457,17 @@ export function OrdersTab() {
                           <p className="text-sm font-semibold text-foreground tabular">
                             {qtyLabel(line.quantity, line.unit)}
                           </p>
-                          {showPrices ? (
-                            <p className="text-xs text-muted-foreground tabular">
-                              {line.line_total === null || line.line_total === undefined
-                                ? "Pris mangler"
-                                : `${kr(line.line_total)} kr`}
-                            </p>
-                          ) : null}
+                          <p className="text-xs text-muted-foreground tabular">
+                            {line.line_total === null || line.line_total === undefined
+                              ? "Pris mangler"
+                              : `${kr(line.line_total)} kr`}
+                          </p>
                         </div>
                       </div>
                     ))}
                     <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
                       <span className="text-sm font-semibold text-foreground">Sum</span>
-                      <span className="text-sm font-bold text-primary tabular">
-                        {showPrices ? `${kr(open.total)} kr` : unitSummary(open.lines)}
-                      </span>
+                      <span className="text-sm font-bold text-primary tabular">{kr(open.total)} kr</span>
                     </div>
                   </div>
                 </div>

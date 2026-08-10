@@ -729,3 +729,69 @@ values
   ((select id from cat where name = 'Deler og skjÃ¸t'), 'RÃ¸rklemme',           '110 mm',     'DEL-K-110',   'del-k-110',   'stk',  39, 100, 20, 'F-06', 6)
 on conflict (sku) do nothing;
 
+
+-- >>> 20260810110000_invoice_keeps_status.sql <<<
+
+-- Fakturagrunnlaget skal ikkje flytte statusen pÃ¥ bestillingane.
+--
+-- Den fÃ¸rste utgÃ¥va sette status = 'behandlet' pÃ¥ alle uttak med status 'ny' nÃ¥r
+-- eit grunnlag blei laga. Det var feil av to grunnar: Ã¥ fakturere og Ã¥ ekspedere
+-- er to ulike ting, og angre-knappen kunne ikkje setje statusen tilbake â€“ han
+-- veit ikkje kva han var fÃ¸r. Resultatet var ei stille endring som ikkje lÃ©t seg
+-- reversere.
+--
+-- No rÃ¸rer grunnlaget berre invoice_id, som er nettopp det angre-knappen kan
+-- nullstille. Status blir styrt der han hÃ¸yrer heime: i bestillingslista.
+
+create or replace function public.pipe_create_invoice(
+  p_customer_name text,
+  p_period_from date,
+  p_period_to date,
+  p_order_ids uuid[],
+  p_total numeric,
+  p_note text default null
+)
+returns public.pipe_invoices
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_invoice public.pipe_invoices;
+  v_already int;
+begin
+  if auth.uid() is null then
+    raise exception 'Krever innlogging';
+  end if;
+  if p_order_ids is null or array_length(p_order_ids, 1) is null then
+    raise exception 'Ingen bestillinger valgt';
+  end if;
+  if p_period_from is null or p_period_to is null then
+    raise exception 'BÃ¥de fra- og til-dato mÃ¥ fylles ut';
+  end if;
+
+  -- Ei bestilling skal aldri hamne pÃ¥ to grunnlag. Sjekken ligg her og ikkje
+  -- berre i grensesnittet, i tilfelle to faner blir brukte samtidig.
+  select count(*) into v_already
+  from public.pipe_orders
+  where id = any(p_order_ids) and invoice_id is not null;
+
+  if v_already > 0 then
+    raise exception '% av bestillingene er allerede fakturert', v_already;
+  end if;
+
+  insert into public.pipe_invoices (customer_name, period_from, period_to, total, note)
+  values (p_customer_name, p_period_from, p_period_to, coalesce(p_total, 0), p_note)
+  returning * into v_invoice;
+
+  update public.pipe_orders
+  set invoice_id = v_invoice.id
+  where id = any(p_order_ids);
+
+  return v_invoice;
+end;
+$$;
+
+revoke all on function public.pipe_create_invoice(text, date, date, uuid[], numeric, text) from public, anon;
+grant execute on function public.pipe_create_invoice(text, date, date, uuid[], numeric, text) to authenticated;
+

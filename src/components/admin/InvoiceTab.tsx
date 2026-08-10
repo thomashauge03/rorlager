@@ -198,6 +198,7 @@ export function InvoiceTab() {
     total: summary.total,
     orders: toPdfOrders(selected),
     company: companyFrom(settings),
+    vatRate: settings?.vat_rate ?? 0,
   });
 
   /** Opnar PDF-en i ny fane i staden for å laste ned – forhåndsvisinga skal
@@ -225,6 +226,9 @@ export function InvoiceTab() {
 
   const create = useMutation({
     mutationFn: async () => {
+      // Datofelta kan tømmast av brukaren. Utan denne sperra går tomme datoar
+      // rett i basen og kjem tilbake som ein engelsk castfeil.
+      if (!from || !to) throw new Error("Både fra- og til-dato må fylles ut.");
       const inv = await createInvoice({
         customer_name: customerName,
         period_from: from,
@@ -233,8 +237,9 @@ export function InvoiceTab() {
         total: summary.total,
         note: note.trim() || undefined,
       });
-      // Bestillingane blir merkte i databasen, så PDF-en må byggjast av det vi
-      // alt har i handa – etter invalideringa er dei ikkje lenger ufakturerte
+      // Bestillingane blir knytte til grunnlaget i databasen, så PDF-en må
+      // byggjast av det vi alt har i handa – etter invalideringa er dei ikkje
+      // lenger med i lista over ufakturerte
       const doc: InvoiceDoc = {
         invoice_number: inv.invoice_number,
         customer_name: inv.customer_name,
@@ -243,6 +248,7 @@ export function InvoiceTab() {
         total: Number(inv.total ?? summary.total),
         orders: toPdfOrders(selected),
         company: companyFrom(settings),
+        vatRate: settings?.vat_rate ?? 0,
       };
       downloadInvoicePDF(doc, pdfOptions);
       return inv;
@@ -250,7 +256,7 @@ export function InvoiceTab() {
     onSuccess: (inv) => {
       toast({
         title: `Fakturagrunnlag nr. ${inv.invoice_number}`,
-        description: `${selected.length} ${selected.length === 1 ? "bestilling" : "bestillinger"} er samlet. PDF-en lastes ned nå.`,
+        description: `${selected.length} ${selected.length === 1 ? "bestilling er" : "bestillinger er"} knyttet til grunnlaget. Statusen på dem står som før. PDF-en lastes ned nå.`,
       });
       qc.invalidateQueries({ queryKey: QK.orders });
       qc.invalidateQueries({ queryKey: QK.invoices });
@@ -292,6 +298,7 @@ export function InvoiceTab() {
           total: Number(inv.total ?? 0),
           orders: toPdfOrders(rows),
           company: companyFrom(settings),
+          vatRate: settings?.vat_rate ?? 0,
         },
         pdfOptions,
       );
@@ -311,7 +318,8 @@ export function InvoiceTab() {
     onSuccess: () => {
       toast({
         title: "Grunnlaget er angret",
-        description: "Bestillingene er ufakturerte igjen og kan tas med på et nytt grunnlag.",
+        description:
+          "Bestillingene er løst fra grunnlaget og er ufakturerte igjen. Statusen på dem er uendret.",
       });
       qc.invalidateQueries({ queryKey: QK.orders });
       qc.invalidateQueries({ queryKey: QK.invoices });
@@ -330,7 +338,7 @@ export function InvoiceTab() {
     {
       id: "pdf-priser",
       label: "Vis priser og sum",
-      hint: "Av som standard. Huk av når grunnlaget skal vise beløp.",
+      hint: "Av som standard. Huk av når grunnlaget skal vise beløp. Mva kommer med hvis satsen er satt under Innstillinger.",
       value: showPrices,
       set: setShowPrices,
     },
@@ -364,7 +372,7 @@ export function InvoiceTab() {
           <CardTitle className="text-base">Nytt fakturagrunnlag</CardTitle>
           <p className="text-sm text-muted-foreground">
             Samler alle ufakturerte bestillinger for én kunde i en periode, og laster ned PDF-en med en gang.
-            Statusen på bestillingene blir ikke rørt.
+            Bestillingene blir knyttet til grunnlaget – status og lager blir ikke rørt.
           </p>
         </CardHeader>
 
@@ -460,6 +468,12 @@ export function InvoiceTab() {
                   />
                 </div>
               </div>
+
+              {!from || !to ? (
+                <p className="text-sm text-warning-ink">
+                  Både fra- og til-dato må fylles ut før du kan opprette grunnlaget.
+                </p>
+              ) : null}
 
               {candidates.length === 0 ? (
                 <p className="text-sm text-muted-foreground">
@@ -597,7 +611,7 @@ export function InvoiceTab() {
                     <Button
                       className="h-11 flex-1 sm:flex-none"
                       onClick={() => create.mutate()}
-                      disabled={selected.length === 0 || create.isPending}
+                      disabled={selected.length === 0 || !from || !to || create.isPending}
                     >
                       {create.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -677,9 +691,10 @@ export function InvoiceTab() {
                       <AlertDialogHeader>
                         <AlertDialogTitle>Angre grunnlag nr. {inv.invoice_number}?</AlertDialogTitle>
                         <AlertDialogDescription>
-                          Bestillingene til {inv.customer_name} blir ufakturerte igjen, og dukker opp på nytt når
-                          du lager et grunnlag. Statusen på bestillingene står som den er, og lageret blir ikke
-                          rørt. Selve PDF-en du allerede har lastet ned blir ikke slettet.
+                          Bestillingene til {inv.customer_name} blir løst fra grunnlaget og er ufakturerte igjen,
+                          så de dukker opp på nytt neste gang du lager et grunnlag. Statusen på bestillingene
+                          står som den er, og lageret blir ikke rørt. Selve PDF-en du allerede har lastet ned
+                          blir ikke slettet.
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>

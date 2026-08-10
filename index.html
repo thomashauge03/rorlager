@@ -74,6 +74,13 @@
       @media (prefers-reduced-motion: reduce) {
         .hm-boot-bar span { animation: none; width: 100%; }
       }
+      /* Utan dette blinkar det kvitt før React rekk å montere mørk drakt.
+         Logofila har kvit botn, så ho får ei eiga avrunda plate å stå på. */
+      @media (prefers-color-scheme: dark) {
+        .hm-boot { background: #171717; }
+        .hm-boot img { background: #fff; border-radius: 24px; }
+        .hm-boot-bar { background: #333333; }
+      }
     </style>
     <script type="module" src="/src/main.tsx"></script>
   </body>

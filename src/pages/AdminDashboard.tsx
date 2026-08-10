@@ -66,7 +66,10 @@ export default function AdminDashboard() {
     queryKey: ["is_super_admin"],
     queryFn: async () => {
       const { data, error } = await supabase.rpc("is_super_admin");
-      if (error) return false;
+      // Eit feila kall er ikkje det same som eit nei. Svelgjer vi feilen, blir
+      // «false» liggjande i cachen resten av økta og lenkja er borte utan grunn –
+      // kastar vi, kan react-query prøve på nytt.
+      if (error) throw new Error(error.message);
       return Boolean(data);
     },
     enabled: !checking && !!email,

@@ -9,7 +9,7 @@ import { downloadOrderPDF } from "@/lib/order-pdf";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { dateTime, kr, num, pipeLabel } from "@/lib/format";
 import type { PipeOrderLineRow, PipeOrderRow, SubmittedOrder } from "@/lib/types";
-import { LAST_ORDER_KEY } from "@/pages/Checkout";
+import { LAST_ORDER_KEY } from "@/lib/cart";
 
 /** Ei halvskriven eller framand sessionStorage-verdi skal ikkje velte sida */
 function isSubmittedOrder(v: unknown): v is SubmittedOrder {
@@ -41,10 +41,25 @@ export default function Receipt() {
   );
 
   useEffect(() => {
-    if (!order) navigate("/", { replace: true });
+    if (!order) {
+      navigate("/", { replace: true });
+      return;
+    }
+    // Reserva har gjort jobben sin når ordren ligg i state. Blir ho ståande, møter
+    // neste kunde på den delte lagertelefonen førre uttak med namn og mengder.
+    try {
+      sessionStorage.removeItem(LAST_ORDER_KEY);
+    } catch {
+      /* privat modus – då vart nøkkelen aldri skriven heller */
+    }
   }, [order, navigate]);
 
-  const showPrices = (settings?.show_prices ?? true) && order?.lines?.some((l) => l.unit_price !== null);
+  const pricesOn = settings?.show_prices ?? true;
+  const hasUnpriced = order?.lines?.some((l) => l.unit_price === null) ?? false;
+  const showPrices = pricesOn && (order?.lines?.some((l) => l.unit_price !== null) ?? false);
+  // Databasen hoppar over linjer utan pris når totalen blir rekna ut, så ein sum
+  // med slike linjer i ville vore lågare enn det kunden faktisk tek med seg
+  const showTotal = pricesOn && !hasUnpriced;
 
   const company: CompanyInfo = useMemo(
     () => ({
@@ -145,11 +160,15 @@ export default function Receipt() {
             ))}
           </ul>
 
-          {showPrices ? (
+          {showTotal ? (
             <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
               <span className="text-base font-semibold text-foreground">Sum</span>
               <span className="tabular text-2xl font-bold text-foreground">{kr(order.total)} kr</span>
             </div>
+          ) : pricesOn && hasUnpriced ? (
+            <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
+              Noen varer har ikke pris – avtales med lageret.
+            </p>
           ) : null}
         </section>
 

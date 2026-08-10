@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { X, Share, Plus } from "lucide-react";
+import { useCart } from "@/lib/cart";
 
 /** Utsett til brukaren har fått sjå sida litt – ein boks med ein gong er berre i vegen */
 const DELAY_MS = 4000;
@@ -34,6 +35,7 @@ export function InstallPrompt() {
   const [vis, setVis] = useState(false);
   const [iosRettleiing, setIosRettleiing] = useState(false);
   const [ventandeEvent, setVentandeEvent] = useState<BeforeInstallPromptEvent | null>(null);
+  const { count } = useCart();
 
   useEffect(() => {
     if (erAlleredeInstallert() || nylegAvvist()) return;
@@ -84,7 +86,9 @@ export function InstallPrompt() {
     }
   };
 
-  if (!vis) return null;
+  // Boksen ligg over CartBar og ville dekt "Se kurven". Har kunden varer i
+  // kurven, er uttaket viktigare enn installasjonen – boksen kjem att seinare.
+  if (!vis || count > 0) return null;
 
   // Animasjonen ligg på kortet, ikkje på den faste boksen: fade-in sluttar på
   // translateY, og på wrapperen ville det dytta heile boksen 8 px ned under

@@ -5,6 +5,11 @@ const KEY = "rorlager.kurv.v1";
 const CUSTOMER_KEY = "rorlager.kunde.v1";
 const EVENT = "rorlager-cart";
 
+/** Kvitteringa må overleve at kunden dreg ned og oppdaterer sida etterpå.
+ *  Nøkkelen bur her saman med dei andre lagringsnøklane, slik at kvitteringssida
+ *  slepp å dra inn heile kassemodulen for å lese henne. */
+export const LAST_ORDER_KEY = "rorlager.siste-ordre";
+
 /** Kundeopplysningane blir hugsa mellom besøk – same person hentar rør ofte,
  *  og skal sleppe å taste namn og telefon på nytt kvar gong. */
 export type SavedCustomer = {
@@ -121,11 +126,19 @@ export function useCart() {
     writeCart(current);
   }, []);
 
+  /**
+   * Set mengd, men fjern aldri ei linje. Talfeltet melder frå om 0 midt i
+   * tastinga – når nokon markerer feltet og skriv om att, eller trykkjer minus
+   * frå 0,5 – og då ville linja og mengda vore borte utan at kunden bad om det.
+   * Søppelbøtta (remove) er den eine vegen ut av kurven.
+   */
   const setQuantity = useCallback((pipeTypeId: string, quantity: number) => {
-    const current = readCart().map((l) =>
-      l.pipe_type_id === pipeTypeId ? { ...l, quantity: Math.round(quantity * 100) / 100 } : l,
+    if (!Number.isFinite(quantity) || quantity <= 0) return;
+    writeCart(
+      readCart().map((l) =>
+        l.pipe_type_id === pipeTypeId ? { ...l, quantity: Math.round(quantity * 100) / 100 } : l,
+      ),
     );
-    writeCart(current.filter((l) => l.quantity > 0));
   }, []);
 
   const remove = useCallback((pipeTypeId: string) => {

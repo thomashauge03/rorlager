@@ -33,6 +33,8 @@ export type InvoiceDoc = {
   total: number;
   orders: InvoiceOrder[];
   company: CompanyInfo;
+  /** Mva-satsen i prosent. Utelaten eller 0 tyder eit reint grunnlag utan mva. */
+  vatRate?: number;
 };
 
 export type InvoiceOptions = {
@@ -240,6 +242,32 @@ export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
     doc.text(sums, pw - MARGIN, y, { align: "right" });
   }
   y += 8;
+
+  /* ---------- Mva ---------- */
+  // Satsen kjem frå innstillingane. Er han 0, er dette eit reint grunnlag utan
+  // mva, og då skal det ikkje stå ei mva-linje på 0,00 og villeie rekneskapen.
+  const vatRate = inv.vatRate ?? 0;
+  if (showPrices && vatRate > 0) {
+    ensure(20);
+    // Rundar i øre, slik at summen inkl. mva stemmer med linja over
+    const vat = Math.round(inv.total * vatRate) / 100;
+    const rows: [string, string][] = [
+      ["Grunnlag eks. mva", `${kr(inv.total)} kr`],
+      [`Mva ${num(vatRate)} %`, `${kr(vat)} kr`],
+      ["Sum inkl. mva", `${kr(inv.total + vat)} kr`],
+    ];
+    doc.setFontSize(9.5);
+    rows.forEach(([label, value], i) => {
+      const sist = i === rows.length - 1;
+      doc.setFont("helvetica", sist ? "bold" : "normal");
+      setText(doc, sist ? BLACK : GREY);
+      doc.text(label, MARGIN + 2, y);
+      setText(doc, sist ? RED : GREY);
+      doc.text(value, colValue, y, { align: "right" });
+      y += 5.6;
+    });
+    y += 3;
+  }
 
   const utenPris = allLines.filter(missingPrice).length;
   if (showPrices && utenPris > 0) {

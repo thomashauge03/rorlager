@@ -34,13 +34,15 @@ import type { PipeType } from "@/lib/types";
 /** Kor mange etikettar det går på eit A4-ark – berre til opplysning i grensesnittet. */
 const PER_PAGE: Record<2 | 3, number> = { 2: 10, 3: 18 };
 
-const toLabelPipe = (t: PipeType): LabelPipe => ({
+/** Prisen blir teken heilt vekk når han ikkje skal trykkjast, slik at han ikkje
+ *  kan lekke ut på eit hylleskilt gjennom eit framtidig val i PDF-koden. */
+const toLabelPipe = (t: PipeType, medPris: boolean): LabelPipe => ({
   name: t.name,
   dimension: t.dimension,
   sku: t.sku,
   qr_slug: t.qr_slug,
   unit: t.unit,
-  price: t.price,
+  price: medPris ? t.price : null,
   location: t.location,
   category_name: t.category_name ?? null,
 });
@@ -71,7 +73,13 @@ export function QrTab() {
   const [showPrice, setShowPrice] = useState(false);
 
   const [preview, setPreview] = useState<string | null>(null);
+  const [previewFeila, setPreviewFeila] = useState(false);
   const [busy, setBusy] = useState<"ark" | "skilt" | "alle" | null>(null);
+
+  // Etiketten og hylleskiltet heng i lageret der kunden står, så dei høyrer til
+  // dei kundeflatene «Vis priser» styrer.
+  const prisarPa = settings?.show_prices ?? true;
+  const visPris = prisarPa && showPrice;
 
   const urlFieldRef = useRef<HTMLInputElement | null>(null);
 
@@ -107,6 +115,7 @@ export function QrTab() {
   // Flagget hindrar at eit tregt kall skriv over eit nyare.
   useEffect(() => {
     let avbrote = false;
+    setPreviewFeila(false);
     if (!markertUrl) {
       setPreview(null);
       return;
@@ -116,7 +125,11 @@ export function QrTab() {
         if (!avbrote) setPreview(url);
       })
       .catch(() => {
-        if (!avbrote) setPreview(null);
+        // Utan eit eige feilflagg ville ruta stå med lasteteksten for alltid, og
+        // ei feila teikning såg ut som ei treg ei
+        if (avbrote) return;
+        setPreview(null);
+        setPreviewFeila(true);
       });
     return () => {
       avbrote = true;
@@ -214,12 +227,15 @@ export function QrTab() {
     }
     setBusy("ark");
     try {
-      await downloadLabelSheetPDF(valgte.map(toLabelPipe), {
-        perRow,
-        showPrice,
-        baseUrl,
-        companyName: settings?.company_name ?? undefined,
-      });
+      await downloadLabelSheetPDF(
+        valgte.map((t) => toLabelPipe(t, visPris)),
+        {
+          perRow,
+          showPrice: visPris,
+          baseUrl,
+          companyName: settings?.company_name ?? undefined,
+        },
+      );
       toast({ title: "Etikettarket er lastet ned", description: `${num(valgte.length)} etiketter.` });
     } catch (e) {
       toast({ variant: "destructive", title: "Klarte ikke å lage etikettarket", description: feilmelding(e) });
@@ -235,8 +251,8 @@ export function QrTab() {
     }
     setBusy("skilt");
     try {
-      await downloadShelfSignPDF(toLabelPipe(markert), {
-        showPrice,
+      await downloadShelfSignPDF(toLabelPipe(markert, visPris), {
+        showPrice: visPris,
         baseUrl,
         companyName: settings?.company_name ?? undefined,
       });
@@ -258,8 +274,8 @@ export function QrTab() {
     try {
       for (const pipe of valgte) {
         try {
-          await downloadShelfSignPDF(toLabelPipe(pipe), {
-            showPrice,
+          await downloadShelfSignPDF(toLabelPipe(pipe, visPris), {
+            showPrice: visPris,
             baseUrl,
             companyName: settings?.company_name ?? undefined,
           });
@@ -495,6 +511,10 @@ export function QrTab() {
                     alt={markert ? `QR-kode for ${markert.name}` : "QR-kode"}
                     className="h-full w-full object-contain animate-scale-in"
                   />
+                ) : previewFeila ? (
+                  <span className="px-3 text-center text-xs text-destructive">
+                    Klarte ikke å lage QR-koden for denne varen
+                  </span>
                 ) : (
                   <span className="px-3 text-center text-xs text-muted-foreground">
                     {markert ? "Lager kode …" : "Klikk på en vare i listen"}
@@ -564,11 +584,26 @@ export function QrTab() {
               </Select>
             </div>
 
-            <div className="flex items-center justify-between gap-3">
-              <Label htmlFor="qr-pris" className="font-normal">
-                Vis pris på etikettene
-              </Label>
-              <Switch id="qr-pris" checked={showPrice} onCheckedChange={setShowPrice} />
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Label htmlFor="qr-pris" className={cn("font-normal", !prisarPa && "text-muted-foreground")}>
+                  Vis pris på etikettene
+                </Label>
+                <Switch
+                  id="qr-pris"
+                  checked={visPris}
+                  disabled={!prisarPa}
+                  onCheckedChange={setShowPrice}
+                  aria-describedby={!prisarPa ? "qr-pris-av" : undefined}
+                />
+              </div>
+              {!prisarPa && (
+                <p id="qr-pris-av" className="flex items-start gap-1.5 text-xs text-muted-foreground">
+                  <Info className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  Priser er slått av for kundene under Innstillinger, og etikettene henger der kunden ser dem. Slå på
+                  «Vis priser» der hvis prisen skal stå på hyllen.
+                </p>
+              )}
             </div>
 
             <Separator />

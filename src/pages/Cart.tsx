@@ -81,11 +81,13 @@ export default function Cart() {
 
               <div className="mt-3">
                 {/* Tom presets-liste gir den kompakte utgåva: berre +/– og tal.
-                    Eit tomt felt (null) held på den gamle mengda – elles ville
-                    linja forsvinne midt i at nokon tastar om att. */}
+                    Halvskrivne verdiar (tomt felt eller 0) blir ikkje lagra, så
+                    linja held på mengda si til kunden har tasta noko ferdig. */}
                 <QuantityInput
                   value={line.quantity}
-                  onChange={(v) => cart.setQuantity(line.pipe_type_id, v ?? line.quantity)}
+                  onChange={(v) => {
+                    if (v !== null && v > 0) cart.setQuantity(line.pipe_type_id, v);
+                  }}
                   unit={line.unit}
                   presets={[]}
                 />

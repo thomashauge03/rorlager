@@ -233,7 +233,9 @@ export function SettingsTab() {
                 onChange={(e) => set("vat_rate", e.target.value)}
               />
               <p className="text-xs text-muted-foreground">
-                Prisene på rørene er uten mva. Satsen brukes når regnskapet skal legge den til.
+                Prisene på rørene er uten mva. Satsen vises på fakturagrunnlaget under Faktura, som en egen
+                blokk under summen med grunnlag eks. mva, mva-beløp og sum inkl. mva – men bare når «Vis priser
+                og sum» er huket av på PDF-en. Står satsen til 0, blir blokken utelatt.
               </p>
             </div>
           </div>

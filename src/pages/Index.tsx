@@ -366,12 +366,22 @@ export default function Index() {
                 onClick={() => setCategoryId(categoryId === c.id ? null : c.id)}
                 aria-pressed={categoryId === c.id}
                 className={cn(
-                  "h-11 rounded-full border px-4 text-sm font-medium transition-colors",
+                  "inline-flex h-11 items-center gap-2 rounded-full border px-4 text-sm font-medium transition-colors",
                   categoryId === c.id
                     ? "border-primary bg-primary text-primary-foreground"
                     : "border-border bg-card text-foreground hover:bg-muted",
                 )}
               >
+                {/* Fargen admin har valt, som prikk og ikkje som bakgrunn: teksten
+                    må vere lesbar same kva farge som blir plukka. Den tynne kanten
+                    gjer at nesten-kvite og nesten-svarte prikkar ikkje forsvinn. */}
+                {c.color ? (
+                  <span
+                    aria-hidden="true"
+                    className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-inset ring-foreground/20"
+                    style={{ backgroundColor: c.color }}
+                  />
+                ) : null}
                 {c.name}
               </button>
             ))}

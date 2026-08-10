@@ -1,6 +1,8 @@
 /**
- * Simple client-side rate limiter to prevent spam submissions.
- * Uses a sliding window approach per action key.
+ * Grensa finst fordi eit skjema som ikkje svarar med det same, blir trykt på
+ * fleire gonger – og då hamnar same bestillinga i basen i fleire eksemplar.
+ * Ho ligg i nettlesaren og er difor inga vakt mot misbruk, berre mot utolmod.
+ * Glidande vindauge per handling, slik at ei treg innsending ikkje låser andre.
  */
 const attempts: Record<string, number[]> = {};
 
@@ -12,7 +14,7 @@ export function checkRateLimit(
   const now = Date.now();
   if (!attempts[key]) attempts[key] = [];
 
-  // Remove expired entries
+  // Forsøk som har falle ut av vindauget skal ikkje telje med lenger
   attempts[key] = attempts[key].filter((t) => now - t < windowMs);
 
   if (attempts[key].length >= maxAttempts) {

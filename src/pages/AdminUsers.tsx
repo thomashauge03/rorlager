@@ -54,6 +54,9 @@ export default function AdminUsers() {
   const [allowed, setAllowed] = useState(false);
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [registryReady, setRegistryReady] = useState(true);
+  // Meldinga frå Supabase er ofte det einaste som skil ein manglande migrasjon
+  // frå nettverk, utgått økt eller manglande tilgang
+  const [registryError, setRegistryError] = useState<string | null>(null);
   const [loadingUsers, setLoadingUsers] = useState(true);
   const [users, setUsers] = useState<SystemUserRow[]>([]);
 
@@ -73,9 +76,11 @@ export default function AdminUsers() {
     setLoadingUsers(false);
     if (error) {
       setRegistryReady(false);
+      setRegistryError(error.message || null);
       return;
     }
     setRegistryReady(true);
+    setRegistryError(null);
     setUsers((data ?? []) as SystemUserRow[]);
   }, []);
 
@@ -221,11 +226,13 @@ export default function AdminUsers() {
 
       <main className="w-full max-w-4xl mx-auto p-4 space-y-4 flex-1 animate-fade-in">
         {!registryReady && (
-          <div className="rounded-lg border border-warning/60 bg-warning/10 px-3 py-2.5">
+          <div className="rounded-lg border border-warning/60 bg-warning/10 px-3 py-2.5 space-y-1">
             <p className="text-sm text-warning-ink">
-              Fikk ikke lest tabellen <code className="text-xs">system_users</code>. Kjør migrasjonen{" "}
-              <code className="text-xs">supabase/migrations/20260810100100_rorlager_admins.sql</code>.
+              Fikk ikke lest tabellen <code className="text-xs">system_users</code>. Det kan være nettverket,
+              en utløpt pålogging, manglende tilgang – eller at migrasjonen{" "}
+              <code className="text-xs">supabase/migrations/20260810100100_rorlager_admins.sql</code> ikke er kjørt.
             </p>
+            {registryError && <p className="text-sm text-foreground">{registryError}</p>}
           </div>
         )}
 

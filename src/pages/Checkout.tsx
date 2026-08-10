@@ -8,15 +8,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { EMPTY_CUSTOMER, clearCart, readCustomer, useCart, writeCustomer } from "@/lib/cart";
+import { EMPTY_CUSTOMER, LAST_ORDER_KEY, clearCart, readCustomer, useCart, writeCustomer } from "@/lib/cart";
 import type { SavedCustomer } from "@/lib/cart";
 import { submitOrder } from "@/lib/orders";
 import { useSettings } from "@/lib/settings";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
-
-/** Kvitteringa må overleve at kunden dreg ned og oppdaterer sida etterpå */
-export const LAST_ORDER_KEY = "rorlager.siste-ordre";
 
 function Field({
   label,
