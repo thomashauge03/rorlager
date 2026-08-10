@@ -59,7 +59,9 @@ const missingPrice = (l: PipeOrderLineRow) =>
 
 export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
   const {
-    showPrices = false,
+    // Grunnlaget skal til rekneskapen, og då er beløpa heile poenget. Ein
+    // uttaksoversikt utan prisar er unntaket ein hakar av for, ikkje regelen.
+    showPrices = true,
     showSignatures = true,
     showProject = true,
     showOrderNumbers = true,
@@ -363,6 +365,8 @@ export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
 
 export function downloadInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
   const doc = buildInvoicePDF(inv, opts);
-  const suffix = opts.showPrices ? "med_pris" : "uten_pris";
+  // Må lese same standard som buildInvoicePDF. Ein rein `opts.showPrices` ville
+  // gitt "uten_pris" på ei fil full av beløp når valet ikkje er sendt inn.
+  const suffix = (opts.showPrices ?? true) ? "med_pris" : "uten_pris";
   doc.save(`fakturagrunnlag_${inv.invoice_number}_${safeName(inv.customer_name)}_${suffix}.pdf`);
 }

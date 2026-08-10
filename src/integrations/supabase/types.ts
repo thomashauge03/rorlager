@@ -173,6 +173,10 @@ export type Database = {
         Returns: number;
       };
       pipe_missing_cost_count: { Args: Record<string, never>; Returns: number };
+      pipe_import_costs: {
+        Args: { p_rows: Json; p_percent: number; p_round_to?: number };
+        Returns: Json;
+      };
       pipe_create_invoice: {
         Args: {
           p_customer_name: string;

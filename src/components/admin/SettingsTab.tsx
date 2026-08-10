@@ -26,6 +26,7 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 
+import { PriceImport } from "@/components/admin/PriceImport";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
@@ -524,6 +525,8 @@ export function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <PriceImport />
 
       <AlertDialog open={confirmOpen} onOpenChange={(open) => !apply.isPending && setConfirmOpen(open)}>
         <AlertDialogContent>

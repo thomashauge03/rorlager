@@ -2,6 +2,7 @@
 // slik at sortering, filtrering og feilmeldingar blir like overalt.
 
 import { supabase } from "@/integrations/supabase/client";
+import type { Json } from "@/integrations/supabase/types";
 import { searchKey } from "@/lib/stock";
 import type {
   OrderStatus,
@@ -290,6 +291,47 @@ export async function applyMarkup(percent: number, scope: MarkupScope = {}): Pro
   });
   if (error) fail("Klarte ikke å oppdatere prisene", error);
   return Number(data ?? 0);
+}
+
+export type ImportResult = {
+  /** Varer som fekk ny innkjøps- og salspris */
+  updated: number;
+  /** Linjer databasen tok imot */
+  received: number;
+  /** Varenummer i fila som ikkje finst i katalogen */
+  unmatched: string[];
+};
+
+/**
+ * Skriv innkjøpsprisane frå ei prisliste inn i katalogen og reknar ut
+ * salsprisane på nytt. Namn, dimensjon, hylleplass og beholdning blir ikkje
+ * rørte – dei kan vere retta for hand, og ein prisimport skal ikkje viske det ut.
+ */
+export async function importCosts(
+  rows: { sku: string; cost: number }[],
+  percent: number,
+  roundTo = 1,
+): Promise<ImportResult> {
+  const { data, error } = await supabase.rpc("pipe_import_costs", {
+    p_rows: rows as unknown as Json,
+    p_percent: percent,
+    p_round_to: roundTo,
+  });
+  if (error) fail("Klarte ikke å importere prisene", error);
+  const r = (data ?? {}) as { updated?: number; received?: number; unmatched?: string[] };
+  return { updated: r.updated ?? 0, received: r.received ?? 0, unmatched: r.unmatched ?? [] };
+}
+
+/**
+ * Opprettar fleire varer i eitt kall. Brukt når ei prisliste inneheld varer
+ * katalogen ikkje har frå før – då kan det vere hundrevis, og ei løkke med eitt
+ * kall per vare ville teke minutt og kunne stoppa halvvegs.
+ */
+export async function createPipeTypes(rows: Partial<PipeTypeRow>[]): Promise<number> {
+  if (!rows.length) return 0;
+  const { data, error } = await supabase.from("pipe_types").insert(rows as PipeTypeRow[]).select("id");
+  if (error) fail("Klarte ikke å opprette varene", error);
+  return data?.length ?? 0;
 }
 
 /** Reknar ut same pris som databasen gjer, slik at førehandsvisinga stemmer. */

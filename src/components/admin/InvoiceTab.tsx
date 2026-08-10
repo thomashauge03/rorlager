@@ -95,7 +95,7 @@ export function InvoiceTab() {
 
   // Prisar er av som standard: grunnlaget kan hamne hos kunden, og då skal
   // beløpa vere eit medvite val og ikkje noko som følgjer med av vane.
-  const [showPrices, setShowPrices] = useState(false);
+  const [showPrices, setShowPrices] = useState(true);
   const [showSignatures, setShowSignatures] = useState(true);
   const [showProject, setShowProject] = useState(true);
   const [showOrderNumbers, setShowOrderNumbers] = useState(true);
@@ -338,7 +338,7 @@ export function InvoiceTab() {
     {
       id: "pdf-priser",
       label: "Vis priser og sum",
-      hint: "Av som standard. Huk av når grunnlaget skal vise beløp. Mva kommer med hvis satsen er satt under Innstillinger.",
+      hint: "På som standard – grunnlaget skal til regnskapet. Ta den av hvis kunden bare skal ha en oversikt over hva som er hentet. Mva kommer med hvis satsen er satt under Innstillinger.",
       value: showPrices,
       set: setShowPrices,
     },
