@@ -19,7 +19,13 @@ npm run dev          # http://localhost:8080
 
 Åpne Supabase-prosjektet -> **SQL Editor** -> lim inn hele [`supabase-setup.sql`](supabase-setup.sql)
 og trykk Run. Den oppretter tabeller, tilgangsregler, funksjoner og en startkatalog
-med rørtyper. Filen kan kjøres flere ganger uten å ødelegge data.
+med 23 rørtyper. Filen kan kjøres flere ganger uten å ødelegge data.
+
+Sjekk at alt sitter:
+
+```bash
+npm run check:db
+```
 
 `.env` må peke på samme prosjekt:
 
