@@ -4,7 +4,7 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, LogOut, Package, Palette, QrCode, Settings, ShoppingCart, Users } from "lucide-react";
+import { FileText, Loader2, LogOut, Package, Palette, QrCode, Settings, ShieldAlert, ShoppingCart, Users } from "lucide-react";
 import hmLogo from "@/assets/hm-logo.png";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -76,6 +76,29 @@ export default function AdminDashboard() {
     staleTime: Infinity,
   });
 
+  /*
+   * Innlogging er ikkje det same som tilgang lenger.
+   *
+   * Kvar policy krev no ei rad i system_users, og sjølvregistrering er open i
+   * prosjektet. Utan denne sjekken ville ein framand som registrerte seg fått
+   * eit heilt tomt panel: kvar spørjing svarar 200 med null rader, som ser ut
+   * som ein app der alt er tomt eller øydelagt.
+   *
+   * Same grunngjeving som over: eit feila kall er ikkje eit nei. Databasen
+   * håndhevar tilgangen uansett, så her vinn vi ingenting på å nekte i tvil –
+   * vi ville berre vist ei falsk nekting til nokon som har tilgang.
+   */
+  const { data: harTilgang } = useQuery({
+    queryKey: ["hm_har_tilgang"],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc("hm_har_tilgang");
+      if (error) throw new Error(error.message);
+      return Boolean(data);
+    },
+    enabled: !checking && !!email,
+    staleTime: Infinity,
+  });
+
   const logout = async () => {
     await supabase.auth.signOut();
     navigate("/login", { replace: true });
@@ -93,6 +116,29 @@ export default function AdminDashboard() {
       <div className="min-h-dvh hm-page flex items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
         <span className="sr-only">Sjekker innlogging</span>
+      </div>
+    );
+  }
+
+  // Berre eit definitivt `false` gir nekting. undefined betyr «ikkje svart
+  // enno», og eit tomt panel i eit halvt sekund er betre enn ei falsk nekting.
+  if (harTilgang === false) {
+    return (
+      <div className="min-h-dvh hm-page flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="rounded-full bg-primary/10 p-4 ring-8 ring-primary/5">
+          <ShieldAlert className="h-7 w-7 text-primary" aria-hidden="true" />
+        </div>
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">Ingen tilgang</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Du er innlogga som <strong>{email ?? "ukjend"}</strong>, men kontoen
+            er ikkje gitt tilgang til admindelen. Ein administrator må leggje deg
+            inn før du ser noko her.
+          </p>
+        </div>
+        <Button variant="outline" onClick={logout}>
+          Logg ut
+        </Button>
       </div>
     );
   }
