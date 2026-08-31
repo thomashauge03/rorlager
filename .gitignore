@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Miljøvariabler. Berre publishable/anon-nøklar i dag, men fila skal
+# uansett ikkje sporast - neste hemmelegheit hamnar her.
+.env

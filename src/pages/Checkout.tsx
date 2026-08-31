@@ -265,6 +265,17 @@ export default function Checkout() {
               </>
             )}
           </Button>
+
+          {/* Informasjonsplikta i GDPR artikkel 13 gjeld på innsamlingstidspunktet,
+              ikkje på førespurnad. Difor står lenka her, ved skjemaet, og ikkje
+              berre i ein botntekst kunden aldri ser. */}
+          <p className="pb-2 text-center text-xs text-muted-foreground">
+            Vi lagrer navn og mobilnummer for å kunne fakturere uttaket.{" "}
+            <Link to="/personvern" className="underline underline-offset-2">
+              Slik behandler vi opplysningene
+            </Link>
+            .
+          </p>
         </form>
       </main>
     </div>

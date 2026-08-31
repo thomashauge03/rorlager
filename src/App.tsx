@@ -12,6 +12,7 @@ import Receipt from "./pages/Receipt";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
+import Personvern from "./pages/Personvern";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -44,6 +45,7 @@ const App = () => (
             <Route path="/kurv" element={<Cart />} />
             <Route path="/kasse" element={<Checkout />} />
             <Route path="/kvittering" element={<Receipt />} />
+            <Route path="/personvern" element={<Personvern />} />
             <Route path="/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/brukere" element={<AdminUsers />} />
