@@ -407,5 +407,73 @@ await som(db, KONTOR, async () => {
   sjekk("og kan åpne det igjen", igjen?.resolved_at ?? null, null);
 });
 
+console.log("\n── Puljer: 100 bestilt, så 60 + 30 + 20 ──\n");
+/*
+ * project_recompute_status er FASITEN for om ei bestilling er levert.
+ * TS-spegelen blei med vilje sletta fordi databasen skal vere einaste
+ * autoritet – og så var autoriteten den einaste delen utan ein einaste test.
+ *
+ * Overleveringa til slutt er poenget: 60 + 30 + 20 = 110 av 100 bestilte.
+ */
+const puljeOrdre = await en(
+  `insert into public.project_orders (project_id, requested_by_name, status)
+   values ($1, 'Kari', 'bestilt') returning id`,
+  [p1.id],
+);
+const puljeLinje = await en(
+  `insert into public.project_order_lines (order_id, name, unit, requested_qty, ordered_qty)
+   values ($1, 'Overvannsrør 200', 'm', 100, 100) returning id`,
+  [puljeOrdre.id],
+);
+
+const puljeStatus = async () => (await en(`select status from public.project_orders where id = $1`, [puljeOrdre.id])).status;
+sjekk("før noe kom: bestilt", await puljeStatus(), "bestilt");
+
+await som(db, KARI, async () => {
+  for (const [antal, venta] of [
+    [60, "delvis"],
+    [30, "delvis"],
+    [20, "mottatt"],
+  ]) {
+    await db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, null, null, 'testkjøring')`, [
+      puljeOrdre.id,
+      JSON.stringify([{ order_line_id: puljeLinje.id, received_qty: antal }]),
+    ]);
+    const s = await puljeStatus();
+    s === venta ? ok(`etter ${antal} m: ${s}`) : nei(`pulje ${antal}`, `venta ${venta}, fikk ${s}`);
+  }
+});
+
+const sum = await en(
+  `select coalesce(sum(rl.received_qty),0)::numeric s from public.project_receipt_lines rl
+     join public.project_receipts r on r.id = rl.receipt_id
+    where rl.order_line_id = $1`,
+  [puljeLinje.id],
+);
+sjekk("summen over alle puljer er 110", Number(sum.s), 110);
+
+/*
+ * Og avviket på siste pulja: klienten sende «ingen», men 60 + 30 + 20 er ti
+ * meter for mykje. projects.ts påstår at «databasen tvingar for_mye uansett kva
+ * klienten sender». Den påstanden var utesta.
+ */
+const sisteAvvik = await en(
+  `select rl.deviation from public.project_receipt_lines rl
+     join public.project_receipts r on r.id = rl.receipt_id
+    where rl.order_line_id = $1 order by r.receipt_number desc limit 1`,
+  [puljeLinje.id],
+);
+sjekk("databasen tvinger «for mye», selv om klienten sa «ingen»", sisteAvvik.deviation, "for_mye");
+
+const rest = await en(
+  `select ordered_qty - coalesce((
+     select sum(rl.received_qty) from public.project_receipt_lines rl
+       join public.project_receipts r on r.id = rl.receipt_id
+      where rl.order_line_id = l.id), 0) as rest
+     from public.project_order_lines l where l.id = $1`,
+  [puljeLinje.id],
+);
+sjekk("resten er −10, ikke null – overleveringen er synlig", Number(rest.rest), -10);
+
 console.log(tilstand.feil === 0 ? `\nAlt i orden. Ingen av hullene er åpne.\n` : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);
