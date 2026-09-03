@@ -198,6 +198,16 @@ export type ProjectReceiptRow = {
   note: string | null;
   /** Nøkkel klienten lagar før innsending, så eit nytt forsøk ikkje gir ei ny pulje. */
   client_ref: string | null;
+  /** Sett når mottaket blei registrert utan bilete. Anten denne eller minst eitt bilete. */
+  no_photo_reason: string | null;
+  created_at: string;
+};
+
+export type ProjectReceiptPhotoRow = {
+  id: string;
+  receipt_id: string;
+  /** Sti i den private bøtta: <project_id>/<client_ref>/<filnamn> */
+  path: string;
   created_at: string;
 };
 
@@ -254,6 +264,7 @@ export type Database = {
       project_order_lines: Table<ProjectOrderLineRow>;
       project_receipts: Table<ProjectReceiptRow>;
       project_receipt_lines: Table<ProjectReceiptLineRow>;
+      project_receipt_photos: Table<ProjectReceiptPhotoRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;
@@ -336,6 +347,8 @@ export type Database = {
           p_signature?: string | null;
           p_note?: string | null;
           p_client_ref?: string | null;
+          p_photos?: string[] | null;
+          p_no_photo_reason?: string | null;
         };
         Returns: ProjectReceiptRow;
       };

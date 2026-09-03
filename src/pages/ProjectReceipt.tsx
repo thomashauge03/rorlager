@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { CheckCheck, Loader2, PackageCheck, RotateCcw, TriangleAlert } from "lucide-react";
+import { Camera, CheckCheck, Loader2, PackageCheck, RotateCcw, Trash2, TriangleAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +24,7 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import { fetchProjectOrder, submitReceipt, suggestDeviation } from "@/lib/projects";
+import { MAKS_BILETE, lastOppBilde, slettBilde } from "@/lib/mottak-bilde";
 import { useAuth } from "@/lib/auth";
 import { num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import { DEVIATION_LABEL, type Deviation, type ProjectOrderLine } from "@/lib/types";
@@ -80,6 +81,17 @@ export default function ProjectReceipt() {
   const navnRef = useRef<HTMLInputElement | null>(null);
 
   /*
+   * Bileta. Lasta opp FØR mottaket blir sendt inn, så brukaren ser dei før han
+   * kvitterer – og så opplastinga ikkje ligg i vegen for sjølve innsendinga når
+   * dekninga er dårleg.
+   */
+  const [bilder, setBilder] = useState<{ sti: string; url: string }[]>([]);
+  const [lasterOpp, setLasterOpp] = useState(0);
+  const [utenBildeGrunn, setUtenBildeGrunn] = useState("");
+  const [visUtenBilde, setVisUtenBilde] = useState(false);
+  const filRef = useRef<HTMLInputElement | null>(null);
+
+  /*
    * Nøkkelen for dette forsøket. Laga éin gong per opna skjerm, og den same om
    * brukaren må prøve på nytt. Går skrivinga gjennom men svaret blir borte i
    * dårleg dekning, svarar databasen med det same mottaket i staden for å lage
@@ -130,6 +142,47 @@ export default function ProjectReceipt() {
     return r && (r.mottattTekst !== somTekst(l.remaining_qty) || r.avvik !== "ingen" || r.notat !== "");
   });
 
+  const velgBilder = async (filer: FileList | null) => {
+    if (!filer || filer.length === 0) return;
+    const plass = MAKS_BILETE - bilder.length;
+    if (plass <= 0) {
+      toast({ title: `Maks ${MAKS_BILETE} bilder`, description: "Fjern ett før du legger til flere." });
+      return;
+    }
+
+    const valgte = Array.from(filer).slice(0, plass);
+    setLasterOpp((n) => n + valgte.length);
+
+    for (const [i, fil] of valgte.entries()) {
+      try {
+        const sti = await lastOppBilde(id, clientRef.current, fil, bilder.length + i);
+        // Førehandsvisinga blir teikna frå fila på telefonen, ikkje henta ned
+        // att frå Storage – det ville vore ein rundtur til ingen nytte.
+        setBilder((f) => [...f, { sti, url: URL.createObjectURL(fil) }]);
+      } catch (err) {
+        toast({
+          variant: "destructive",
+          title: "Bildet ble ikke lastet opp",
+          description: err instanceof Error ? err.message : "Sjekk dekningen og prøv igjen.",
+        });
+      } finally {
+        setLasterOpp((n) => n - 1);
+      }
+    }
+
+    // Same fila skal kunne veljast om att om opplastinga feila
+    if (filRef.current) filRef.current.value = "";
+  };
+
+  const fjernBilde = async (sti: string) => {
+    const bildet = bilder.find((b) => b.sti === sti);
+    setBilder((f) => f.filter((b) => b.sti !== sti));
+    if (bildet) URL.revokeObjectURL(bildet.url);
+    // Rydder i bøtta òg: eit bilete som ikkje blir kvittert for, skal ikkje bli
+    // liggjande att som eit foto ingen har bedt om å lagre.
+    await slettBilde(sti).catch(() => undefined);
+  };
+
   const nullstill = () => {
     setRader(Object.fromEntries(linjer.map((l) => [l.id, tomRad(l.remaining_qty)])));
     toast({ title: "Alle linjer satt tilbake til bestilt antall" });
@@ -162,6 +215,12 @@ export default function ProjectReceipt() {
 
       if (ut.length === 0) throw new Error("Ingen linjer å kvittere for. Fyll inn hva som kom.");
 
+      // Databasen krev det same, men meldinga herifrå er den brukaren treng.
+      if (bilder.length === 0 && !utenBildeGrunn.trim()) {
+        throw new Error("Ta minst ett bilde av leveransen, eller skriv hvorfor det ikke lot seg gjøre.");
+      }
+      if (lasterOpp > 0) throw new Error("Vent til bildene er lastet opp.");
+
       try {
         localStorage.setItem(NAVN_NØKKEL, navn.trim());
       } catch {
@@ -174,6 +233,8 @@ export default function ProjectReceipt() {
         signature: signatur,
         note: notat.trim() || null,
         clientRef: clientRef.current,
+        photos: bilder.map((b) => b.sti),
+        noPhotoReason: bilder.length === 0 ? utenBildeGrunn.trim() : null,
         lines: ut,
       });
     },
@@ -392,6 +453,114 @@ export default function ProjectReceipt() {
           })}
         </ul>
 
+        {/* ---------- Bildedokumentasjonen ---------- */}
+        <section className="hm-card mt-4 space-y-3 p-3" aria-labelledby="bilder">
+          <div className="flex items-center justify-between gap-2">
+            <h2 id="bilder" className="text-sm font-semibold text-foreground">
+              Bilde av leveransen <span className="text-destructive">*</span>
+            </h2>
+            {bilder.length > 0 ? (
+              <span className="hm-chip border border-success/30 bg-success/15 text-success">
+                {bilder.length} av {MAKS_BILETE}
+              </span>
+            ) : null}
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Ta bilde av pallene, følgeseddelen eller det som er galt. Det er dette som gjelder hvis leveransen må
+            reklameres.
+          </p>
+
+          {/* capture="environment" åpner kameraet rett på baksida, ikkje
+              filveljaren – eitt trykk mindre med hanskar på. */}
+          <input
+            ref={filRef}
+            id="mottak-bilde"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            className="sr-only"
+            onChange={(e) => velgBilder(e.target.files)}
+          />
+
+          {bilder.length > 0 ? (
+            <ul className="grid grid-cols-3 gap-2">
+              {bilder.map((b) => (
+                <li key={b.sti} className="relative">
+                  <img
+                    src={b.url}
+                    alt="Bilde fra mottaket"
+                    className="aspect-square w-full rounded-md border border-border object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fjernBilde(b.sti)}
+                    aria-label="Fjern bildet"
+                    className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 text-destructive shadow"
+                  >
+                    <Trash2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+
+          <Button
+            type="button"
+            variant={bilder.length === 0 ? "default" : "outline"}
+            className="h-14 w-full text-base [&_svg]:size-6"
+            disabled={lasterOpp > 0 || bilder.length >= MAKS_BILETE}
+            onClick={() => filRef.current?.click()}
+          >
+            {lasterOpp > 0 ? (
+              <>
+                <Loader2 className="mr-2 animate-spin" aria-hidden="true" />
+                Laster opp {lasterOpp} {lasterOpp === 1 ? "bilde" : "bilder"} …
+              </>
+            ) : (
+              <>
+                <Camera className="mr-2" aria-hidden="true" />
+                {bilder.length === 0 ? "Ta bilde" : "Ta ett til"}
+              </>
+            )}
+          </Button>
+
+          {/*
+           * Nødutgangen. Dekninga på ein byggjeplass er som ho er, og eit krav
+           * som ikkje kan omgåast blir omgått på verre måtar – då kvitterer
+           * ingen, eller dei kvitterer frå ein annan stad seinare.
+           */}
+          {bilder.length === 0 ? (
+            visUtenBilde ? (
+              <div className="space-y-1.5 rounded-md border border-warning/40 bg-warning/10 p-3">
+                <Label htmlFor="uten-bilde" className="text-sm text-warning-ink dark:text-warning">
+                  Hvorfor mangler bildet?
+                </Label>
+                <Input
+                  id="uten-bilde"
+                  value={utenBildeGrunn}
+                  onChange={(e) => setUtenBildeGrunn(e.target.value)}
+                  placeholder="F.eks. ingen dekning på plassen"
+                  className="h-12 bg-background text-base"
+                />
+                <p className="text-xs text-warning-ink dark:text-warning">
+                  Kontoret ser at bildet mangler, og hvorfor.
+                </p>
+              </div>
+            ) : (
+              <Button
+                type="button"
+                variant="ghost"
+                className="h-11 w-full text-muted-foreground"
+                onClick={() => setVisUtenBilde(true)}
+              >
+                Fikk ikke tatt bilde
+              </Button>
+            )
+          ) : null}
+        </section>
+
         <section className="hm-card mt-4 space-y-3 p-3" aria-labelledby="kvittering">
           <h2 id="kvittering" className="text-sm font-semibold text-foreground">
             Kvittering
@@ -438,7 +607,8 @@ export default function ProjectReceipt() {
         {/* Informasjonsplikta gjeld når opplysningane blir samla inn, ikkje
             seinare. Same grep som i kassa. */}
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Navnet og signaturen din lagres på mottaket som dokumentasjon på leveransen.{" "}
+          Navnet, signaturen og bildene lagres på mottaket som dokumentasjon på leveransen. Bildene er ikke offentlige —
+          bare kontoret og de som er på prosjektet ser dem.{" "}
           <Link to="/personvern" className="underline underline-offset-2 hover:text-foreground">
             Personvern
           </Link>

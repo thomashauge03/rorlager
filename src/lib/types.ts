@@ -19,10 +19,12 @@ export type {
   ProjectOrderStatus,
   ProjectReceiptRow,
   ProjectReceiptLineRow,
+  ProjectReceiptPhotoRow,
   Deviation,
 } from "@/integrations/supabase/types";
 
 import type {
+  ProjectReceiptPhotoRow,
   PipeTypeRow,
   PipeCatalogRow,
   PipeOrderRow,
@@ -119,8 +121,14 @@ export type ProjectOrderLine = ProjectOrderLineRow & {
   remaining_qty: number;
 };
 
+/** Eit mottak med linjene og bileta sine. */
+export type ProjectReceiptFull = ProjectReceiptRow & {
+  lines: ProjectReceiptLineRow[];
+  photos: ProjectReceiptPhotoRow[];
+};
+
 /** Ei bestilling slik ho blir vist: hovudrada, linjene og mottaka. */
 export type ProjectOrderWithLines = ProjectOrderRow & {
   lines: ProjectOrderLine[];
-  receipts: (ProjectReceiptRow & { lines: ProjectReceiptLineRow[] })[];
+  receipts: ProjectReceiptFull[];
 };

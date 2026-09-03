@@ -23,6 +23,7 @@ import {
   setText,
   type CompanyInfo,
 } from "@/lib/order-pdf";
+import { hentBildeData } from "@/lib/mottak-bilde";
 import { dateTime, isoDate, num, pipeLabel } from "@/lib/format";
 import { DEVIATION_LABEL } from "@/lib/types";
 import type { ProjectOrderWithLines, ProjectReceiptRow, ProjectReceiptLineRow } from "@/lib/types";
@@ -33,9 +34,11 @@ export type ReceiptPdfDoc = {
   projectAddress: string | null;
   order: ProjectOrderWithLines;
   receipt: ProjectReceiptRow & { lines: ProjectReceiptLineRow[] };
+  /** Bileta som data-URL-ar. jsPDF kan ikkje hente dei sjølv. */
+  photos?: string[];
 };
 
-export function buildReceiptPDF({ company, projectName, projectAddress, order, receipt }: ReceiptPdfDoc) {
+export function buildReceiptPDF({ company, projectName, projectAddress, order, receipt, photos = [] }: ReceiptPdfDoc) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
@@ -160,6 +163,54 @@ export function buildReceiptPDF({ company, projectName, projectAddress, order, r
     y += 6 + linjer.length * 4.4;
   }
 
+  // ---------- Bileta ----------
+  //
+  // To per rad. Dette er dokumentasjonen som følgjer reklamasjonen, så dei skal
+  // vere store nok til at ein sprekk faktisk er synleg på papir.
+  if (photos.length > 0) {
+    if (y + 30 > ph - 26) {
+      doc.addPage();
+      y = MARGIN + 6;
+    }
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    setText(doc, BLACK);
+    doc.text(`Bilder fra mottaket (${photos.length})`, MARGIN, y);
+    y += 4;
+
+    const kolBreidd = (contentW - 6) / 2;
+    const høgd = kolBreidd * 0.75;
+
+    photos.forEach((data, i) => {
+      const kol = i % 2;
+      if (kol === 0) {
+        if (y + høgd > ph - 26) {
+          doc.addPage();
+          y = MARGIN + 6;
+        }
+        y += 4;
+      }
+      try {
+        doc.addImage(data, MARGIN + kol * (kolBreidd + 6), y, kolBreidd, høgd, undefined, "FAST");
+      } catch {
+        /* eit bilete som ikkje let seg teikne skal ikkje velte heile PDF-en */
+      }
+      if (kol === 1 || i === photos.length - 1) y += høgd;
+    });
+    y += 8;
+  }
+
+  if (receipt.no_photo_reason) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    setText(doc, RED);
+    doc.text("Uten bilde", MARGIN, y);
+    doc.setFont("helvetica", "normal");
+    setText(doc, GREY);
+    doc.text(receipt.no_photo_reason, MARGIN + 24, y);
+    y += 8;
+  }
+
   // ---------- Signaturen ----------
   if (receipt.signature) {
     if (y + 34 > ph - 26) {
@@ -196,4 +247,25 @@ export function buildReceiptPDF({ company, projectName, projectAddress, order, r
 export function downloadReceiptPDF(input: ReceiptPdfDoc) {
   const doc = buildReceiptPDF(input);
   doc.save(`mottak-${input.receipt.receipt_number}-${safeName(input.projectName)}-${isoDate()}.pdf`);
+}
+
+/**
+ * Same, men hentar bileta først.
+ *
+ * Bileta ligg i ei privat bøtte og må hentast gjennom signerte lenker før de
+ * kan leggjast i dokumentet. Går det ikkje – dårleg dekning, ei lenke som gjekk
+ * ut – blir PDF-en laga likevel, med linjene og avvika. Ein PDF utan bilete er
+ * langt betre enn ingen når du står i ein reklamasjon.
+ */
+export async function downloadReceiptPDFMedBilder(
+  input: Omit<ReceiptPdfDoc, "photos"> & { photoPaths: string[] },
+): Promise<void> {
+  const { photoPaths, ...resten } = input;
+  let photos: string[] = [];
+  try {
+    photos = await hentBildeData(photoPaths);
+  } catch {
+    /* PDF-en blir laga utan */
+  }
+  downloadReceiptPDF({ ...resten, photos });
 }

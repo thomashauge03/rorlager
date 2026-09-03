@@ -103,7 +103,7 @@ await som(db, KARI, async () => {
   m ? ok("kan ikke legge til en linje direkte") : nei("ny linje", "GIKK GJENNOM");
 
   const r = await nekta(() =>
-    db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb)`, [
+    db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, null, null, 'testkjøring')`, [
       ordre.id,
       JSON.stringify([{ order_line_id: linje.id, received_qty: 50 }]),
     ]),
@@ -151,7 +151,7 @@ await som(db, KONTOR, async () => {
 
   // Fanst som feil: same linje to gonger i eitt kall såg ikkje den første av
   // dei, så overleveringa slapp unna for_mye-merkinga.
-  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb)`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, null, 'testkjøring')`, [
     ordre.id,
     JSON.stringify([
       { order_line_id: linje.id, received_qty: 20 },
@@ -182,7 +182,7 @@ await som(db, KONTOR, async () => {
     o.id,
     JSON.stringify([{ id: l.id, ordered_qty: 10 }]),
   ]);
-  await db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb)`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, null, null, 'testkjøring')`, [
     o.id,
     JSON.stringify([{ order_line_id: l.id, received_qty: 6 }]),
   ]);
@@ -203,12 +203,12 @@ await som(db, KONTOR, async () => {
   // pulje. Byggjeplassdekning gjer at eit svar kan bli borte etter at
   // skrivinga gjekk gjennom.
   const nokkel = "11111111-2222-3333-4444-555555555555";
-  const a = await en(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, $3) as r`, [
+  const a = await en(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, $3, null, 'testkjøring') as r`, [
     o.id,
     JSON.stringify([{ order_line_id: l.id, received_qty: 2 }]),
     nokkel,
   ]);
-  const b = await en(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, $3) as r`, [
+  const b = await en(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, $3, null, 'testkjøring') as r`, [
     o.id,
     JSON.stringify([{ order_line_id: l.id, received_qty: 2 }]),
     nokkel,

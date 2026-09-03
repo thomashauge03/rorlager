@@ -193,6 +193,23 @@ det er reell informasjon, og den skjules ikke.
 tabellen. Mottaket og linjene skal skrives helt eller ikke i det hele tatt, og
 statusen på bestillingen settes i samme transaksjon.
 
+**Bilde er påkrevd, med én nødutgang.** Databasen avviser et mottak uten både
+bilde og en skreven grunn — kravet ligger der og ikke bare i grensesnittet,
+siden en klient alltid kan la være å sende feltet. Nødutgangen finnes fordi
+dekningen på en byggeplass er som den er: et krav som ikke kan omgås blir omgått
+på verre måter, som at ingen kvitterer, eller at de kvitterer fra et sted med
+dekning lenge etterpå. Kontoret ser hvilke mottak som mangler bilde og hvorfor.
+
+**Bildene er personopplysninger.** Et bilde fra en byggeplass kan vise folk.
+Bøtta `mottak-bilder` er derfor privat, og tilgangen følger prosjektet helt ned
+til Storage: stien starter med prosjekt-id, og policyen på `storage.objects`
+leser nettopp det leddet. Ingen offentlige URL-er — bare signerte lenker som
+utløper. Sletting er kontorets alene; plassen skal ikke kunne fjerne
+dokumentasjon i ettertid.
+
+Bildene komprimeres i nettleseren før opplasting. Et mobilbilde er 3–8 MB, og på
+halv dekning tar det minutter mens sjåføren står og venter.
+
 ## Priser og avanse
 
 Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der

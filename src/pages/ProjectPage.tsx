@@ -24,7 +24,7 @@ import { QK } from "@/lib/orders";
 import { deleteProjectOrder, fetchProject, fetchProjectOrders, isOverdue } from "@/lib/projects";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
-import { downloadReceiptPDF } from "@/lib/receipt-pdf";
+import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
 import { num, shortDate } from "@/lib/format";
 import { useState } from "react";
 import type { ProjectOrderWithLines } from "@/lib/types";
@@ -249,7 +249,7 @@ export default function ProjectPage() {
                                 type="button"
                                 aria-label={`Last ned mottak ${r.receipt_number} som PDF`}
                                 onClick={() =>
-                                  downloadReceiptPDF({
+                                  downloadReceiptPDFMedBilder({
                                     company: {
                                       name: settings?.company_name || "Hauge Maskin AS",
                                       orgNumber: settings?.org_number ?? null,
@@ -261,6 +261,7 @@ export default function ProjectPage() {
                                     projectAddress: p?.address ?? null,
                                     order: o,
                                     receipt: r,
+                                    photoPaths: r.photos.map((f) => f.path),
                                   })
                                 }
                                 className="flex h-11 w-11 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground"

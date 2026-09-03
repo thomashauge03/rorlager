@@ -148,7 +148,7 @@ await som(db, KARI, async () => {
 await som(db, OLA, async () => {
   sjekk("Ola ser ikke Karis bestilling", (await alle(`select id from public.project_orders`)).length, 0);
   const m = await nekta(() =>
-    db.query(`select public.project_submit_receipt($1, 'Ola', $2::jsonb)`, [
+    db.query(`select public.project_submit_receipt($1, 'Ola', $2::jsonb, null, null, null, null, 'testkjøring')`, [
       ordreId,
       JSON.stringify([{ order_line_id: l1, received_qty: 50 }]),
     ]),
@@ -183,7 +183,7 @@ await som(db, KONTOR, async () => {
 
 await som(db, KARI, async () => {
   // Første pulje: 25 av 40 meter, ingen koblinger
-  await db.query(`select public.project_submit_receipt($1, 'Kari Nordmann', $2::jsonb, null, 'Første bil')`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kari Nordmann', $2::jsonb, null, 'Første bil', null, null, 'testkjøring')`, [
     ordreId,
     JSON.stringify([{ order_line_id: l1, received_qty: 25 }]),
   ]);
@@ -200,7 +200,7 @@ await som(db, KARI, async () => {
   sjekk("rest på rørlinja er 15", Number(rest.rest), 15);
 
   // Andre pulje: resten av røret, og koblingene med avvik
-  await db.query(`select public.project_submit_receipt($1, 'Kari Nordmann', $2::jsonb, null, 'Andre bil')`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kari Nordmann', $2::jsonb, null, 'Andre bil', null, null, 'testkjøring')`, [
     ordreId,
     JSON.stringify([
       { order_line_id: l1, received_qty: 15 },
@@ -214,7 +214,7 @@ await som(db, KARI, async () => {
   sjekk("avviket er bevart", avvik.map((a) => a.deviation), ["skadet"]);
 
   const m = await nekta(() =>
-    db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb)`, [
+    db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, null, null, 'testkjøring')`, [
       ordreId,
       JSON.stringify([{ order_line_id: l1, received_qty: 1 }]),
     ]),
@@ -240,7 +240,7 @@ await som(db, KONTOR, async () => {
   ]);
 
   // For mye levert skal aldri se rent ut
-  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb)`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, null, 'testkjøring')`, [
     o.id,
     JSON.stringify([{ order_line_id: l.id, received_qty: 12 }]),
   ]);
@@ -262,7 +262,7 @@ await som(db, KONTOR, async () => {
     o.id,
     JSON.stringify([{ id: lA.id, ordered_qty: 5 }]),
   ]);
-  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb)`, [
+  await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, null, 'testkjøring')`, [
     o.id,
     JSON.stringify([{ order_line_id: lA.id, received_qty: 5 }]),
   ]);

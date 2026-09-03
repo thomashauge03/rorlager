@@ -62,6 +62,13 @@ export default function Personvern() {
               <li>Hva du tok ut, hvor mye og når</li>
               <li>Signatur, dersom utleier har slått på signering</li>
             </ul>
+
+            <p className="mt-3">
+              For dem som er satt på et prosjekt og kvitterer for leveranser fra
+              leverandør, behandler vi i tillegg navnet på den som tok imot,
+              signaturen hans, og <strong>bildene han tar av leveransen</strong>.
+              Bildene kan vise personer som er på plassen.
+            </p>
           </Avsnitt>
 
           <Avsnitt tittel="Hvorfor">
@@ -71,6 +78,15 @@ export default function Personvern() {
               fakturere. Det rettslige grunnlaget er å oppfylle avtalen med deg,
               jf. personvernforordningen artikkel 6 nr. 1 bokstav b, og
               bokføringsplikten for det som gjelder faktura.
+            </p>
+            <p className="mt-3">
+              Bilder fra mottakskontrollen tas for å dokumentere hva som faktisk
+              ble levert, slik at avvik kan reklameres til leverandøren. Grunnlaget
+              er vår berettigede interesse i å kunne dokumentere en leveranse,
+              jf. artikkel 6 nr. 1 bokstav f. Bildene er ikke offentlige: de
+              ligger utilgjengelig for andre enn kontoret og dem som er satt på
+              det aktuelle prosjektet, og hentes bare fram gjennom lenker som
+              utløper.
             </p>
           </Avsnitt>
 

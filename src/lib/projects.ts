@@ -15,6 +15,7 @@ import type {
   ProjectOrderRow,
   ProjectOrderWithLines,
   ProjectReceiptLineRow,
+  ProjectReceiptPhotoRow,
   ProjectReceiptRow,
   ProjectRow,
 } from "@/lib/types";
@@ -258,11 +259,15 @@ export async function removeProjectMember(id: string): Promise<void> {
 
 // ---------------------------------------------------------------- bestillingar
 
-const ORDER_SELECT = "*, project_order_lines(*), project_receipts(*, project_receipt_lines(*))";
+const ORDER_SELECT =
+  "*, project_order_lines(*), project_receipts(*, project_receipt_lines(*), project_receipt_photos(*))";
 
 type RaaBestilling = ProjectOrderRow & {
   project_order_lines?: ProjectOrderLineRow[] | null;
-  project_receipts?: (ProjectReceiptRow & { project_receipt_lines?: ProjectReceiptLineRow[] | null })[] | null;
+  project_receipts?: (ProjectReceiptRow & {
+    project_receipt_lines?: ProjectReceiptLineRow[] | null;
+    project_receipt_photos?: ProjectReceiptPhotoRow[] | null;
+  })[] | null;
 };
 
 /** Set saman rada, linjene og mottaka til det sidene faktisk vil ha. */
@@ -270,7 +275,11 @@ function formBestilling(rad: RaaBestilling): ProjectOrderWithLines {
   const { project_order_lines, project_receipts, ...order } = rad;
 
   const receipts = [...(project_receipts ?? [])]
-    .map(({ project_receipt_lines, ...r }) => ({ ...r, lines: project_receipt_lines ?? [] }))
+    .map(({ project_receipt_lines, project_receipt_photos, ...r }) => ({
+      ...r,
+      lines: project_receipt_lines ?? [],
+      photos: project_receipt_photos ?? [],
+    }))
     .sort((a, b) => a.received_at.localeCompare(b.received_at));
 
   const alleMottakslinjer = receipts.flatMap((r) => r.lines);
@@ -403,6 +412,9 @@ export async function submitReceipt(input: {
   signature: string | null;
   note: string | null;
   clientRef: string;
+  /** Stiar i den private bøtta. Anten desse eller ein grunn må vere med. */
+  photos: string[];
+  noPhotoReason: string | null;
   lines: { order_line_id: string; received_qty: number; deviation: Deviation; note: string | null }[];
 }): Promise<ProjectReceiptRow> {
   const { data, error } = await supabase.rpc("project_submit_receipt", {
@@ -412,6 +424,8 @@ export async function submitReceipt(input: {
     p_signature: input.signature,
     p_note: input.note,
     p_client_ref: input.clientRef,
+    p_photos: input.photos,
+    p_no_photo_reason: input.noPhotoReason,
   });
   if (error) throw new Error(error.message || "Klarte ikke å registrere mottaket");
   return data as ProjectReceiptRow;

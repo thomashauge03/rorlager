@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import { fetchAllProjectOrders, fetchProjects, isOverdue, markOrdered, saveOfficeNote, setOrderStatus } from "@/lib/projects";
 import { useSettings } from "@/lib/settings";
-import { downloadReceiptPDF } from "@/lib/receipt-pdf";
+import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
 import { dateTime, num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import type { ProjectOrderWithLines } from "@/lib/types";
 
@@ -179,6 +179,14 @@ export function ToOrderTab() {
                         Mottak #{receipt.receipt_number} · bestilling #{order.order_number}
                       </p>
                     </div>
+                    {/* Manglande bilete er verdt like mykje merksemd som eit
+                        avvik: det er dokumentasjonen som skal følgje ein
+                        reklamasjon. */}
+                    {receipt.no_photo_reason ? (
+                      <span className="hm-chip shrink-0 border border-warning/30 bg-warning/15 text-warning-ink dark:text-warning">
+                        Uten bilde
+                      </span>
+                    ) : null}
                     {avvikPaa > 0 ? (
                       <span className="hm-chip shrink-0 border border-destructive/30 bg-destructive/15 text-destructive">
                         {avvikPaa} avvik
@@ -200,8 +208,15 @@ export function ToOrderTab() {
 
                   <div className="mt-3 flex flex-wrap gap-2">
                     <Stat label="Varelinjer" value={String(receipt.lines.length)} />
+                    <Stat label="Bilder" value={String(receipt.photos.length)} />
                     <Stat label="Bestilling" value={`#${order.order_number}`} />
                   </div>
+
+                  {receipt.no_photo_reason ? (
+                    <p className="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-ink dark:text-warning">
+                      Ingen bilde: «{receipt.no_photo_reason}»
+                    </p>
+                  ) : null}
 
                   <ul className="mt-3 space-y-1 border-t border-border pt-3">
                     {receipt.lines.map((rl) => {
@@ -234,12 +249,13 @@ export function ToOrderTab() {
                     disabled={!p}
                     onClick={() =>
                       p
-                        ? downloadReceiptPDF({
+                        ? downloadReceiptPDFMedBilder({
                             company: pdfFirma,
                             projectName: p.name,
                             projectAddress: p.address,
                             order,
                             receipt,
+                            photoPaths: receipt.photos.map((f) => f.path),
                           })
                         : undefined
                     }
