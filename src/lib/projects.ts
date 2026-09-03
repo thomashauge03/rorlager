@@ -59,6 +59,27 @@ function kreverTreff(rader: unknown[] | null, nekting: string): void {
  */
 const rundAv = (n: number) => Math.round(n * 1000) / 1000;
 
+/**
+ * Teksten som fortel kva som står att på ei linje.
+ *
+ * Ligg her og ikkje i JSX-en fordi ho har eit tredje tilfelle som er lett å
+ * gløyme: OVERLEVERING. Kortet skreiv «{ordered_qty} mottatt» for alt som ikkje
+ * mangla – altså det BESTILTE talet der det MOTTEKNE skulle stått. Kom det 110
+ * av 100, sa skjermen «100 m mottatt», og dei ti ekstra var usynlege for
+ * kontoret som skal reklamere på dei.
+ */
+export function remainderLabel(orderedQty: number | null, remainingQty: number, unit: string): string {
+  const bestilt = Number(orderedQty ?? 0);
+  if (remainingQty > 0) return `mangler ${nMed(remainingQty)} ${unit}`;
+  if (remainingQty < 0) {
+    return `${nMed(bestilt - remainingQty)} ${unit} mottatt – ${nMed(-remainingQty)} ${unit} for mye`;
+  }
+  return `${nMed(bestilt)} ${unit} mottatt`;
+}
+
+/** Norsk komma, og ingen etterfølgjande nullar. Same form som num() i format.ts. */
+const nMed = (n: number) => String(rundAv(n)).replace(".", ",");
+
 /** Kva som er mottatt på éi bestillingslinje, summert over alle puljer. */
 export function receivedForLine(lineId: string, receiptLines: ProjectReceiptLineRow[]): number {
   return rundAv(

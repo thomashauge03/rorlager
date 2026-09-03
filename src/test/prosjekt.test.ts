@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isOverdue, receivedForLine, suggestDeviation, withReceived } from "@/lib/projects";
+import { isOverdue, receivedForLine, remainderLabel, suggestDeviation, withReceived } from "@/lib/projects";
 import type { ProjectOrderLineRow, ProjectReceiptLineRow } from "@/lib/types";
 
 // Mottakskontrollen står og fell på eitt tal: kor mykje som framleis manglar.
@@ -117,5 +117,35 @@ describe("suggestDeviation", () => {
   it("regner ikke en delleveranse som avvik", () => {
     expect(suggestDeviation(8, 10)).toBe("ingen");
     expect(suggestDeviation(0, 10)).toBe("ingen");
+  });
+});
+
+/*
+ * Teksten på prosjektkortet.
+ *
+ * Overleveringen var usynlig: koden skrev «{ordered_qty} mottatt» for alt som
+ * ikke manglet — altså det BESTILTE tallet der det MOTTATTE skulle stått. Kom
+ * det 110 av 100, sa kortet «100 m mottatt», og de ti ekstra fantes ikke for
+ * kontoret som skal reklamere på dem.
+ */
+describe("remainderLabel", () => {
+  it("sier hva som mangler", () => {
+    expect(remainderLabel(100, 40, "m")).toBe("mangler 40 m");
+  });
+
+  it("sier at alt kom", () => {
+    expect(remainderLabel(100, 0, "m")).toBe("100 m mottatt");
+  });
+
+  it("viser overleveringen, ikke det bestilte tallet", () => {
+    expect(remainderLabel(100, -10, "m")).toBe("110 m mottatt – 10 m for mye");
+  });
+
+  it("tåler at kontoret ikke har skrevet inn antallet ennå", () => {
+    expect(remainderLabel(null, 0, "stk")).toBe("0 stk mottatt");
+  });
+
+  it("skriver norsk komma og ingen flyttallsstøy", () => {
+    expect(remainderLabel(6.4, -0.30000000000000004, "m")).toBe("6,7 m mottatt – 0,3 m for mye");
   });
 });

@@ -21,7 +21,7 @@ import { Stat } from "@/components/Stat";
 import { ProjectStatusBadge } from "@/components/StatusBadge";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
-import { deleteProjectOrder, fetchProject, fetchProjectOrders, isOverdue } from "@/lib/projects";
+import { deleteProjectOrder, fetchProject, fetchProjectOrders, isOverdue, remainderLabel } from "@/lib/projects";
 import { useAuth } from "@/lib/auth";
 import { useSettings } from "@/lib/settings";
 import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
@@ -231,20 +231,8 @@ export default function ProjectPage() {
                           .map((l) => (
                             <li key={l.id} className="flex justify-between gap-3 text-sm">
                               <span className="min-w-0 truncate text-muted-foreground">{l.name}</span>
-                              {/*
-                                * OVERLEVERING HAR SIN EIGEN TEKST.
-                                *
-                                * Her stod «ordered_qty mottatt» for alt som ikkje mangla –
-                                * altså det BESTILTE talet på plassen der det MOTTEKNE skulle
-                                * stått. Kom det 110 av 100, sa kortet «100 m mottatt», og dei
-                                * ti ekstra var usynlege for kontoret som skal reklamere på dei.
-                                */}
                               <span className="tabular shrink-0 font-medium text-foreground">
-                                {l.remaining_qty > 0
-                                  ? `mangler ${num(l.remaining_qty)} ${l.unit}`
-                                  : l.remaining_qty < 0
-                                    ? `${num(Number(l.ordered_qty) - l.remaining_qty)} ${l.unit} mottatt – ${num(-l.remaining_qty)} for mye`
-                                    : `${num(Number(l.ordered_qty))} ${l.unit} mottatt`}
+                                {remainderLabel(l.ordered_qty, l.remaining_qty, l.unit)}
                               </span>
                             </li>
                           ))}
