@@ -191,6 +191,65 @@ export async function addProjectMember(projectId: string, email: string): Promis
   }
 }
 
+/**
+ * Kva prosjekt ein person er sett på.
+ *
+ * .eq og IKKJE .ilike. ilike sender mønsteret rått til Postgres, der `_` matchar
+ * eit vilkårleg teikn – så «per_hansen@hm.no» ville òg treft «per.hansen@hm.no».
+ * På lesing gir det feil avkryssingar; på sletting ville det fjerna ein ANNAN
+ * person sin tilgang. Alle skrivingar legg inn med små bokstavar, så .eq mot ei
+ * småskriven adresse treffer det som finst.
+ */
+export async function fetchMemberProjects(email: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from("project_members")
+    .select("project_id")
+    .eq("email", email.trim().toLowerCase());
+  if (error) fail("Klarte ikke å hente prosjekttilgangen", error);
+  return (data ?? []).map((r) => r.project_id);
+}
+
+/**
+ * Set heile lista over prosjekt ein person har tilgang til.
+ *
+ * Skriv berre skilnaden. Å slette alt og setje inn på nytt ville gitt eit
+ * augeblikk der personen ikkje såg prosjekta sine – og står han midt i ein
+ * mottakskontroll då, mistar han det han har skrive.
+ *
+ * Feilar noko halvvegs, seier vi kva som faktisk skjedde. Ei melding om at
+ * «ingenting blei lagra» når halvparten landa, er verre enn inga melding: då
+ * prøver superadmin på nytt utan å vite kva han rettar.
+ */
+export async function setMemberProjects(email: string, projectIds: string[]): Promise<void> {
+  const e = email.trim().toLowerCase();
+  const har = await fetchMemberProjects(e);
+
+  const skalLeggjeTil = projectIds.filter((id) => !har.includes(id));
+  const skalFjerne = har.filter((id) => !projectIds.includes(id));
+
+  let lagtTil = 0;
+
+  if (skalLeggjeTil.length > 0) {
+    const { error } = await supabase
+      .from("project_members")
+      .insert(skalLeggjeTil.map((project_id) => ({ project_id, email: e })) as ProjectMemberRow[]);
+    if (error) fail("Klarte ikke å legge til prosjekttilgang", error);
+    lagtTil = skalLeggjeTil.length;
+  }
+
+  if (skalFjerne.length > 0) {
+    const { error } = await supabase
+      .from("project_members")
+      .delete()
+      .eq("email", e)
+      .in("project_id", skalFjerne);
+    if (error) {
+      const halvvegs = lagtTil > 0 ? ` ${lagtTil} nye prosjekt ble lagt til, men` : "";
+      throw new Error(`Klarte ikke å fjerne prosjekttilgang.${halvvegs} de gamle står fortsatt.`);
+    }
+  }
+}
+
 export async function removeProjectMember(id: string): Promise<void> {
   const { data, error } = await supabase.from("project_members").delete().eq("id", id).select("id");
   if (error) fail("Klarte ikke å fjerne personen", error);

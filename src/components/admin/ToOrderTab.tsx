@@ -6,7 +6,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ClipboardCopy, Inbox, Loader2, PackageCheck, ShoppingBag, Truck } from "lucide-react";
+import { AlertTriangle, ClipboardCopy, FileDown, Inbox, Loader2, PackageCheck, ShoppingBag, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -28,14 +28,17 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import { fetchAllProjectOrders, fetchProjects, isOverdue, markOrdered, saveOfficeNote, setOrderStatus } from "@/lib/projects";
-import { num, parseNum, pipeLabel, shortDate } from "@/lib/format";
+import { useSettings } from "@/lib/settings";
+import { downloadReceiptPDF } from "@/lib/receipt-pdf";
+import { dateTime, num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import type { ProjectOrderWithLines } from "@/lib/types";
 
-type Utsnitt = "bestille" | "underveis" | "avvik";
+type Utsnitt = "bestille" | "underveis" | "mottak" | "avvik";
 
 const UTSNITT: { verdi: Utsnitt; navn: string }[] = [
   { verdi: "bestille", navn: "Å bestille" },
   { verdi: "underveis", navn: "Underveis" },
+  { verdi: "mottak", navn: "Mottak" },
   { verdi: "avvik", navn: "Avvik" },
 ];
 
@@ -45,16 +48,31 @@ export function ToOrderTab() {
 
   const orders = useQuery({ queryKey: QK.projectOrders, queryFn: fetchAllProjectOrders });
   const projects = useQuery({ queryKey: QK.projects, queryFn: fetchProjects });
+  const { data: settings } = useSettings();
 
-  const prosjektNavn = useMemo(() => {
-    const kart = new Map((projects.data ?? []).map((p) => [p.id, p.name]));
-    return (id: string) => kart.get(id) ?? "Ukjent prosjekt";
-  }, [projects.data]);
+  // Eitt kart, brukt av begge utsnitta. Låg tidlegare som eit memoisert kart
+  // for namnet og eit lineært `find` for rada – to måtar å gjere same oppslaget.
+  const prosjektKart = useMemo(
+    () => new Map((projects.data ?? []).map((p) => [p.id, p])),
+    [projects.data],
+  );
+  const prosjektNavn = (id: string) => prosjektKart.get(id)?.name ?? "Ukjent prosjekt";
 
   const alle = orders.data ?? [];
 
   const bestille = alle.filter((o) => o.status === "meldt");
   const underveis = alle.filter((o) => o.status === "bestilt" || o.status === "delvis");
+  /*
+   * Alle mottak, nyaste først.
+   *
+   * Kontoret såg tidlegare berre AVVIK, aldri dei normale mottaka – altså
+   * ingen måte å svare på «kom dette, og kven tok imot?» utan å opne kvar
+   * bestilling for seg.
+   */
+  const mottak = alle
+    .flatMap((o) => o.receipts.map((r) => ({ order: o, receipt: r })))
+    .sort((a, b) => b.receipt.received_at.localeCompare(a.receipt.received_at));
+
   const medAvvik = alle
     .flatMap((o) =>
       o.receipts.flatMap((r) =>
@@ -70,13 +88,30 @@ export function ToOrderTab() {
     )
     .sort((a, b) => b.receipt.received_at.localeCompare(a.receipt.received_at));
 
+  const prosjektRad = (id: string) => prosjektKart.get(id) ?? null;
+
+  const pdfFirma = {
+    name: settings?.company_name || "Hauge Maskin AS",
+    orgNumber: settings?.org_number ?? null,
+    address: settings?.address ?? null,
+    phone: settings?.phone ?? null,
+    email: settings?.email ?? null,
+  };
+
   const vist = utsnitt === "bestille" ? bestille : utsnitt === "underveis" ? underveis : [];
 
   return (
     <div className="animate-fade-in space-y-4">
       <div className="hm-card flex flex-wrap gap-2 p-3">
         {UTSNITT.map((u) => {
-          const antal = u.verdi === "bestille" ? bestille.length : u.verdi === "underveis" ? underveis.length : medAvvik.length;
+          const antal =
+            u.verdi === "bestille"
+              ? bestille.length
+              : u.verdi === "underveis"
+                ? underveis.length
+                : u.verdi === "mottak"
+                  ? mottak.length
+                  : medAvvik.length;
           return (
             <button
               key={u.verdi}
@@ -101,16 +136,122 @@ export function ToOrderTab() {
           <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
         </div>
-      ) : orders.isError ? (
+      ) : orders.isError || projects.isError ? (
         <div className="hm-card p-6">
-          <p className="text-sm font-semibold text-destructive">Bestillingene kunne ikke hentes</p>
-          <p className="mt-1 text-sm text-foreground">
-            {orders.error instanceof Error ? orders.error.message : "Ukjent feil"}
+          <p className="text-sm font-semibold text-destructive">
+            {orders.isError ? "Bestillingene" : "Prosjektene"} kunne ikke hentes
           </p>
-          <Button size="sm" variant="outline" className="mt-3" onClick={() => orders.refetch()}>
+          <p className="mt-1 text-sm text-foreground">
+            {(orders.error ?? projects.error) instanceof Error
+              ? (orders.error ?? projects.error)!.message
+              : "Ukjent feil"}
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            className="mt-3"
+            onClick={() => {
+              if (orders.isError) orders.refetch();
+              if (projects.isError) projects.refetch();
+            }}
+          >
             Prøv igjen
           </Button>
         </div>
+      ) : utsnitt === "mottak" ? (
+        mottak.length === 0 ? (
+          <TomTilstand
+            ikon={<PackageCheck className="h-7 w-7 text-primary" aria-hidden="true" />}
+            tittel="Ingen mottak ennå"
+            tekst="Når plassen kvitterer for en leveranse, dukker den opp her."
+          />
+        ) : (
+          <ul className="space-y-2">
+            {mottak.map(({ order, receipt }) => {
+              const avvikPaa = receipt.lines.filter((l) => l.deviation !== "ingen").length;
+              const p = prosjektRad(order.project_id);
+              return (
+                <li key={receipt.id} className="hm-card p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">{p?.name ?? "Ukjent prosjekt"}</p>
+                      <p className="tabular text-sm text-muted-foreground">
+                        Mottak #{receipt.receipt_number} · bestilling #{order.order_number}
+                      </p>
+                    </div>
+                    {avvikPaa > 0 ? (
+                      <span className="hm-chip shrink-0 border border-destructive/30 bg-destructive/15 text-destructive">
+                        {avvikPaa} avvik
+                      </span>
+                    ) : (
+                      <span className="hm-chip shrink-0 border border-success/30 bg-success/15 text-success">
+                        Uten avvik
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Namnet står som tekst, ikkje i ei hm-stat-rute: den er
+                      laga for tal (text-lg font-bold, fast breidd), og eit langt
+                      namn flyt over henne. */}
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    Tatt imot av <span className="font-medium text-foreground">{receipt.received_by_name}</span> ·{" "}
+                    <span className="tabular">{dateTime(receipt.received_at)}</span>
+                  </p>
+
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Stat label="Varelinjer" value={String(receipt.lines.length)} />
+                    <Stat label="Bestilling" value={`#${order.order_number}`} />
+                  </div>
+
+                  <ul className="mt-3 space-y-1 border-t border-border pt-3">
+                    {receipt.lines.map((rl) => {
+                      const linje = order.lines.find((l) => l.id === rl.order_line_id);
+                      return (
+                        <li key={rl.id} className="flex items-center justify-between gap-3 text-sm">
+                          <span className="min-w-0 truncate text-muted-foreground">
+                            {linje ? pipeLabel(linje.name, linje.dimension) : "Ukjent vare"}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            <span className="tabular text-foreground">
+                              {num(Number(rl.received_qty))} {linje?.unit ?? ""}
+                            </span>
+                            {rl.deviation !== "ingen" ? <DeviationBadge deviation={rl.deviation} /> : null}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {receipt.note ? <p className="mt-2 text-sm text-foreground">«{receipt.note}»</p> : null}
+
+                  {/* Utskrifta er det som blir sendt leverandøren ved reklamasjon */}
+                  {/* Stengd til prosjektlista er lesen. Uten den blir
+                      prosjektnavnet «Prosjekt» og adressen tom i PDF-en — og
+                      den PDF-en er reklamasjonsgrunnlaget mot leverandøren. */}
+                  <Button
+                    variant="outline"
+                    className="mt-3 h-11 w-full"
+                    disabled={!p}
+                    onClick={() =>
+                      p
+                        ? downloadReceiptPDF({
+                            company: pdfFirma,
+                            projectName: p.name,
+                            projectAddress: p.address,
+                            order,
+                            receipt,
+                          })
+                        : undefined
+                    }
+                  >
+                    <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+                    {p ? "Last ned mottakskontrollen" : "Henter prosjektet …"}
+                  </Button>
+                </li>
+              );
+            })}
+          </ul>
+        )
       ) : utsnitt === "avvik" ? (
         medAvvik.length === 0 ? (
           <TomTilstand

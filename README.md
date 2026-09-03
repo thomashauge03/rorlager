@@ -76,10 +76,54 @@ Tilgangen har tre nivåer, og **rollen i `system_users` avgjør hvilket**:
 Vilkåret er formulert negativt — «rolle forskjellig fra `prosjekt`» — slik at
 eksisterende brukere beholder tilgangen uten at noen rad må flyttes.
 
-**Å gi en person på byggeplassen tilgang krever to ting:** en rad i
-`system_users` med rollen `prosjekt` (Admin → Brukere), og en rad per prosjekt
-under Admin → Prosjekt → «Hvem er på». Begge nøkles på e-post, så de kan legges
-inn før personen har registrert seg.
+**Å gi en person tilgang gjøres på ett sted:** Admin → Brukere. Der velger du
+rolle og huker av hvilke prosjekter personen skal se — så mange som trengs, og
+det kan endres når som helst. Samme tilgang kan også styres fra prosjektsiden
+(Admin → Prosjekt → «Hvem er på»), for når du har plassen framfor deg og ikke
+personen. Begge skriver samme tabell.
+
+Alt nøkles på e-post, ikke på bruker-id, så en person kan settes opp før han har
+logget inn første gang.
+
+### Sjekk dette i Supabase én gang
+
+**Authentication → Providers → Email: «Confirm email» og «Secure email change»
+må begge være PÅ.**
+
+Hele tilgangsmodellen henger på e-posten i innloggingstokenet. `is_super_admin()`,
+`hm_er_kontor()`, `hm_rolle()` og `hm_er_prosjektmedlem()` slår alle opp på den.
+Samtidig er selvregistrering åpen i prosjektet, så hvem som helst kan lage en
+konto.
+
+Er «Secure email change» av, kan en fremmed registrere seg, be om å bytte
+e-postadresse til superadminens — og få den uten bekreftelse. Etter neste
+token-fornyelse er han superadmin. Det er den eneste veien inn i tilgangsmodellen
+noen har funnet, og den ligger i en innstilling, ikke i koden.
+
+### Serverfunksjonen for midlertidige passord
+
+**Dette må rulles ut én gang før «Opprett med midlertidig passord» virker.**
+
+Å opprette en innlogging, eller sette passordet til noen andre, krever
+`service_role`-nøkkelen. Den omgår **all** RLS — har noen den, har de alt — så
+den kan aldri ligge i nettleseren. Derfor ligger jobben i en serverfunksjon der
+nøkkelen aldri forlater Supabase.
+
+1. Supabase → **Edge Functions** → **Deploy a new function**
+2. Navn: `opprett-bruker` (nøyaktig dette — klienten kaller det ved navn)
+3. Lim inn hele [`supabase/functions/opprett-bruker/index.ts`](supabase/functions/opprett-bruker/index.ts)
+4. Deploy
+
+`SUPABASE_URL`, `SUPABASE_ANON_KEY` og `SUPABASE_SERVICE_ROLE_KEY` settes
+automatisk av Supabase — du trenger ikke fylle inn noe.
+
+Funksjonen sjekker selv at den som kaller er superadmin, og gjør det med
+**kallerens egen økt**, ikke med `service_role`. En sjekk gjort på serveren er
+den eneste som teller; klienten kan lyve om hvem den er.
+
+Passordet vises én gang og lagres ingen steder. Personen logger inn med det og
+bytter det selv under «Bytt passord» på `/admin/brukere`. Mister du det, lager du
+et nytt fra nøkkel-ikonet i brukerlista.
 
 ## Sider
 
@@ -92,6 +136,7 @@ inn før personen har registrert seg.
 | `/kvittering` | Kvittering med ordrenummer og PDF |
 | `/login` | Innlogging |
 | `/admin` | Bestillinger, Å bestille, Prosjekt, Lager, QR-koder, Faktura, Innstillinger |
+| `/admin` → **Å bestille** | Fire utsnitt: Å bestille, Underveis, Mottak, Avvik |
 | `/admin/brukere` | Brukerregister (kun superadmin) |
 | `/prosjekt` | Prosjektene mine (byggeplass) |
 | `/prosjekt/:id` | Bestillingene på prosjektet |
@@ -187,6 +232,7 @@ src/
     invoice-pdf.ts fakturagrunnlag
     receipt-pdf.ts mottakskontroll – det du sender leverandøren ved reklamasjon
 supabase/migrations/   databaseskjemaet – kilden til supabase-setup.sql
+supabase/functions/    serverfunksjoner (opprett-bruker: midlertidige passord)
 scripts/
   check-db.mjs    sjekker en levende base med anon-nøkkelen
   bygg-setup.mjs  bygger supabase-setup.sql fra migrasjonene
