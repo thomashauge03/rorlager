@@ -28,7 +28,16 @@ import { parseNum, pipeLabel } from "@/lib/format";
  * leveransen, på eit dokument som blir signert og sendt leverandøren.
  */
 const NAVN_NØKKEL = (epost: string | null) => `rorlager.prosjekt.navn.${epost ?? "ukjend"}`;
-const UTKAST_NØKKEL = (id: string) => `rorlager.prosjekt.utkast.${id}`;
+
+/**
+ * Utkastet er PER BRUKAR OG PROSJEKT.
+ *
+ * Det var berre per prosjekt. På det same delte nettbrettet betyr det at neste
+ * mann opnar «Meld inn behov» og finn førre manns liste – med fritekstlinjene
+ * og notata hans – og sender ho inn under sitt eige namn.
+ */
+const UTKAST_NØKKEL = (id: string, epost: string | null) =>
+  `rorlager.prosjekt.utkast.${epost ?? "ukjend"}.${id}`;
 
 /** Så mange treff blir viste om gongen. Står som ei konstant fordi talet blir
  *  vist til brukaren når lista er kappa. */
@@ -61,19 +70,22 @@ type Utkast = NyLinje & { key: string; antalTekst: string };
  * det motsette (cart.ts), og dette er nøyaktig same situasjonen – berre med
  * hanskar på og dårlegare dekning.
  */
-const lesUtkast = (id: string): Utkast[] => {
+const lesUtkast = (nøkkel: string): Utkast[] => {
   try {
-    const raw = localStorage.getItem(UTKAST_NØKKEL(id));
-    return raw ? (JSON.parse(raw) as Utkast[]) : [];
+    const raw = localStorage.getItem(nøkkel);
+    const v = raw ? JSON.parse(raw) : null;
+    // Innhaldet er noko brukaren sjølv kan endre. Er det ikkje ei liste, er det
+    // ikkje eit utkast – då startar vi tomt heller enn å krasje på .map().
+    return Array.isArray(v) ? (v as Utkast[]) : [];
   } catch {
     return [];
   }
 };
 
-const skrivUtkast = (id: string, linjer: Utkast[]) => {
+const skrivUtkast = (nøkkel: string, linjer: Utkast[]) => {
   try {
-    if (linjer.length === 0) localStorage.removeItem(UTKAST_NØKKEL(id));
-    else localStorage.setItem(UTKAST_NØKKEL(id), JSON.stringify(linjer));
+    if (linjer.length === 0) localStorage.removeItem(nøkkel);
+    else localStorage.setItem(nøkkel, JSON.stringify(linjer));
   } catch {
     /* ignorer – berre ei bekvemmelegheit */
   }
@@ -87,9 +99,21 @@ export default function ProjectRequest() {
   const auth = useAuth(() => navigate("/login", { replace: true }));
   const klar = !auth.checking && !!auth.email;
 
+  /*
+   * E-POSTEN ER IKKJE KJEND PÅ FØRSTE RENDER.
+   *
+   * Både namnet og utkastet ligg per brukar, men useAuth må først spørje
+   * Supabase. Ein useState-initialisator ville difor lese «…ukjend»-nøkkelen og
+   * aldri sjå det som faktisk blei lagra – namnefeltet var i praksis daudt.
+   * Difor hentar vi dei i ein effekt, og let autolagringa under vente til
+   * nøkkelen vi hydrerte frå er den same som den vi skriv til.
+   */
+  const nøkkel = klar ? UTKAST_NØKKEL(id, auth.email) : null;
+  const [hydrertFor, setHydrertFor] = useState<string | null>(null);
+
   const [søk, setSøk] = useState("");
-  const [linjer, setLinjer] = useState<Utkast[]>(() => lesUtkast(id));
-  const [navn, setNavn] = useState(() => lesNavn(auth.email));
+  const [linjer, setLinjer] = useState<Utkast[]>([]);
+  const [navn, setNavn] = useState("");
   const [trengsInnen, setTrengsInnen] = useState("");
   const [notat, setNotat] = useState("");
   const [fritekst, setFritekst] = useState("");
@@ -110,11 +134,21 @@ export default function ProjectRequest() {
     return (katalog.data ?? []).filter((t) => t.active && matchesSearch(t, q)).slice(0, TREFF_TAK);
   }, [katalog.data, søk]);
 
-  // Kvar endring blir lagra med det same, så ingenting går tapt om sida blir
-  // forlaten midt i.
   useEffect(() => {
-    skrivUtkast(id, linjer);
-  }, [id, linjer]);
+    if (!nøkkel) return;
+    setLinjer(lesUtkast(nøkkel));
+    // Har brukaren alt begynt å skrive, skal ikkje det lagra namnet overskrive han.
+    setNavn((n) => n || lesNavn(auth.email));
+    setHydrertFor(nøkkel);
+  }, [nøkkel, auth.email]);
+
+  // Kvar endring blir lagra med det same, så ingenting går tapt om sida blir
+  // forlaten midt i. Ventar på hydreringa over: elles ville den tomme
+  // startlista blitt skriven over det som låg der.
+  useEffect(() => {
+    if (!nøkkel || hydrertFor !== nøkkel) return;
+    skrivUtkast(nøkkel, linjer);
+  }, [nøkkel, hydrertFor, linjer]);
 
   const leggTil = (linje: NyLinje) => {
     setLinjer((f) => [...f, { ...linje, key: `${Date.now()}-${f.length}`, antalTekst: "1" }]);
@@ -169,7 +203,7 @@ export default function ProjectRequest() {
       });
     },
     onSuccess: (order) => {
-      skrivUtkast(id, []);
+      if (nøkkel) skrivUtkast(nøkkel, []);
       queryClient.invalidateQueries({ queryKey: QK.projectOrders });
       toast({ title: "Behovet er meldt inn", description: `Bestilling #${order.order_number} ligger nå hos kontoret.` });
       navigate(`/prosjekt/${id}`, { replace: true });

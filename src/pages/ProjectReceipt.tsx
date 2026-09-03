@@ -82,7 +82,19 @@ export default function ProjectReceipt() {
   });
 
   const [rader, setRader] = useState<Record<string, Rad>>({});
-  const [navn, setNavn] = useState(() => lesNavn(auth.email));
+  const [navn, setNavn] = useState("");
+
+  /*
+   * E-POSTEN ER IKKJE KJEND PÅ FØRSTE RENDER.
+   *
+   * Namnenøkkelen er per brukar, men useAuth må først spørje Supabase. Ein
+   * useState-initialisator las difor «…ukjend» og fann aldri det som blei
+   * lagra – feltet stod tomt kvar gong sjølv om vi skreiv til det.
+   */
+  useEffect(() => {
+    if (!auth.email) return;
+    setNavn((n) => n || lesNavn(auth.email));
+  }, [auth.email]);
   const [signatur, setSignatur] = useState<string | null>(null);
   const [notat, setNotat] = useState("");
   const navnRef = useRef<HTMLInputElement | null>(null);

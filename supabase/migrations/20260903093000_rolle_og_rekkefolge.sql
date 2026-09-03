@@ -30,14 +30,21 @@ as $$
   select public.is_super_admin() or exists (
     select 1 from public.system_users
      where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
-       -- ALT som ikke er en bokstav vekk.
-       --
-       -- Ikke `btrim()`, som bare fjerner mellomrom, og ikke `\s`, som ikke
-       -- dekker hardt mellomrom (U+00A0). Å jage tegn for tegn er en liste som
-       -- alltid mangler ett; å beholde bare a–z kan ikke mangle noe.
-       -- 'prosjekt' med tab, linjeskift, hardt mellomrom eller store bokstaver
-       -- blir alle 'prosjekt', og dermed IKKE kontor.
-       and regexp_replace(lower(coalesce(role, '')), '[^a-z]', '', 'g') <> 'prosjekt'
+       /*
+        * HVITELISTE, IKKE «alt som ikke er prosjekt».
+        *
+        * Det negative vilkåret var feil vei. Først tålte det ikke tabulator,
+        * så ikke hardt mellomrom — og selv etter at alt utenom a–z ble
+        * strippet, ga en kyrillisk «о» i «prоsjekt» fortsatt KONTOR. Enhver
+        * negativ formulering må kjenne hver eneste måte å skrive 'prosjekt'
+        * på; en positiv trenger bare kjenne rollene som faktisk gir tilgang.
+        *
+        * Prisen er at en ny kontorrolle krever en migrasjon. Det er riktig
+        * pris: en rolle ingen har tenkt på skal ikke gi tilgang til
+        * fakturagrunnlag og innkjøpspriser fordi den tilfeldigvis ikke het
+        * 'prosjekt'.
+        */
+       and regexp_replace(lower(coalesce(role, '')), '[^a-z]', '', 'g') in ('admin', 'kontor', 'lager')
   );
 $$;
 
@@ -51,7 +58,14 @@ as $$
   select case
     when public.is_super_admin() then 'super_admin'
     else (
-      select regexp_replace(lower(role), '[^a-z_]', '', 'g') from public.system_users
+      -- NØYAKTIG samme normalisering som hm_er_kontor().
+      --
+      -- Klassene var ulike: `[^a-z]` her mot `[^a-z_]` der. En rolle med
+      -- understrek — «pro_sjekt», «prosjekt_» — ga da hm_er_kontor()=usann i
+      -- basen, mens klienten sammenlignet svaret mot «prosjekt», ikke fikk
+      -- treff, og trodde han var kontor. Brukeren ble låst inne i et tomt
+      -- adminpanel og kom aldri til prosjektet sitt.
+      select regexp_replace(lower(role), '[^a-z]', '', 'g') from public.system_users
        where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''))
        limit 1
     )
@@ -106,15 +120,19 @@ declare
   v_bilete integer := 0;
   v_grunn text;
 begin
+  /*
+   * SAMME SVAR PÅ «finnes ikke» OG «ikke din».
+   *
+   * To ulike meldinger gjorde funksjonen til et orakel: en ikke-medlem fikk
+   * «Fant ikke bestillingen» for en oppdiktet id, men «Ingen tilgang» for en
+   * ekte — og kunne dermed bekrefte at en ordre-id finnes.
+   *
+   * Lav alvorlighet, siden uuid-er ikke lar seg gjette. Men et orakel er
+   * gratis å fjerne, og den som gjetter riktig skal ikke få vite det.
+   */
   select * into v_order from public.project_orders where id = p_order_id;
-  if not found then
-    raise exception 'Fant ikke bestillingen';
-  end if;
-
-  -- TILGANGEN FØRST. Alt under her forutsetter at kalleren hører hjemme på
-  -- prosjektet, inkludert svaret på et gjentatt forsøk.
-  if not public.hm_er_prosjektmedlem(v_order.project_id) then
-    raise exception 'Ingen tilgang til dette prosjektet' using errcode = '42501';
+  if not found or not public.hm_er_prosjektmedlem(v_order.project_id) then
+    raise exception 'Fant ikke bestillingen' using errcode = '42501';
   end if;
 
   -- Same nøkkel to gonger = same mottak. Sjå 20260903090100.
@@ -189,7 +207,17 @@ begin
     values (v_receipt.id, v_bilde)
     on conflict (path) do nothing;
 
-    v_bilete := v_bilete + 1;
+    /*
+     * BARE RADER SOM FAKTISK BLEI SKRIVNE.
+     *
+     * `on conflict do nothing` set FOUND til usann når rada alt fanst. Utan
+     * denne sjekken talde løkka FORSØK, og eit mottak som sende ein sti ein
+     * annan alt hadde brukt enda opp med null bilete og null grunn — altså
+     * nøyaktig den invarianten kravet skulle halde oppe.
+     */
+    if found then
+      v_bilete := v_bilete + 1;
+    end if;
   end loop;
 
   /*
@@ -340,7 +368,46 @@ revoke all on function public.project_submit_request(uuid, text, jsonb, date, te
 grant execute on function public.project_submit_request(uuid, text, jsonb, date, text) to authenticated;
 
 
--- ── 4. Fakturabeløpet regnes i basen ──
+-- ── 4. project_recompute_status var åpen for alle innloggede ──
+--
+-- Den er SECURITY DEFINER, hadde `grant execute ... to authenticated`, og —
+-- i motsetning til hver eneste andre prosjekt-RPC — ingen vakt i kroppen.
+--
+-- Demonstrert av en angriper: en innlogget bruker UTEN medlemskap i noe
+-- prosjekt kunne lese statusen på en hvilken som helst bestilling, bruke
+-- feilmeldingen som orakel på om en ordre-id finnes, og — fordi funksjonen
+-- kjører som eier og går utenom RLS — flytte et fremmed prosjekts bestilling
+-- fra 'bestilt' til 'mottatt'.
+--
+-- Funksjonen blir bare kalt internt, med `perform`, fra project_mark_ordered og
+-- project_submit_receipt. Begge er SECURITY DEFINER og kjører som eier, som har
+-- kjøreretten uansett. Den skal aldri ha vært kallbar utenfra.
+--
+-- Samme klasse tabbe som pipe_import_costs var i august: en definer-funksjon
+-- som gikk under radaren da vaktene ble satt.
+
+revoke execute on function public.project_recompute_status(uuid) from public, anon, authenticated;
+
+
+-- ── 5. Sekvensene lakk forretningsvolum til alle innloggede ──
+--
+-- Herdingen i 20260903090200 stengte bare anon, med begrunnelsen at «select på
+-- en sekvens røper hvor mange ordrer bedriften har hatt». Nøyaktig den samme
+-- lekkasjen sto åpen for `authenticated` — som i denne modellen inkluderer
+-- byggeplassbrukerne hele prosjekt-tilgangsmodellen ble bygd for å gjerde inne.
+--
+-- `usage` blir stående: kontoret setter inn direkte i projects og
+-- project_orders, og trenger nextval. Hull i serien er uansett uttrykkelig
+-- greit ifølge init-migrasjonen — det er `select last_value` som er problemet.
+
+revoke select on sequence public.projects_project_number_seq         from authenticated;
+revoke select on sequence public.project_orders_order_number_seq     from authenticated;
+revoke select on sequence public.project_receipts_receipt_number_seq from authenticated;
+revoke select on sequence public.pipe_orders_order_number_seq        from authenticated;
+revoke select on sequence public.pipe_invoices_invoice_number_seq    from authenticated;
+
+
+-- ── 6. Fakturabeløpet regnes i basen ──
 --
 -- `pipe_create_invoice` lagret `p_total` slik den kom inn fra nettleseren, og
 -- sammenlignet den aldri med bestillingene den knyttet til.
@@ -455,7 +522,10 @@ begin
     for select to authenticated
     using (
       bucket_id = 'mottak-bilder'
-      and name ~ '^[0-9a-fA-F-]{36}/'
+      -- Uuid-FORMEN, ikke bare 36 tegn fra riktig alfabet. «000…0» (36 nuller)
+      -- og 36 bindestreker matchet den forrige regexen, kastet på casten, og
+      -- ville fått hver select mot bøtta til å feile for alle innloggede.
+      and name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/'
       and public.hm_er_prosjektmedlem(((storage.foldername(name))[1])::uuid)
     );
 
@@ -464,7 +534,7 @@ begin
     for insert to authenticated
     with check (
       bucket_id = 'mottak-bilder'
-      and name ~ '^[0-9a-fA-F-]{36}/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'
+      and name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'
       and public.hm_er_prosjektmedlem(((storage.foldername(name))[1])::uuid)
     );
 
@@ -476,8 +546,18 @@ begin
       and (
         public.hm_er_kontor()
         or (
-          name ~ '^[0-9a-fA-F-]{36}/'
+          name ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}/'
           and public.hm_er_prosjektmedlem(((storage.foldername(name))[1])::uuid)
+          /*
+           * SITT EGET bilde, ikke hvem som helst sitt på prosjektet.
+           *
+           * Uten eiersjekken kunne Per slette Karis uferdige opplasting. Og
+           * siden RPC-en nå krever at fila finnes, ville hennes kvittering
+           * feilet med «Fant ikke bildet» — en annens sletting blokkerte
+           * altså hennes mottak. Før eksistenskravet var følgen bare at fila
+           * ble liggende; nå er den verre.
+           */
+          and owner = auth.uid()
           -- Bare det som ennå ikke er dokumentasjon
           and not exists (
             select 1 from public.project_receipt_photos ph where ph.path = storage.objects.name

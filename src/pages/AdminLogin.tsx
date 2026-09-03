@@ -30,12 +30,28 @@ function norwegianAuthError(message: string): string {
  * ein spinnar i eit panel han ikkje har tilgang til.
  */
 async function heimeside(): Promise<string> {
-  try {
-    const { data } = await supabase.rpc("hm_rolle");
-    return data === "prosjekt" ? "/prosjekt" : "/admin";
-  } catch {
-    return "/admin";
+  /*
+   * .rpc() KASTAR ALDRI.
+   *
+   * Han resolverer med { data: null, error }, så ein try/catch her hadde vore
+   * daud kode – og kvar einaste feil ville gitt data === null, altså «/admin»,
+   * som er nøyaktig det ein prosjektbrukar ikkje skal.
+   *
+   * Og han har inga tidsavgrensing. Utan Promise.race ville ein tenar som ikkje
+   * svarar late brukaren stå på ein spinnar utan veg vidare.
+   */
+  const svar = await Promise.race([
+    supabase.rpc("hm_rolle"),
+    new Promise<{ data: null; error: true }>((r) => setTimeout(() => r({ data: null, error: true }), 8000)),
+  ]);
+
+  if (svar.error || svar.data == null) {
+    // Vi VEIT ikkje kven han er. Prosjektsida er den trygge gissinga: kjem ein
+    // kontorbrukar dit, ser han prosjekta sine og kan gå vidare sjølv. Kjem ein
+    // prosjektbrukar til /admin, møter han eit panel han ikkje har tilgang til.
+    return "/prosjekt";
   }
+  return svar.data === "prosjekt" ? "/prosjekt" : "/admin";
 }
 
 export default function AdminLogin() {
@@ -52,8 +68,18 @@ export default function AdminLogin() {
     let alive = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!alive) return;
-      if (data.session) heimeside().then((v) => navigate(v, { replace: true }));
-      else setChecking(false);
+      if (!data.session) {
+        setChecking(false);
+        return;
+      }
+      // setChecking(false) òg her: heimeside() er ikkje lenger synkron, og utan
+      // dette ville ein innlogga brukar stått på ein evig spinnar dersom
+      // rolleoppslaget heng.
+      heimeside().then((v) => {
+        if (!alive) return;
+        setChecking(false);
+        navigate(v, { replace: true });
+      });
     });
     return () => {
       alive = false;
@@ -80,12 +106,22 @@ export default function AdminLogin() {
       email: email.trim().toLowerCase(),
       password,
     });
-    setLoading(false);
-
     if (error) {
+      setLoading(false);
       toast({ title: "Innlogging feilet", description: norwegianAuthError(error.message), variant: "destructive" });
       return;
     }
+
+    /*
+     * setLoading(false) står IKKE her.
+     *
+     * Det lå over, før rolleoppslaget — så knappen var aktiv gjennom hele
+     * heimeside(). Fem utålmodige trykk i det vinduet brenner rate-limiteren
+     * (5 forsøk per 5 minutt), og brukeren blir utestengt med riktig passord.
+     * På en byggeplass med halv dekning er det vinduet ikke teoretisk.
+     *
+     * Knappen blir stående deaktivert til vi navigerer bort.
+     */
     navigate(await heimeside(), { replace: true });
   };
 

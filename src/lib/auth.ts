@@ -27,9 +27,21 @@ import { fetchRole } from "@/lib/projects";
  * likevel her.
  */
 export async function loggUt(queryClient: QueryClient): Promise<void> {
+  /*
+   * BERRE NAMNET, ikkje utkastet.
+   *
+   * Eit sveip over «rorlager.prosjekt.*» tok med
+   * «rorlager.prosjekt.utkast.<id>» – lista over varer plassen har tasta inn.
+   * Ho blir med vilje bevart når ei innsending feilar («feilar innsendinga,
+   * skal lista framleis liggje der brukaren la ho»), og då er feila innsending
+   * pluss utlogging tolv varelinjer borte.
+   *
+   * Namnenøklane er alt per e-post, så dette er belte og bukseseler – men det
+   * er òg det einaste som SKAL vekk her.
+   */
   try {
     for (const n of Object.keys(localStorage)) {
-      if (n.startsWith("rorlager.prosjekt.")) localStorage.removeItem(n);
+      if (n.startsWith("rorlager.prosjekt.navn.")) localStorage.removeItem(n);
     }
   } catch {
     /* privat modus – då finst det ingenting å rydde */

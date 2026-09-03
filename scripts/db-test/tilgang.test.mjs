@@ -153,7 +153,11 @@ await som(db, OLA, async () => {
       JSON.stringify([{ order_line_id: l1, received_qty: 50 }]),
     ]),
   );
-  m && /tilgang/i.test(m) ? ok("Ola kan ikke kvittere på et fremmed prosjekt") : nei("Ola kvitterte!", m ?? "gikk gjennom");
+  // Meldinga er med vilje den same som for ei bestilling som ikkje finst –
+  // to ulike svar gjorde funksjonen til eit orakel på kva id-ar som finst.
+  m && /Fant ikke bestillingen/.test(m)
+    ? ok("Ola kan ikke kvittere på et fremmed prosjekt, og får ikke vite at den finnes")
+    : nei("Ola kvitterte!", m ?? "gikk gjennom");
 });
 
 await som(db, KARI, async () => {

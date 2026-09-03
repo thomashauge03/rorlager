@@ -10,8 +10,9 @@
 import { byggBase, som, somAnon, nekta, lagFasit } from "./base.mjs";
 
 const KONTOR = { epost: "thomashauge03@gmail.com" };
-const KARI = { epost: "kari@plassen.no" };
-const OLA = { epost: "ola@annenplass.no" };
+// Faste uid-ar: eigarsjekken i slettepolicyen samanliknar med auth.uid().
+const KARI = { epost: "kari@plassen.no", uid: "22222222-2222-2222-2222-222222222222" };
+const OLA = { epost: "ola@annenplass.no", uid: "33333333-3333-3333-3333-333333333333" };
 
 const { tilstand, ok, nei, sjekk } = lagFasit();
 const db = await byggBase();
@@ -170,8 +171,8 @@ console.log("\n── Idempotensnøkkelen røper ikke andres kvittering ──\n
         nøkkel,
       ]),
     );
-    m && /tilgang/i.test(m)
-      ? ok("fremmed med riktig nøkkel blir avvist på tilgang, ikke besvart med kvitteringen")
+    m && /Fant ikke bestillingen/.test(m)
+      ? ok("fremmed med riktig nøkkel blir avvist, og får ikke vite at bestillingen finnes")
       : nei("nøkkellekkasje", m ?? "FIKK KVITTERINGEN");
   });
 }
@@ -192,9 +193,12 @@ await db.query(`delete from public.project_receipt_photos`);
 await db.query(`delete from storage.objects where bucket_id = 'mottak-bilder'`);
 
 // Filer lagt inn direkte, slik Storage ville gjort det
+// Eigar må vere med: slettepolicyen samanliknar med auth.uid(), så ein kan
+// berre fjerne SITT EIGET ukvitterte bilete – ikkje ein annan sitt.
 await db.query(
-  `insert into storage.objects (bucket_id, name) values ('mottak-bilder', $1), ('mottak-bilder', $2)`,
-  [`${pA.id}/abc/1.jpg`, `${pB.id}/def/1.jpg`],
+  `insert into storage.objects (bucket_id, name, owner)
+   values ('mottak-bilder', $1, $3), ('mottak-bilder', $2, $4)`,
+  [`${pA.id}/abc/1.jpg`, `${pB.id}/def/1.jpg`, KARI.uid, OLA.uid],
 );
 
 await som(db, KARI, async () => {
