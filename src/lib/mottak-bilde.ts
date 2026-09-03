@@ -59,6 +59,17 @@ export async function krymp(fil: File): Promise<Blob> {
 /** Formata bøtta tek imot. Alt anna blir avvist av Storage, ikkje av oss. */
 const GODTEKNE = ["image/jpeg", "image/png", "image/webp"] as const;
 
+/**
+ * Så lenge ventar vi på ei opplasting før vi gir opp.
+ *
+ * Eit komprimert bilete er 150–400 kB. Førti sekund er rundhandsama sjølv på
+ * ei halv stong dekning – går det lenger, står forbindelsen og henger, og då
+ * er det verre å vente enn å seie frå.
+ */
+const TIDSGRENSE_MS = 40_000;
+
+const TIDSAVBROT = Symbol("tidsavbrot");
+
 export async function lastOppBilde(
   projectId: string,
   clientRef: string,
@@ -88,10 +99,48 @@ export async function lastOppBilde(
   // Berre teikn stien og policyen godtek: bokstavar, tal, punktum, bindestrek
   const sti = `${projectId}/${clientRef}/${nummer}-${Date.now()}.${endelse}`;
 
-  const { error } = await supabase.storage.from(BØTTE).upload(sti, blob, {
+  /*
+   * OPPLASTINGA MÅ HA EI TIDSGRENSE.
+   *
+   * Utan denne kunne ho vente for alltid. Skjermen tel opplastingar som går, og
+   * mottakskontrollen nektar å bli send så lenge talet er over null – så ei
+   * opplasting som stod og hang, låste heile skjermen. Sjåføren står med
+   * lasset, arbeidaren har skrive «ingen dekning på plassen» i grunnfeltet, og
+   * knappen svarar framleis «Laster opp 1 bilde …». Einaste vegen ut var å
+   * laste sida på nytt, og det er nettopp det som slettar utkastet.
+   *
+   * storage-js tek ikkje imot eit AbortSignal på upload(), så vi kan ikkje
+   * stoppe sjølve førespurnaden – men vi kan slutte å vente på han. Kjem fila
+   * likevel fram etterpå, ryddar vi henne vekk: elles ville ho blitt liggjande
+   * i bøtta utan eit mottak som peikar på henne, og det er eit bilete av folk
+   * på ein byggjeplass ingen lenger veit om.
+   */
+  const opplasting = supabase.storage.from(BØTTE).upload(sti, blob, {
     contentType: type,
     upsert: false,
   });
+
+  let vekkjar: ReturnType<typeof setTimeout> | undefined;
+  const utfall = await Promise.race([
+    opplasting,
+    new Promise<typeof TIDSAVBROT>((r) => {
+      vekkjar = setTimeout(() => r(TIDSAVBROT), TIDSGRENSE_MS);
+    }),
+  ]);
+  clearTimeout(vekkjar);
+
+  if (utfall === TIDSAVBROT) {
+    void opplasting
+      .then((sein) => {
+        if (!sein.error) void supabase.storage.from(BØTTE).remove([sti]);
+      })
+      .catch(() => {
+        /* kom aldri fram – då er det ingenting å rydde */
+      });
+    throw new Error("Bildet brukte for lang tid. Sjekk dekningen og prøv igjen.");
+  }
+
+  const { error } = utfall;
 
   if (error) {
     if (/exceeded|too large|maximum/i.test(error.message)) {

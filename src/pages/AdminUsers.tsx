@@ -64,6 +64,8 @@ export default function AdminUsers() {
 
   const [checking, setChecking] = useState(true);
   const [allowed, setAllowed] = useState(false);
+  /** Oppslaget kom aldri fram. Ikkje det same som eit nei – sjå render under. */
+  const [sjekkFeila, setSjekkFeila] = useState(false);
   const [myEmail, setMyEmail] = useState<string | null>(null);
   const [registryReady, setRegistryReady] = useState(true);
   // Meldinga frå Supabase er ofte det einaste som skil ein manglande migrasjon
@@ -169,25 +171,42 @@ export default function AdminUsers() {
     setUsers((data ?? []) as SystemUserRow[]);
   }, []);
 
-  useEffect(() => {
-    (async () => {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) {
-        navigate("/login", { replace: true });
-        return;
-      }
-      setMyEmail(user.email ?? null);
-      // Tilgangen blir avgjord av RLS i databasen; denne sjekken styrer berre
-      // kva grensesnittet viser
-      const { data, error } = await supabase.rpc("is_super_admin", {});
-      const ok = !error && data === true;
-      setAllowed(ok);
-      setChecking(false);
-      if (ok) fetchUsers();
-    })();
+  const sjekkTilgang = useCallback(async () => {
+    setChecking(true);
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) {
+      navigate("/login", { replace: true });
+      return;
+    }
+    setMyEmail(user.email ?? null);
+
+    /*
+     * EIT FEILA OPPSLAG ER IKKJE EIT NEI.
+     *
+     * Her stod `const ok = !error && data === true`, og eit nettverksglipp,
+     * ein utgått token eller ein hikke i PostgREST kolla då ned til det same
+     * som «du er ikkje superadmin» – med ei forklaring som var handfast og
+     * usann: «sjekk at e-posten din står i super_admins». Ein superadmin på
+     * eit nettbrett med dårleg dekning fekk beskjed om at tilgangen var borte,
+     * og ingen veg vidare enn «Tilbake».
+     *
+     * Adminpanelet skil desse to alt; denne skjermen gjorde det ikkje.
+     * Tilgangen blir uansett avgjord av RLS i databasen – dette styrer berre
+     * kva grensesnittet viser.
+     */
+    const { data, error } = await supabase.rpc("is_super_admin", {});
+    setSjekkFeila(!!error);
+    const ok = !error && data === true;
+    setAllowed(ok);
+    setChecking(false);
+    if (ok) fetchUsers();
   }, [navigate, fetchUsers]);
+
+  useEffect(() => {
+    void sjekkTilgang();
+  }, [sjekkTilgang]);
 
   /**
    * Oppretter innlogging, registerrad og prosjekttilgang i ett.
@@ -355,6 +374,30 @@ export default function AdminUsers() {
     return (
       <div className="min-h-dvh hm-page flex items-center justify-center">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" aria-label="Laster" />
+      </div>
+    );
+  }
+
+  if (sjekkFeila) {
+    return (
+      <div className="min-h-dvh hm-page flex items-center justify-center p-4">
+        <Card className="max-w-sm w-full animate-fade-in">
+          <CardContent className="pt-6 text-center space-y-3">
+            <div className="mx-auto rounded-full bg-muted p-3 w-fit">
+              <ShieldCheck className="h-6 w-6 text-muted-foreground" aria-hidden="true" />
+            </div>
+            <p className="font-semibold text-foreground">Fikk ikke sjekket tilgangen din</p>
+            <p className="text-sm text-muted-foreground">
+              Serveren svarte ikke. Dette betyr ikke at tilgangen er borte — sjekk nettet og prøv igjen.
+            </p>
+            <Button className="h-11 w-full" onClick={() => void sjekkTilgang()}>
+              Prøv igjen
+            </Button>
+            <Button variant="outline" className="h-11 w-full" onClick={() => navigate("/admin")}>
+              Tilbake til adminpanelet
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }

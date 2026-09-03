@@ -9,11 +9,39 @@
 -- gamle varene beheld namn og pris på linjene sine; det er berre peikaren som
 -- forsvinn, og det er med vilje: historikken skal ikkje endre seg.
 
--- Startpåslag: 25 %
-update public.pipe_settings set markup_percent = 25 where id = 1;
+/*
+ * SEEDINGA KØYRER BERRE FØRSTE GONG.
+ *
+ * supabase-setup.sql er alle migrasjonane sette saman, og README-en fortel
+ * operatøren at han skal køyre fila på nytt for å ta inn ei ny migrasjon. Utan
+ * vakta under gjorde ei slik omkøyring dette, utan éi einaste feilmelding:
+ *
+ *   - sletta heile katalogen og gav alle varer nye id-ar
+ *   - nulla lagerbehaldninga
+ *   - sette påslaget tilbake til 25 %, same kva kontoret hadde justert det til
+ *   - fjerna kvar vare kontoret sjølv hadde lagt inn
+ *   - kasta innkjøpsprisane frå siste prisimport
+ *   - nulla pipe_type_id på bestillingslinjer og lagerlogg, fordi kvar
+ *     framandnøkkel hit er «on delete set null»
+ *
+ * Vakta spør om Dahl-katalogen alt ligg der. Gjer han det, er dette ei
+ * omkøyring, og seedinga skal ikkje røre noko som helst.
+ */
 
-delete from public.pipe_types;
-delete from public.pipe_categories;
+-- Startpåslag: 25 %
+update public.pipe_settings
+   set markup_percent = 25
+ where id = 1
+   and not exists (select 1 from public.pipe_types where sku = '3100501');
+
+-- Demokatalogen frå oppstarten ut. Subspørjinga er ikkje korrelert, så han blir
+-- rekna ut éin gong for heile setninga: anten forsvinn alt, eller ingenting.
+delete from public.pipe_types
+ where not exists (select 1 from public.pipe_types t where t.sku = '3100501');
+
+-- Køyrer etter slettinga over, og ser difor ein tom katalog i førstegongstilfellet.
+delete from public.pipe_categories
+ where not exists (select 1 from public.pipe_types t where t.sku = '3100501');
 
 insert into public.pipe_categories (name, color, sort_order) values
   ('Overvannsrør', '#2f6f9f', 1),
@@ -23,7 +51,8 @@ insert into public.pipe_categories (name, color, sort_order) values
   ('Deler overvann', '#3f8fbf', 5),
   ('Deler avløp', '#8a7a5a', 6),
   ('PE-deler', '#4a4a4a', 7),
-  ('Koblinger og kraner', '#a67c00', 8);
+  ('Koblinger og kraner', '#a67c00', 8)
+on conflict do nothing;
 
 -- Overvannsrør (18 varer)
 insert into public.pipe_types
@@ -46,7 +75,8 @@ values
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør IQ SN8', '1000/1154 mm', '3012439', 'overvannsror-iq-sn8-1000-1154-mm', 'm', 6528, 8160, 0, 0, 15),
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '110 mm', '2295601', 'overvannsror-pvc-glatt-110-mm', 'm', 63.7, 79.63, 0, 0, 16),
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '160 mm', '2295603', 'overvannsror-pvc-glatt-160-mm', 'm', 148.2, 185.25, 0, 0, 17),
-  ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '200 mm', '2295604', 'overvannsror-pvc-glatt-200-mm', 'm', 190.8, 238.5, 0, 0, 18);
+  ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '200 mm', '2295604', 'overvannsror-pvc-glatt-200-mm', 'm', 190.8, 238.5, 0, 0, 18)
+on conflict do nothing;
 
 -- Avløpsrør (3 varer)
 insert into public.pipe_types
@@ -54,7 +84,8 @@ insert into public.pipe_types
 values
   ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '110 mm', '2251059', 'avlopsror-pvc-110-mm', 'm', 63.7, 79.63, 0, 0, 1),
   ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '160 mm', '2251119', 'avlopsror-pvc-160-mm', 'm', 148.5, 185.63, 0, 0, 2),
-  ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '200 mm', '2251159', 'avlopsror-pvc-200-mm', 'm', 190.1, 237.63, 0, 0, 3);
+  ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '200 mm', '2251159', 'avlopsror-pvc-200-mm', 'm', 190.1, 237.63, 0, 0, 3)
+on conflict do nothing;
 
 -- Drensrør (4 varer)
 insert into public.pipe_types
@@ -63,7 +94,8 @@ values
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør PE korrugert', '110 mm', '1381970', 'drensror-pe-korrugert-110-mm', 'm', 49.1, 61.38, 0, 0, 1),
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør PE korrugert', '160 mm', '1381971', 'drensror-pe-korrugert-160-mm', 'm', 124.5, 155.63, 0, 0, 2),
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør uten slisser', '83/100 mm', '3104919', 'drensror-uten-slisser-83-100-mm', 'm', 25.5, 31.88, 0, 0, 3),
-  ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør korrugert PEH', '83/100 mm', '3104629', 'drensror-korrugert-peh-83-100-mm', 'm', 21.76, 27.2, 0, 0, 4);
+  ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør korrugert PEH', '83/100 mm', '3104629', 'drensror-korrugert-peh-83-100-mm', 'm', 21.76, 27.2, 0, 0, 4)
+on conflict do nothing;
 
 -- PE trykkrør (12 varer)
 insert into public.pipe_types
@@ -80,7 +112,8 @@ values
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 150 m)', '50 mm', '2392762', 'pe100-sdr11-trykkror-kveil-150-m-50-mm', 'm', 54.9, 68.63, 0, 0, 9),
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '50 mm', '2392753', 'pe100-sdr11-trykkror-kveil-50-m-50-mm', 'm', 57.4, 71.75, 0, 0, 10),
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 150 m)', '63 mm', '2392764', 'pe100-sdr11-trykkror-kveil-150-m-63-mm', 'm', 80.6, 100.75, 0, 0, 11),
-  ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '63 mm', '2392763', 'pe100-sdr11-trykkror-kveil-50-m-63-mm', 'm', 122.5, 153.13, 0, 0, 12);
+  ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '63 mm', '2392763', 'pe100-sdr11-trykkror-kveil-50-m-63-mm', 'm', 122.5, 153.13, 0, 0, 12)
+on conflict do nothing;
 
 -- Deler overvann (20 varer)
 insert into public.pipe_types
@@ -105,7 +138,8 @@ values
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 30°', '300 mm', '3100558', 'bend-x-stream-30gr-300-mm', 'stk', 1863.5, 2329.38, 0, 0, 17),
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 45°', '300 mm', '3100559', 'bend-x-stream-45gr-300-mm', 'stk', 1865, 2331.25, 0, 0, 18),
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 90°', '300 mm', '3100561', 'bend-x-stream-90gr-300-mm', 'stk', 2613, 3266.25, 0, 0, 19),
-  ((select id from public.pipe_categories where name = 'Deler overvann'), 'Dobbeltmuffe X-Stream', '300 mm', '3100655', 'dobbeltmuffe-x-stream-300-mm', 'stk', 510.4, 638, 0, 0, 20);
+  ((select id from public.pipe_categories where name = 'Deler overvann'), 'Dobbeltmuffe X-Stream', '300 mm', '3100655', 'dobbeltmuffe-x-stream-300-mm', 'stk', 510.4, 638, 0, 0, 20)
+on conflict do nothing;
 
 -- Deler avløp (36 varer)
 insert into public.pipe_types
@@ -146,7 +180,8 @@ values
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Bend langt avløp 30°', '200 mm', '2251764', 'bend-langt-avlop-30gr-200-mm', 'stk', 1224.8, 1531, 0, 0, 33),
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Bend langt avløp 45°', '200 mm', '2251769', 'bend-langt-avlop-45gr-200-mm', 'stk', 1224.8, 1531, 0, 0, 34),
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '110/200 mm', '3210046', 'stake-og-spylegren-pp-110-200-mm', 'stk', 546.5, 683.13, 0, 0, 35),
-  ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '160/200 mm', '3210047', 'stake-og-spylegren-pp-160-200-mm', 'stk', 746.8, 933.5, 0, 0, 36);
+  ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '160/200 mm', '3210047', 'stake-og-spylegren-pp-160-200-mm', 'stk', 746.8, 933.5, 0, 0, 36)
+on conflict do nothing;
 
 -- PE-deler (44 varer)
 insert into public.pipe_types
@@ -195,7 +230,8 @@ values
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '50-40 mm', '2462216', 'reduksjon-elektro-pe100-50-40-mm', 'stk', 137.36, 171.7, 0, 0, 41),
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-32 mm', '2462219', 'reduksjon-elektro-pe100-63-32-mm', 'stk', 148.24, 185.3, 0, 0, 42),
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-40 mm', '2462223', 'reduksjon-elektro-pe100-63-40-mm', 'stk', 148.24, 185.3, 0, 0, 43),
-  ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-50 mm', '2462226', 'reduksjon-elektro-pe100-63-50-mm', 'stk', 148.24, 185.3, 0, 0, 44);
+  ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-50 mm', '2462226', 'reduksjon-elektro-pe100-63-50-mm', 'stk', 148.24, 185.3, 0, 0, 44)
+on conflict do nothing;
 
 -- Koblinger og kraner (19 varer)
 insert into public.pipe_types
@@ -219,5 +255,6 @@ values
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Bakkekran Isiflo m/mutter', '32 mm', '3383606', 'bakkekran-isiflo-m-mutter-32-mm', 'stk', 990.1, 1237.63, 0, 0, 16),
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Bakkekran Isiflo m/mutter', '40 mm', '3383608', 'bakkekran-isiflo-m-mutter-40-mm', 'stk', 1899.6, 2374.5, 0, 0, 17),
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 97-165 cm', null, '3351033', 'spindelforlenger-xo-97-165-cm', 'stk', 539, 673.75, 0, 0, 18),
-  ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 147-266 cm', null, '3351032', 'spindelforlenger-xo-147-266-cm', 'stk', 621.25, 776.56, 0, 0, 19);
+  ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 147-266 cm', null, '3351032', 'spindelforlenger-xo-147-266-cm', 'stk', 621.25, 776.56, 0, 0, 19)
+on conflict do nothing;
 

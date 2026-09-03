@@ -266,5 +266,146 @@ await som(db, KONTOR, async () => {
   sjekk("og teller bare én gang", sum.s, 8);
 });
 
+console.log("\n── TRUNCATE går utenom RLS. Derfor må privilegiet vekk ──\n");
+/*
+ * Fanst som hol: kvar revoke i migrasjonane tok berre anon. Supabase sine
+ * default privileges gav authenticated «all» – som inkluderer TRUNCATE – og
+ * authenticated er kven som helst som har registrert seg. Ein konto utan rad i
+ * system_users har ingen tilgang i det heile, men han er authenticated, og
+ * TRUNCATE ser ingen policy.
+ */
+const FRAMAND = { epost: "ingen@stad.no", uid: "00000000-0000-0000-0000-0000000000aa" };
+
+await som(db, FRAMAND, async () => {
+  for (const t of ["system_users", "super_admins", "projects", "pipe_types", "project_receipts"]) {
+    const m = await nekta(() => db.exec(`truncate public.${t} cascade`));
+    m ? ok(`TRUNCATE ${t} nektes`) : nei(`TRUNCATE ${t}`, "gikk gjennom");
+  }
+
+  const m = await nekta(() => db.query(`select setval('public.projects_project_number_seq', 9999)`));
+  m ? ok("setval på nummerserien nektes") : nei("setval", "gikk gjennom");
+});
+
+const staarIgjen = await en(`select count(*)::int n from public.system_users`);
+staarIgjen.n > 0 ? ok(`tilgangsmodellen står (${staarIgjen.n} brukere)`) : nei("system_users", "tømt");
+const katalogIgjen = await en(`select count(*)::int n from public.pipe_types`);
+katalogIgjen.n > 100 ? ok(`katalogen står (${katalogIgjen.n} varer)`) : nei("pipe_types", "tømt");
+
+console.log("\n── NaN er ikke et antall ──\n");
+/*
+ * Postgres sorterer NaN som det største numeriske talet, så «NaN <= 0» er
+ * usant og både vakta i funksjonen og CHECK-en slapp han gjennom. Verst i
+ * statusutrekninga: ho spør «mottatt < bestilt», og NaN < 10 er usant, så ei
+ * bestilling der det kom «NaN» av ei vare stod som fullt mottatt.
+ */
+const p2 = await en(`insert into public.projects (name) values ('Talltesten') returning id`);
+await db.query(`insert into public.project_members (project_id, email) values ($1, 'kari@plassen.no')`, [p2.id]);
+
+await som(db, KARI, async () => {
+  for (const verdi of ["NaN", "Infinity"]) {
+    const m = await nekta(() =>
+      db.query(`select public.project_submit_request($1, 'Kari', null, null, $2::jsonb)`, [
+        p2.id,
+        JSON.stringify([{ name: "Rør", unit: "m", requested_qty: verdi }]),
+      ]),
+    );
+    m ? ok(`«${verdi}» som bestilt antall nektes`) : nei(`${verdi} bestilt`, "gikk gjennom");
+  }
+});
+
+const talOrdre = await en(
+  `insert into public.project_orders (project_id, requested_by_name, status)
+   values ($1, 'Kari', 'bestilt') returning id`,
+  [p2.id],
+);
+const talLinje = await en(
+  `insert into public.project_order_lines (order_id, name, unit, requested_qty, ordered_qty)
+   values ($1, 'Rør', 'm', 10, 10) returning id`,
+  [talOrdre.id],
+);
+
+await som(db, KARI, async () => {
+  for (const verdi of ["NaN", "Infinity"]) {
+    const m = await nekta(() =>
+      db.query(`select public.project_submit_receipt($1, 'Kari', $2::jsonb, null, null, null, null, 'testkjøring')`, [
+        talOrdre.id,
+        JSON.stringify([{ order_line_id: talLinje.id, received_qty: verdi }]),
+      ]),
+    );
+    m ? ok(`«${verdi}» som mottatt antall nektes`) : nei(`${verdi} mottatt`, "gikk gjennom");
+  }
+});
+
+const status = await en(`select status from public.project_orders where id = $1`, [talOrdre.id]);
+sjekk("bestillingen står fortsatt som bestilt, ikke mottatt", status.status, "bestilt");
+
+console.log("\n── project_recompute_status har vakta i kroppen, ikke bare i rettighetene ──\n");
+/*
+ * Funksjonen er SECURITY DEFINER. I dag er han stengd av eit «revoke execute»
+ * åleine, og «create or replace» tek vare på det. Men ein «drop» + «create» i
+ * ein seinare migrasjon ville stille gitt han tilbake til alle innlogga,
+ * gjennom dei same default privileges som resten av fila handlar om.
+ */
+await som(db, FRAMAND, async () => {
+  const m = await nekta(() => db.query(`select public.project_recompute_status($1)`, [talOrdre.id]));
+  m ? ok("en fremmed når ikke fram") : nei("recompute", "gikk gjennom");
+});
+
+await db.exec(`grant execute on function public.project_recompute_status(uuid) to authenticated`);
+await som(db, FRAMAND, async () => {
+  const m = await nekta(() => db.query(`select public.project_recompute_status($1)`, [talOrdre.id]));
+  m === "Fant ikke bestillingen"
+    ? ok("og heller ikke om rettigheten skulle komme tilbake")
+    : nei("recompute uten revoke", `fikk ${JSON.stringify(m)}`);
+});
+await db.exec(`revoke all on function public.project_recompute_status(uuid) from public, anon, authenticated`);
+
+console.log("\n── Avvik kan lukkes, men bare av kontoret ──\n");
+/*
+ * Avvikslista hadde ingen botn: alt som nokon gong var registrert låg der for
+ * alltid. Og plassen skal ikkje kunne krysse av sitt eige avvik – det er
+ * kontoret som tek det med leverandøren.
+ */
+const avvikOrdre = await en(
+  `insert into public.project_orders (project_id, requested_by_name, status)
+   values ($1, 'Kari', 'bestilt') returning id`,
+  [p1.id],
+);
+const avvikLinje = await en(
+  `insert into public.project_order_lines (order_id, name, unit, requested_qty, ordered_qty)
+   values ($1, 'Bend 110', 'stk', 4, 4) returning id`,
+  [avvikOrdre.id],
+);
+const kvitt = await en(
+  `insert into public.project_receipts (order_id, received_by_name, no_photo_reason)
+   values ($1, 'Kari', 'testkjøring') returning id`,
+  [avvikOrdre.id],
+);
+const avvikRad = await en(
+  `insert into public.project_receipt_lines (receipt_id, order_line_id, received_qty, deviation, note)
+   values ($1, $2, 4, 'skadet', 'sprekk i muffen') returning id`,
+  [kvitt.id, avvikLinje.id],
+);
+
+await som(db, KARI, async () => {
+  const m = await nekta(() => db.query(`select public.project_resolve_deviation($1, true)`, [avvikRad.id]));
+  m && /kontoret/i.test(m) ? ok("plassen kan ikke lukke sitt eget avvik") : nei("plassen lukker", m ?? "GIKK GJENNOM");
+
+  // Og heller ikkje rett på tabellen, utanom funksjonen
+  await nekta(() => db.query(`update public.project_receipt_lines set resolved_at = now() where id = $1`, [avvikRad.id]));
+  const r = await en(`select resolved_at from public.project_receipt_lines where id = $1`, [avvikRad.id]);
+  sjekk("heller ikke rett på tabellen", r?.resolved_at ?? null, null);
+});
+
+await som(db, KONTOR, async () => {
+  await db.query(`select public.project_resolve_deviation($1, true)`, [avvikRad.id]);
+  const r = await en(`select resolved_at, resolved_by from public.project_receipt_lines where id = $1`, [avvikRad.id]);
+  r?.resolved_at ? ok(`kontoret krysser av (${r.resolved_by})`) : nei("kontoret lukker", "ble ikke satt");
+
+  await db.query(`select public.project_resolve_deviation($1, false)`, [avvikRad.id]);
+  const igjen = await en(`select resolved_at from public.project_receipt_lines where id = $1`, [avvikRad.id]);
+  sjekk("og kan åpne det igjen", igjen?.resolved_at ?? null, null);
+});
+
 console.log(tilstand.feil === 0 ? `\nAlt i orden. Ingen av hullene er åpne.\n` : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);

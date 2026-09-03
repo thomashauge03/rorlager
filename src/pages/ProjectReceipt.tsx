@@ -67,6 +67,58 @@ type Rad = { mottattTekst: string; avvik: Deviation; notat: string; avvikOpe: bo
 
 const tomRad = (rest: number): Rad => ({ mottattTekst: somTekst(rest), avvik: "ingen", notat: "", avvikOpe: false });
 
+/*
+ * UTKASTET OVERLEVER AT SIDA BLIR FORLATEN.
+ *
+ * «Meld inn behov» har alltid gjort dette – ein telefon som ringer, ein
+ * tilbakeknapp, ei fane iOS kastar fordi bileta åt opp minnet. Denne skjermen,
+ * som er den med høgast innsats av dei to, hadde ingenting. Alt låg i useState.
+ *
+ * Nøkkelen for idempotens ligg med i utkastet med vilje. Blir han laga på nytt
+ * ved kvar montering, mister ein reload nettopp det vernet mot ei dobbel pulje
+ * som han er der for å gi.
+ */
+const UTKAST_NØKKEL = (epost: string | null, ordreId: string) =>
+  `rorlager.prosjekt.mottak.${epost ?? "ukjend"}.${ordreId}`;
+
+type Utkast = {
+  rader: Record<string, Rad>;
+  navn: string;
+  notat: string;
+  signatur: string | null;
+  utenBildeGrunn: string;
+  /* Berre stiane. Ein blob-URL peikar på minnet i fana som laga han, og er daud
+   * etter ein reload – miniatyrane blir henta att som signerte lenker. */
+  bilder: string[];
+  clientRef: string;
+};
+
+const lesUtkast = (nøkkel: string): Partial<Utkast> => {
+  try {
+    const raw = localStorage.getItem(nøkkel);
+    const v = raw ? JSON.parse(raw) : null;
+    return v && typeof v === "object" && !Array.isArray(v) ? (v as Partial<Utkast>) : {};
+  } catch {
+    return {};
+  }
+};
+
+const skrivUtkast = (nøkkel: string, u: Utkast) => {
+  try {
+    localStorage.setItem(nøkkel, JSON.stringify(u));
+  } catch {
+    /* full disk eller privat modus – utkastet er ei bekvemmelegheit, ikkje eit krav */
+  }
+};
+
+const slettUtkast = (nøkkel: string) => {
+  try {
+    localStorage.removeItem(nøkkel);
+  } catch {
+    /* ignorer */
+  }
+};
+
 export default function ProjectReceipt() {
   const { id = "", ordreId = "" } = useParams();
   const navigate = useNavigate();
@@ -83,18 +135,6 @@ export default function ProjectReceipt() {
 
   const [rader, setRader] = useState<Record<string, Rad>>({});
   const [navn, setNavn] = useState("");
-
-  /*
-   * E-POSTEN ER IKKJE KJEND PÅ FØRSTE RENDER.
-   *
-   * Namnenøkkelen er per brukar, men useAuth må først spørje Supabase. Ein
-   * useState-initialisator las difor «…ukjend» og fann aldri det som blei
-   * lagra – feltet stod tomt kvar gong sjølv om vi skreiv til det.
-   */
-  useEffect(() => {
-    if (!auth.email) return;
-    setNavn((n) => n || lesNavn(auth.email));
-  }, [auth.email]);
   const [signatur, setSignatur] = useState<string | null>(null);
   const [notat, setNotat] = useState("");
   const navnRef = useRef<HTMLInputElement | null>(null);
@@ -121,6 +161,70 @@ export default function ProjectReceipt() {
   const clientRef = useRef<string | null>(null);
   if (clientRef.current === null) clientRef.current = lagNøkkel();
 
+  /*
+   * HYDRERINGA AV UTKASTET.
+   *
+   * Ligg i ein effekt, ikkje i ein useState-initialisator: e-posten – og
+   * dermed nøkkelen – er ikkje kjend på første render. Autolagringa under
+   * ventar på at denne har køyrt, elles ville dei tomme startverdiane blitt
+   * skrivne rett over det som låg der.
+   */
+  const utkastNøkkel = klar ? UTKAST_NØKKEL(auth.email, ordreId) : null;
+  const [hydrertFor, setHydrertFor] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!utkastNøkkel) return;
+    let levande = true;
+    const u = lesUtkast(utkastNøkkel);
+
+    if (u.clientRef) clientRef.current = u.clientRef;
+    if (u.rader) setRader(u.rader);
+    if (u.notat) setNotat(u.notat);
+    if (u.signatur) setSignatur(u.signatur);
+    if (u.utenBildeGrunn) setUtenBildeGrunn(u.utenBildeGrunn);
+    // Har brukaren alt begynt å skrive, skal ikkje det lagra namnet ta over.
+    setNavn((n) => n || u.navn || lesNavn(auth.email));
+
+    const stiar = u.bilder ?? [];
+    if (stiar.length === 0) {
+      setHydrertFor(utkastNøkkel);
+      return;
+    }
+
+    // Blob-URL-ane frå førre økt er daude. Miniatyrane blir henta att som
+    // signerte lenker; ei sti som ikkje lenger finst, fell berre bort.
+    void signerteLenker(stiar).then((lenker) => {
+      if (!levande) return;
+      setBilder(stiar.filter((s) => lenker[s]).map((s) => ({ sti: s, url: lenker[s] })));
+      setHydrertFor(utkastNøkkel);
+    });
+
+    return () => {
+      levande = false;
+    };
+    // auth.email inngår alt i utkastNøkkel
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [utkastNøkkel]);
+
+  const utkastKlart = !!utkastNøkkel && hydrertFor === utkastNøkkel;
+
+  /* Sett når innsendinga gjekk gjennom. Utan han ville autolagringa under
+   * skrive utkastet tilbake på committen etter at onSuccess sletta det. */
+  const sendt = useRef(false);
+
+  useEffect(() => {
+    if (!utkastNøkkel || !utkastKlart || sendt.current) return;
+    skrivUtkast(utkastNøkkel, {
+      rader,
+      navn,
+      notat,
+      signatur,
+      utenBildeGrunn,
+      bilder: bilder.map((b) => b.sti),
+      clientRef: clientRef.current as string,
+    });
+  }, [utkastNøkkel, utkastKlart, rader, navn, notat, signatur, utenBildeGrunn, bilder]);
+
   // Berre linjer kontoret faktisk tinga, og som ikkje alt er fullt levert.
   const linjer: ProjectOrderLine[] = useMemo(
     () => (order.data?.lines ?? []).filter((l) => Number(l.ordered_qty ?? 0) > 0 && l.remaining_qty > 0),
@@ -137,12 +241,51 @@ export default function ProjectReceipt() {
    * hadde blitt ei overlevering.
    */
   const mottakTeljar = order.data?.receipts.length ?? 0;
+
+  /*
+   * BERRE EIT NYTT MOTTAK MEDAN SKJERMEN STÅR OPEN skal fylle felta på nytt.
+   *
+   * Den FØRSTE verdien er ingen endring – han er berre kor mange puljer
+   * bestillinga alt hadde då sida blei opna. Køyrde vi på den òg, ville eit
+   * gjenoppretta utkast bli overskrive kvar einaste gong bestillinga alt hadde
+   * ei pulje: talda tilbake til «alt kom», medan namn, notat, signatur og
+   * bilete stod att og fekk skjermen til å sjå riktig gjenoppretta ut. Han
+   * ville kvittert for ein full leveranse på ein manko.
+   */
+  const forrigeTeljar = useRef<number | null>(null);
   useEffect(() => {
-    if (linjer.length === 0) return;
+    if (linjer.length === 0 || !utkastKlart) return;
+    const før = forrigeTeljar.current;
+    forrigeTeljar.current = mottakTeljar;
+
+    if (før === null) {
+      // Første gjennomgang: fyll berre dei linjene utkastet ikkje dekte. Er det
+      // ikkje noko utkast, er det alle – altså den førehandsutfyllinga skjermen
+      // alltid har hatt.
+      setRader((f) => {
+        let endra = false;
+        const ny = { ...f };
+        for (const l of linjer) {
+          if (!ny[l.id]) {
+            ny[l.id] = tomRad(l.remaining_qty);
+            endra = true;
+          }
+        }
+        return endra ? ny : f;
+      });
+      return;
+    }
+
+    if (før === mottakTeljar) return;
+
     setRader(Object.fromEntries(linjer.map((l) => [l.id, tomRad(l.remaining_qty)])));
+    toast({
+      title: "Noen andre registrerte et mottak",
+      description: "Feltene er fylt ut med det som står igjen nå.",
+    });
     // linjer er utleidd av order.data, som mottakTeljar allereie følgjer
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mottakTeljar, ordreId]);
+  }, [mottakTeljar, ordreId, utkastKlart]);
 
   const settRad = (l: ProjectOrderLine, patch: Partial<Rad>) =>
     setRader((f) => ({ ...f, [l.id]: { ...(f[l.id] ?? tomRad(l.remaining_qty)), ...patch } }));
@@ -298,6 +441,20 @@ export default function ProjectReceipt() {
       });
     },
     onSuccess: (kvittering) => {
+      /*
+       * UTKASTET MÅ VEKK NO.
+       *
+       * Det ber clientRef-en til nettopp denne innsendinga. Blir det liggjande,
+       * hentar neste pulje han opp att, og databasen svarar med at ho alt har
+       * sett denne nøkkelen – ho gir tilbake DETTE mottaket i staden for å lage
+       * eit nytt. Pulje to blir aldri registrert, brukaren får «Mottaket er
+       * registrert» ein gong til, og bestillinga står som om berre pulje éin
+       * kom. Ei leveranse i fleire puljer er heile grunnen til at mottaka er
+       * ein eigen tabell.
+       */
+      sendt.current = true;
+      if (utkastNøkkel) slettUtkast(utkastNøkkel);
+
       queryClient.invalidateQueries({ queryKey: QK.projectOrders });
       toast({
         title: "Mottaket er registrert",
@@ -556,7 +713,11 @@ export default function ProjectReceipt() {
                     type="button"
                     onClick={() => fjernBilde(b.sti)}
                     aria-label="Fjern bildet"
-                    className="absolute right-1 top-1 flex h-9 w-9 items-center justify-center rounded-full bg-background/90 text-destructive shadow"
+                    /* h-11 på telefon, som alle andre ikonknappar i appen.
+                     * h-9 var 36 px – den minste og trongaste flata på skjermen,
+                     * treft med hanskar, og eit bomtrykk slettar dokumentasjonen
+                     * med det same og utan spørsmål. */
+                    className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-destructive shadow md:h-9 md:w-9"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>

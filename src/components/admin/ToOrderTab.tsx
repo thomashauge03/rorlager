@@ -6,7 +6,18 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, ClipboardCopy, FileDown, Inbox, Loader2, PackageCheck, ShoppingBag, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  ClipboardCopy,
+  FileDown,
+  Inbox,
+  Loader2,
+  PackageCheck,
+  RotateCcw,
+  ShoppingBag,
+  Truck,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,7 +38,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
-import { fetchAllProjectOrders, fetchProjects, isOverdue, markOrdered, saveOfficeNote, setOrderStatus } from "@/lib/projects";
+import {
+  fetchAllProjectOrders,
+  fetchProjects,
+  isOverdue,
+  markOrdered,
+  resolveDeviation,
+  saveOfficeNote,
+  setOrderStatus,
+} from "@/lib/projects";
 import { useSettings } from "@/lib/settings";
 import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
 import { dateTime, num, parseNum, pipeLabel, shortDate } from "@/lib/format";
@@ -73,7 +92,7 @@ export function ToOrderTab() {
     .flatMap((o) => o.receipts.map((r) => ({ order: o, receipt: r })))
     .sort((a, b) => b.receipt.received_at.localeCompare(a.receipt.received_at));
 
-  const medAvvik = alle
+  const alleAvvik = alle
     .flatMap((o) =>
       o.receipts.flatMap((r) =>
         r.lines
@@ -87,6 +106,27 @@ export function ToOrderTab() {
       ),
     )
     .sort((a, b) => b.receipt.received_at.localeCompare(a.receipt.received_at));
+
+  /*
+   * BARE DE ÅPNE, MED MINDRE DU BER OM RESTEN.
+   *
+   * Lista hadde ingen bunn: hvert avvik som noen gang er registrert lå der for
+   * alltid. Etter en sesong står fjorårets reklamasjoner øverst i synsfeltet,
+   * og da slutter lista å bli lest. En liste ingen leser er funksjonelt det
+   * samme som et avvik som aldri kom fram.
+   */
+  const [visHandterte, setVisHandterte] = useState(false);
+  const apneAvvik = alleAvvik.filter((a) => !a.line.resolved_at);
+  const medAvvik = visHandterte ? alleAvvik : apneAvvik;
+
+  const handter = useMutation({
+    mutationFn: ({ id, på }: { id: string; på: boolean }) => resolveDeviation(id, på),
+    onSuccess: (_d, v) => {
+      queryClient.invalidateQueries({ queryKey: QK.projectOrders });
+      toast({ title: v.på ? "Avviket er merket håndtert" : "Avviket er åpnet igjen" });
+    },
+    onError: (e: Error) => toast({ variant: "destructive", title: "Gikk ikke", description: e.message }),
+  });
 
   const prosjektRad = (id: string) => prosjektKart.get(id) ?? null;
 
@@ -111,7 +151,9 @@ export function ToOrderTab() {
                 ? underveis.length
                 : u.verdi === "mottak"
                   ? mottak.length
-                  : medAvvik.length;
+                  // Talet på chipen er dei ÅPNE. Eit tal som berre veks er ikkje
+                  // ei oppgåve, og då sluttar det å bli lese.
+                  : apneAvvik.length;
           return (
             <button
               key={u.verdi}
@@ -269,11 +311,30 @@ export function ToOrderTab() {
           </ul>
         )
       ) : utsnitt === "avvik" ? (
-        medAvvik.length === 0 ? (
+        <>
+        {alleAvvik.length > apneAvvik.length ? (
+          <div className="mb-2 flex justify-end">
+            <button
+              type="button"
+              aria-pressed={visHandterte}
+              onClick={() => setVisHandterte((v) => !v)}
+              className="hm-chip h-11 border border-border bg-muted px-3 text-muted-foreground transition-colors hover:bg-muted/70"
+            >
+              {visHandterte
+                ? `Skjul håndterte (${alleAvvik.length - apneAvvik.length})`
+                : `Vis håndterte (${alleAvvik.length - apneAvvik.length})`}
+            </button>
+          </div>
+        ) : null}
+        {medAvvik.length === 0 ? (
           <TomTilstand
             ikon={<PackageCheck className="h-7 w-7 text-primary" aria-hidden="true" />}
-            tittel="Ingen avvik"
-            tekst="Alt som er kvittert for, kom slik det skulle."
+            tittel={apneAvvik.length === 0 && alleAvvik.length > 0 ? "Ingen åpne avvik" : "Ingen avvik"}
+            tekst={
+              apneAvvik.length === 0 && alleAvvik.length > 0
+                ? `Alle ${alleAvvik.length} avvik er håndtert. Trykk «Vis håndterte» for å se dem.`
+                : "Alt som er kvittert for, kom slik det skulle."
+            }
           />
         ) : (
           <ul className="space-y-2">
@@ -299,10 +360,40 @@ export function ToOrderTab() {
                     {a.order.supplier_ref ? ` · ${a.order.supplier_ref}` : ""}
                   </p>
                 ) : null}
+
+                {a.line.resolved_at ? (
+                  <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className="hm-chip border border-border bg-muted text-muted-foreground">
+                      <Check className="h-3.5 w-3.5" aria-hidden="true" />
+                      Håndtert {shortDate(a.line.resolved_at)}
+                      {a.line.resolved_by ? ` av ${a.line.resolved_by}` : ""}
+                    </span>
+                    <Button
+                      variant="ghost"
+                      className="h-11 px-3 text-sm"
+                      disabled={handter.isPending}
+                      onClick={() => handter.mutate({ id: a.line.id, på: false })}
+                    >
+                      <RotateCcw className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                      Åpne igjen
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="mt-3 h-11 w-full"
+                    disabled={handter.isPending}
+                    onClick={() => handter.mutate({ id: a.line.id, på: true })}
+                  >
+                    <Check className="mr-1.5 h-4 w-4" aria-hidden="true" />
+                    Merk som håndtert
+                  </Button>
+                )}
               </li>
             ))}
           </ul>
-        )
+        )}
+        </>
       ) : vist.length === 0 ? (
         <TomTilstand
           ikon={<Inbox className="h-7 w-7 text-primary" aria-hidden="true" />}

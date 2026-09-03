@@ -220,6 +220,9 @@ export type ProjectReceiptLineRow = {
   received_qty: number;
   deviation: Deviation;
   note: string | null;
+  /** Sett når kontoret har fulgt opp avviket. Null så lenge det står åpent. */
+  resolved_at: string | null;
+  resolved_by: string | null;
 };
 
 /**

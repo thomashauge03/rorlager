@@ -78,13 +78,39 @@ export function buildReceiptPDF({
 
   y += 4;
 
-  // ---------- Linjene ----------
+  /* ---------- Linjene ----------
+   *
+   * FIRE TALKOLONNER, IKKJE TO.
+   *
+   * «Bestilt» er heile bestillinga, medan «Mottatt» berre er DENNE pulja. På
+   * pulje to av tre stod det difor «Bestilt 100 m / Mottatt 30 m / Ingen
+   * avvik» – og dette er dokumentet som følgjer ein reklamasjon til
+   * leverandøren. Han les det som at 70 meter manglar.
+   *
+   * «Tidl.» og «Gjenstår» er det som gjer arket sant åleine. Utan dei må den
+   * som les det ha alle puljene framfor seg for å forstå kva han ser på.
+   */
   const kolonner = [
-    { tittel: "Vare", x: MARGIN, w: contentW - 96 },
-    { tittel: "Bestilt", x: pw - MARGIN - 96, w: 24, høgre: true },
-    { tittel: "Mottatt", x: pw - MARGIN - 70, w: 24, høgre: true },
-    { tittel: "Avvik", x: pw - MARGIN - 44, w: 44 },
+    { tittel: "Vare", x: MARGIN, w: contentW - 140 },
+    { tittel: "Bestilt", x: pw - MARGIN - 140, w: 24, høgre: true },
+    { tittel: "Tidl.", x: pw - MARGIN - 113, w: 22, høgre: true },
+    { tittel: "Nå", x: pw - MARGIN - 88, w: 22, høgre: true },
+    { tittel: "Gjenstår", x: pw - MARGIN - 63, w: 24, høgre: true },
+    { tittel: "Avvik", x: pw - MARGIN - 36, w: 36 },
   ];
+
+  /**
+   * Kor mykje som var motteke på denne linja FØR denne pulja.
+   *
+   * Berre puljer med eit lågare mottaksnummer tel. Hadde vi teke alle, ville
+   * eit ark skrive ut i ettertid vist puljer som kom etter det sjølv.
+   */
+  const tidlegare = (orderLineId: string) =>
+    order.receipts
+      .filter((r) => r.receipt_number < receipt.receipt_number)
+      .flatMap((r) => r.lines)
+      .filter((l) => l.order_line_id === orderLineId)
+      .reduce((s, l) => s + Number(l.received_qty), 0);
 
   const tegnKolonneHoder = () => {
     setFill(doc, BLACK);
@@ -107,8 +133,16 @@ export function buildReceiptPDF({
     const linje = order.lines.find((l) => l.id === rl.order_line_id);
     const navn = linje ? pipeLabel(linje.name, linje.dimension) : "Ukjent vare";
     const enhet = linje?.unit ?? "";
-    const bestilt = linje?.ordered_qty == null ? "–" : `${num(Number(linje.ordered_qty))} ${enhet}`;
-    const mottatt = `${num(Number(rl.received_qty))} ${enhet}`;
+    const bestiltTal = linje?.ordered_qty == null ? null : Number(linje.ordered_qty);
+    const før = tidlegare(rl.order_line_id);
+    const no = Number(rl.received_qty);
+
+    const bestilt = bestiltTal == null ? "–" : `${num(bestiltTal)} ${enhet}`;
+    const tidl = før > 0 ? `${num(før)} ${enhet}` : "–";
+    const mottatt = `${num(no)} ${enhet}`;
+    // Negativt tal er ei overlevering, og det skal stå med sitt eige forteikn –
+    // ikkje kappast til «0» slik at ti meter for mye blir usynlege.
+    const gjenstår = bestiltTal == null ? "–" : `${num(bestiltTal - før - no)} ${enhet}`;
 
     const navnLinjer = doc.splitTextToSize(navn, kolonner[0].w - 4) as string[];
     const merknad = rl.note ? (doc.splitTextToSize(rl.note, kolonner[0].w - 4) as string[]) : [];
@@ -142,7 +176,9 @@ export function buildReceiptPDF({
 
     setText(doc, BLACK);
     doc.text(bestilt, kolonner[1].x + kolonner[1].w, y + 5, { align: "right" });
-    doc.text(mottatt, kolonner[2].x + kolonner[2].w, y + 5, { align: "right" });
+    doc.text(tidl, kolonner[2].x + kolonner[2].w, y + 5, { align: "right" });
+    doc.text(mottatt, kolonner[3].x + kolonner[3].w, y + 5, { align: "right" });
+    doc.text(gjenstår, kolonner[4].x + kolonner[4].w, y + 5, { align: "right" });
 
     if (rl.deviation !== "ingen") {
       harAvvik = true;
@@ -151,7 +187,9 @@ export function buildReceiptPDF({
     } else {
       setText(doc, GREY);
     }
-    doc.text(DEVIATION_LABEL[rl.deviation] ?? rl.deviation, kolonner[3].x, y + 5);
+    doc.setFontSize(8);
+    doc.text(DEVIATION_LABEL[rl.deviation] ?? rl.deviation, kolonner[5].x, y + 5);
+    doc.setFontSize(9);
     doc.setFont("helvetica", "normal");
 
     y += høgde;

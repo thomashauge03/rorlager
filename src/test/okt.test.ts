@@ -23,6 +23,7 @@ import { loggUt } from "@/lib/auth";
 
 const NAVN = "rorlager.prosjekt.navn.kari@haugemaskin.no";
 const UTKAST = "rorlager.prosjekt.utkast.kari@haugemaskin.no.7f3c";
+const MOTTAK = "rorlager.prosjekt.mottak.kari@haugemaskin.no.9a11";
 const KURV = "rorlager.handlekurv";
 
 describe("loggUt", () => {
@@ -42,6 +43,12 @@ describe("loggUt", () => {
     localStorage.setItem(UTKAST, JSON.stringify([{ name: "110 mm rør" }]));
     await loggUt(new QueryClient());
     expect(localStorage.getItem(UTKAST)).not.toBeNull();
+  });
+
+  it("tar mottaksutkastet – det bærer en håndskrevet signatur", async () => {
+    localStorage.setItem(MOTTAK, JSON.stringify({ signatur: "data:image/png;base64,AAAA" }));
+    await loggUt(new QueryClient());
+    expect(localStorage.getItem(MOTTAK)).toBeNull();
   });
 
   it("rører ikke handlekurven i uttaksdelen", async () => {

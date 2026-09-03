@@ -173,20 +173,50 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Finner kontoen. GoTrue filtrerer på e-post, så vi slipper å bla gjennom
-    // alle brukerne — og slipper å bomme på dem som ligger forbi første side.
-    const { data: liste, error: søkFeil } = await admin.auth.admin.listUsers({
-      page: 1,
-      perPage: 200,
-      // @ts-expect-error GoTrue tar imot filteret, men typen har det ikke ennå
-      filter: `email.eq.${epost}`,
-    });
-    if (søkFeil) {
-      console.error("listUsers feilet", { epost, av: kallerEpost, feil: søkFeil.message });
-      return svar({ error: "Klarte ikke å finne den eksisterende kontoen" }, 500);
+    /*
+     * BARE KONTOER RØRLAGERET SELV EIER.
+     *
+     * Kommentaren rett over sier hvorfor opprettelsen nekter å røre en konto
+     * som finnes fra før — «deler prosjektet auth.users med en annen app,
+     * gjelder det også kontoer som ikke hører rørlageret til». Passordbyttet
+     * hadde ikke den sperren. Et kall hit med en hvilken som helst adresse i
+     * auth.users ga et fungerende passord til den kontoen. Brukerlista viser
+     * bare nøkkelikonet for egne brukere, men det er denne funksjonen som er
+     * grensen, ikke skjermbildet.
+     */
+    const { data: iRegisteret, error: regSøkFeil } = await admin
+      .from("system_users")
+      .select("email")
+      .eq("email", epost)
+      .maybeSingle();
+
+    if (regSøkFeil) {
+      console.error("oppslag i system_users feilet", { epost, av: kallerEpost, feil: regSøkFeil.message });
+      return svar({ error: "Klarte ikke å slå opp brukeren i registeret" }, 500);
+    }
+    if (!iRegisteret) {
+      return svar({ error: "Denne adressen står ikke i brukerregisteret." }, 404);
     }
 
-    const funnet = liste.users.find((u) => (u.email ?? "").toLowerCase() === epost);
+    /*
+     * listUsers sender BARE page og per_page.
+     *
+     * Her lå det et `filter: email.eq.…` med en @ts-expect-error som påsto at
+     * GoTrue tok imot det. Det gjør den ikke: klienten bygger spørringen av de
+     * to nevnte feltene og kaster resten før forespørselen går. Filteret nådde
+     * aldri fram — funksjonen hentet 200 brukere og lette selv. Bruker nummer
+     * 201 fikk «Kontoen finnes, men ble ikke funnet» på en konto som finnes.
+     */
+    let funnet: { id: string } | undefined;
+    for (let side = 1; side <= 20 && !funnet; side++) {
+      const { data: liste, error: søkFeil } = await admin.auth.admin.listUsers({ page: side, perPage: 1000 });
+      if (søkFeil) {
+        console.error("listUsers feilet", { epost, av: kallerEpost, feil: søkFeil.message });
+        return svar({ error: "Klarte ikke å finne den eksisterende kontoen" }, 500);
+      }
+      funnet = liste.users.find((u) => (u.email ?? "").toLowerCase() === epost);
+      if (liste.users.length < 1000) break;
+    }
     if (!funnet) return svar({ error: "Kontoen finnes, men ble ikke funnet. Prøv fra Supabase-dashbordet." }, 500);
 
     const { error: byttFeil } = await admin.auth.admin.updateUserById(funnet.id, {
@@ -230,7 +260,24 @@ Deno.serve(async (req) => {
       );
     if (regFeil) {
       console.error("system_users-upsert feilet", { epost, av: kallerEpost, feil: regFeil.message });
-      return svar({ error: "Innloggingen ble laget, men registeret feilet. Prøv igjen." }, 500);
+      /*
+       * PASSORDET MÅ UT, SELV NÅR REGISTERET FEILET.
+       *
+       * Innloggingen er allerede laget. Holdt vi passordet tilbake her, sto
+       * kontoen igjen uten en rad i system_users — og dermed uten en linje i
+       * brukerlista, som er der nøkkelikonet bor. Neste forsøk traff
+       * «email_exists» og svarte 409 med «bruk nøkkelikonet i brukerlisten»,
+       * på en bruker som ikke er i lista. Blindvei, bare løsbar fra
+       * Supabase-dashbordet.
+       *
+       * Prosjekttilknytningen under svarer allerede slik når den feiler.
+       */
+      return svar({
+        password: passord,
+        existed: fantesFra,
+        warning:
+          "Innloggingen ble laget, men brukeren kom ikke inn i registeret. Legg den inn på nytt her, ellers får personen ikke tilgang.",
+      });
     }
   }
 

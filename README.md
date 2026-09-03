@@ -31,8 +31,11 @@ npm run dev          # http://localhost:8080
 
 Åpne Supabase-prosjektet -> **SQL Editor** -> lim inn hele [`supabase-setup.sql`](supabase-setup.sql)
 og trykk Run. Den oppretter tabeller, tilgangsregler, funksjoner og varekatalogen.
-Filen er idempotent, så den kan kjøres igjen på et prosjekt som allerede er satt
-opp — det er slik du tar inn en ny migrasjon.
+Filen kan kjøres igjen på et prosjekt som allerede er satt opp — det er slik du
+tar inn en ny migrasjon. Ingenting går tapt: lagerbeholdning, justert påslag,
+egne varer og importerte innkjøpspriser står igjen etterpå. Det er dekket av
+`npm run test:db`, som kjører hele filen to ganger mot en ekte Postgres og
+sjekker at alt står.
 
 **Filen er generert fra `supabase/migrations/`, ikke skrevet for hånd.** Legg
 endringer i en ny migrasjonsfil og bygg den på nytt:
@@ -210,6 +213,32 @@ dokumentasjon i ettertid.
 Bildene komprimeres i nettleseren før opplasting. Et mobilbilde er 3–8 MB, og på
 halv dekning tar det minutter mens sjåføren står og venter.
 
+### Bilde i mottakskontrollen
+
+Bøtta og reglene lages av `supabase-setup.sql`. Du trenger ikke gjøre noe
+manuelt — dette avsnittet er her for det ene tilfellet der du må.
+
+Reglene på `storage.objects` ligger i en `DO`-blokk som fanger
+`insufficient_privilege`, fordi den tabellen eies av Supabase og enkelte
+prosjekter nekter å la SQL Editor røre den. Skjer det, går resten av filen
+gjennom som normalt, men du får en `WARNING` i utdataen som peker hit — og
+bildeopplasting virker ikke før reglene finnes.
+
+Slik lager du dem for hånd: gå til **Storage → Policies → `objects`** og legg
+inn tre regler på bøtta `mottak-bilder`.
+
+| Operasjon | Hvem | Vilkår |
+| --- | --- | --- |
+| `SELECT` | `authenticated` | prosjekt-id-en i første ledd av stien er et prosjekt brukeren er med på |
+| `INSERT` | `authenticated` | samme, og `owner` er brukeren selv |
+| `DELETE` | `authenticated` | samme, og `owner` er brukeren selv (kontoret sletter det som er kvittert for) |
+
+Uttrykket er det samme i alle tre, og står ordrett i
+`supabase/migrations/20260903093000_rolle_og_rekkefolge.sql` — søk etter
+`mottak-bilder`. Kopier `using`- og `with check`-uttrykkene derfra; de sjekker
+at stien har uuid-form før den blir castet, slik at en oppdiktet sti gir «ingen
+tilgang» og ikke en databasefeil.
+
 ## Priser og avanse
 
 Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der
@@ -323,5 +352,5 @@ hemmelig. De ligger igjen under Supabase → Project Settings → Data API.
 ### Etter første utrulling
 
 **Generer QR-kodene på nytt.** Koder laget mens du utviklet peker på
-`localhost:8081` og er verdiløse på en hylle. Gå til **Admin → QR-koder**, sett
+`localhost:8080` og er verdiløse på en hylle. Gå til **Admin → QR-koder**, sett
 feltet «Adresse appen ligger på» til Vercel-adressen, og skriv ut på nytt.

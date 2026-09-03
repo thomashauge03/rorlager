@@ -44,8 +44,15 @@ const topp = `-- Hele skjemaet til rørlageret, i den rekkefølgen migrasjonene 
 -- kunne si noe annet enn migrasjonene. Legg endringer i en ny migrasjon under
 -- supabase/migrations/ og kjør «npm run bygg:setup».
 --
--- Filen er idempotent og kan kjøres flere ganger på samme prosjekt. Det er
--- verifisert ved å kjøre alle migrasjonene to ganger mot en ekte Postgres.
+-- Filen kan kjøres flere ganger på samme prosjekt uten at noe går tapt: ingen
+-- feil, og ingen data borte. Det er ikke en antakelse — scripts/db-test/
+-- omkoyring.test.mjs kjører nettopp denne filen to ganger mot en ekte Postgres
+-- med lagerbeholdning, justert påslag, egne varer og importerte innkjøpspriser
+-- i basen, og sjekker at alt står igjen etterpå.
+--
+-- Den testen finnes fordi det en gang IKKE var sant: seedingen av katalogen
+-- slettet pipe_types, og siden hver fremmednøkkel dit er «on delete set null»,
+-- gikk det gjennom uten en eneste feilmelding.
 --
 -- Bygget fra ${filer.length} migrasjoner:
 ${filer.map((f) => `--   ${f}`).join("\n")}

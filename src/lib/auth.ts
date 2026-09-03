@@ -28,20 +28,22 @@ import { fetchRole } from "@/lib/projects";
  */
 export async function loggUt(queryClient: QueryClient): Promise<void> {
   /*
-   * BERRE NAMNET, ikkje utkastet.
+   * NAMNET OG MOTTAKSUTKASTET – IKKJE BEHOVSUTKASTET.
    *
-   * Eit sveip over «rorlager.prosjekt.*» tok med
+   * Eit sveip over heile «rorlager.prosjekt.*» tok med
    * «rorlager.prosjekt.utkast.<id>» – lista over varer plassen har tasta inn.
    * Ho blir med vilje bevart når ei innsending feilar («feilar innsendinga,
    * skal lista framleis liggje der brukaren la ho»), og då er feila innsending
-   * pluss utlogging tolv varelinjer borte.
+   * pluss utlogging tolv varelinjer borte. Ho blir difor verande.
    *
-   * Namnenøklane er alt per e-post, så dette er belte og bukseseler – men det
-   * er òg det einaste som SKAL vekk her.
+   * Mottaksutkastet er ei anna sak: det inneheld signaturen, teikna for hand,
+   * som ein data-URL. Det er ei personopplysning, og ho skal ikkje bli
+   * liggjande på eit delt nettbrett etter at han som skreiv henne har logga ut.
    */
+  const RYDD = ["rorlager.prosjekt.navn.", "rorlager.prosjekt.mottak."];
   try {
     for (const n of Object.keys(localStorage)) {
-      if (n.startsWith("rorlager.prosjekt.navn.")) localStorage.removeItem(n);
+      if (RYDD.some((p) => n.startsWith(p))) localStorage.removeItem(n);
     }
   } catch {
     /* privat modus – då finst det ingenting å rydde */

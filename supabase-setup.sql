@@ -5,10 +5,17 @@
 -- kunne si noe annet enn migrasjonene. Legg endringer i en ny migrasjon under
 -- supabase/migrations/ og kjør «npm run bygg:setup».
 --
--- Filen er idempotent og kan kjøres flere ganger på samme prosjekt. Det er
--- verifisert ved å kjøre alle migrasjonene to ganger mot en ekte Postgres.
+-- Filen kan kjøres flere ganger på samme prosjekt uten at noe går tapt: ingen
+-- feil, og ingen data borte. Det er ikke en antakelse — scripts/db-test/
+-- omkoyring.test.mjs kjører nettopp denne filen to ganger mot en ekte Postgres
+-- med lagerbeholdning, justert påslag, egne varer og importerte innkjøpspriser
+-- i basen, og sjekker at alt står igjen etterpå.
 --
--- Bygget fra 14 migrasjoner:
+-- Den testen finnes fordi det en gang IKKE var sant: seedingen av katalogen
+-- slettet pipe_types, og siden hver fremmednøkkel dit er «on delete set null»,
+-- gikk det gjennom uten en eneste feilmelding.
+--
+-- Bygget fra 16 migrasjoner:
 --   20260810100000_rorlager_init.sql
 --   20260810100100_rorlager_admins.sql
 --   20260810110000_invoice_keeps_status.sql
@@ -23,6 +30,8 @@
 --   20260903091000_epost_utan_store_bokstavar.sql
 --   20260903092000_mottaksbilde.sql
 --   20260903093000_rolle_og_rekkefolge.sql
+--   20260903094000_authenticated_utan_truncate.sql
+--   20260903095000_avvik_handtert.sql
 
 
 -- ══════════════════════════════════════════════════════════════════════
@@ -869,11 +878,39 @@ grant execute on function public.pipe_missing_cost_count() to authenticated;
 -- gamle varene beheld namn og pris på linjene sine; det er berre peikaren som
 -- forsvinn, og det er med vilje: historikken skal ikkje endre seg.
 
--- Startpåslag: 25 %
-update public.pipe_settings set markup_percent = 25 where id = 1;
+/*
+ * SEEDINGA KØYRER BERRE FØRSTE GONG.
+ *
+ * supabase-setup.sql er alle migrasjonane sette saman, og README-en fortel
+ * operatøren at han skal køyre fila på nytt for å ta inn ei ny migrasjon. Utan
+ * vakta under gjorde ei slik omkøyring dette, utan éi einaste feilmelding:
+ *
+ *   - sletta heile katalogen og gav alle varer nye id-ar
+ *   - nulla lagerbehaldninga
+ *   - sette påslaget tilbake til 25 %, same kva kontoret hadde justert det til
+ *   - fjerna kvar vare kontoret sjølv hadde lagt inn
+ *   - kasta innkjøpsprisane frå siste prisimport
+ *   - nulla pipe_type_id på bestillingslinjer og lagerlogg, fordi kvar
+ *     framandnøkkel hit er «on delete set null»
+ *
+ * Vakta spør om Dahl-katalogen alt ligg der. Gjer han det, er dette ei
+ * omkøyring, og seedinga skal ikkje røre noko som helst.
+ */
 
-delete from public.pipe_types;
-delete from public.pipe_categories;
+-- Startpåslag: 25 %
+update public.pipe_settings
+   set markup_percent = 25
+ where id = 1
+   and not exists (select 1 from public.pipe_types where sku = '3100501');
+
+-- Demokatalogen frå oppstarten ut. Subspørjinga er ikkje korrelert, så han blir
+-- rekna ut éin gong for heile setninga: anten forsvinn alt, eller ingenting.
+delete from public.pipe_types
+ where not exists (select 1 from public.pipe_types t where t.sku = '3100501');
+
+-- Køyrer etter slettinga over, og ser difor ein tom katalog i førstegongstilfellet.
+delete from public.pipe_categories
+ where not exists (select 1 from public.pipe_types t where t.sku = '3100501');
 
 insert into public.pipe_categories (name, color, sort_order) values
   ('Overvannsrør', '#2f6f9f', 1),
@@ -883,7 +920,8 @@ insert into public.pipe_categories (name, color, sort_order) values
   ('Deler overvann', '#3f8fbf', 5),
   ('Deler avløp', '#8a7a5a', 6),
   ('PE-deler', '#4a4a4a', 7),
-  ('Koblinger og kraner', '#a67c00', 8);
+  ('Koblinger og kraner', '#a67c00', 8)
+on conflict do nothing;
 
 -- Overvannsrør (18 varer)
 insert into public.pipe_types
@@ -906,7 +944,8 @@ values
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør IQ SN8', '1000/1154 mm', '3012439', 'overvannsror-iq-sn8-1000-1154-mm', 'm', 6528, 8160, 0, 0, 15),
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '110 mm', '2295601', 'overvannsror-pvc-glatt-110-mm', 'm', 63.7, 79.63, 0, 0, 16),
   ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '160 mm', '2295603', 'overvannsror-pvc-glatt-160-mm', 'm', 148.2, 185.25, 0, 0, 17),
-  ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '200 mm', '2295604', 'overvannsror-pvc-glatt-200-mm', 'm', 190.8, 238.5, 0, 0, 18);
+  ((select id from public.pipe_categories where name = 'Overvannsrør'), 'Overvannsrør PVC glatt', '200 mm', '2295604', 'overvannsror-pvc-glatt-200-mm', 'm', 190.8, 238.5, 0, 0, 18)
+on conflict do nothing;
 
 -- Avløpsrør (3 varer)
 insert into public.pipe_types
@@ -914,7 +953,8 @@ insert into public.pipe_types
 values
   ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '110 mm', '2251059', 'avlopsror-pvc-110-mm', 'm', 63.7, 79.63, 0, 0, 1),
   ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '160 mm', '2251119', 'avlopsror-pvc-160-mm', 'm', 148.5, 185.63, 0, 0, 2),
-  ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '200 mm', '2251159', 'avlopsror-pvc-200-mm', 'm', 190.1, 237.63, 0, 0, 3);
+  ((select id from public.pipe_categories where name = 'Avløpsrør'), 'Avløpsrør PVC', '200 mm', '2251159', 'avlopsror-pvc-200-mm', 'm', 190.1, 237.63, 0, 0, 3)
+on conflict do nothing;
 
 -- Drensrør (4 varer)
 insert into public.pipe_types
@@ -923,7 +963,8 @@ values
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør PE korrugert', '110 mm', '1381970', 'drensror-pe-korrugert-110-mm', 'm', 49.1, 61.38, 0, 0, 1),
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør PE korrugert', '160 mm', '1381971', 'drensror-pe-korrugert-160-mm', 'm', 124.5, 155.63, 0, 0, 2),
   ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør uten slisser', '83/100 mm', '3104919', 'drensror-uten-slisser-83-100-mm', 'm', 25.5, 31.88, 0, 0, 3),
-  ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør korrugert PEH', '83/100 mm', '3104629', 'drensror-korrugert-peh-83-100-mm', 'm', 21.76, 27.2, 0, 0, 4);
+  ((select id from public.pipe_categories where name = 'Drensrør'), 'Drensrør korrugert PEH', '83/100 mm', '3104629', 'drensror-korrugert-peh-83-100-mm', 'm', 21.76, 27.2, 0, 0, 4)
+on conflict do nothing;
 
 -- PE trykkrør (12 varer)
 insert into public.pipe_types
@@ -940,7 +981,8 @@ values
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 150 m)', '50 mm', '2392762', 'pe100-sdr11-trykkror-kveil-150-m-50-mm', 'm', 54.9, 68.63, 0, 0, 9),
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '50 mm', '2392753', 'pe100-sdr11-trykkror-kveil-50-m-50-mm', 'm', 57.4, 71.75, 0, 0, 10),
   ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 150 m)', '63 mm', '2392764', 'pe100-sdr11-trykkror-kveil-150-m-63-mm', 'm', 80.6, 100.75, 0, 0, 11),
-  ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '63 mm', '2392763', 'pe100-sdr11-trykkror-kveil-50-m-63-mm', 'm', 122.5, 153.13, 0, 0, 12);
+  ((select id from public.pipe_categories where name = 'PE trykkrør'), 'PE100 SDR11 trykkrør (kveil 50 m)', '63 mm', '2392763', 'pe100-sdr11-trykkror-kveil-50-m-63-mm', 'm', 122.5, 153.13, 0, 0, 12)
+on conflict do nothing;
 
 -- Deler overvann (20 varer)
 insert into public.pipe_types
@@ -965,7 +1007,8 @@ values
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 30°', '300 mm', '3100558', 'bend-x-stream-30gr-300-mm', 'stk', 1863.5, 2329.38, 0, 0, 17),
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 45°', '300 mm', '3100559', 'bend-x-stream-45gr-300-mm', 'stk', 1865, 2331.25, 0, 0, 18),
   ((select id from public.pipe_categories where name = 'Deler overvann'), 'Bend X-Stream 90°', '300 mm', '3100561', 'bend-x-stream-90gr-300-mm', 'stk', 2613, 3266.25, 0, 0, 19),
-  ((select id from public.pipe_categories where name = 'Deler overvann'), 'Dobbeltmuffe X-Stream', '300 mm', '3100655', 'dobbeltmuffe-x-stream-300-mm', 'stk', 510.4, 638, 0, 0, 20);
+  ((select id from public.pipe_categories where name = 'Deler overvann'), 'Dobbeltmuffe X-Stream', '300 mm', '3100655', 'dobbeltmuffe-x-stream-300-mm', 'stk', 510.4, 638, 0, 0, 20)
+on conflict do nothing;
 
 -- Deler avløp (36 varer)
 insert into public.pipe_types
@@ -1006,7 +1049,8 @@ values
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Bend langt avløp 30°', '200 mm', '2251764', 'bend-langt-avlop-30gr-200-mm', 'stk', 1224.8, 1531, 0, 0, 33),
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Bend langt avløp 45°', '200 mm', '2251769', 'bend-langt-avlop-45gr-200-mm', 'stk', 1224.8, 1531, 0, 0, 34),
   ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '110/200 mm', '3210046', 'stake-og-spylegren-pp-110-200-mm', 'stk', 546.5, 683.13, 0, 0, 35),
-  ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '160/200 mm', '3210047', 'stake-og-spylegren-pp-160-200-mm', 'stk', 746.8, 933.5, 0, 0, 36);
+  ((select id from public.pipe_categories where name = 'Deler avløp'), 'Stake- og spylegren PP', '160/200 mm', '3210047', 'stake-og-spylegren-pp-160-200-mm', 'stk', 746.8, 933.5, 0, 0, 36)
+on conflict do nothing;
 
 -- PE-deler (44 varer)
 insert into public.pipe_types
@@ -1055,7 +1099,8 @@ values
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '50-40 mm', '2462216', 'reduksjon-elektro-pe100-50-40-mm', 'stk', 137.36, 171.7, 0, 0, 41),
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-32 mm', '2462219', 'reduksjon-elektro-pe100-63-32-mm', 'stk', 148.24, 185.3, 0, 0, 42),
   ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-40 mm', '2462223', 'reduksjon-elektro-pe100-63-40-mm', 'stk', 148.24, 185.3, 0, 0, 43),
-  ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-50 mm', '2462226', 'reduksjon-elektro-pe100-63-50-mm', 'stk', 148.24, 185.3, 0, 0, 44);
+  ((select id from public.pipe_categories where name = 'PE-deler'), 'Reduksjon elektro PE100', '63-50 mm', '2462226', 'reduksjon-elektro-pe100-63-50-mm', 'stk', 148.24, 185.3, 0, 0, 44)
+on conflict do nothing;
 
 -- Koblinger og kraner (19 varer)
 insert into public.pipe_types
@@ -1079,7 +1124,8 @@ values
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Bakkekran Isiflo m/mutter', '32 mm', '3383606', 'bakkekran-isiflo-m-mutter-32-mm', 'stk', 990.1, 1237.63, 0, 0, 16),
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Bakkekran Isiflo m/mutter', '40 mm', '3383608', 'bakkekran-isiflo-m-mutter-40-mm', 'stk', 1899.6, 2374.5, 0, 0, 17),
   ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 97-165 cm', null, '3351033', 'spindelforlenger-xo-97-165-cm', 'stk', 539, 673.75, 0, 0, 18),
-  ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 147-266 cm', null, '3351032', 'spindelforlenger-xo-147-266-cm', 'stk', 621.25, 776.56, 0, 0, 19);
+  ((select id from public.pipe_categories where name = 'Koblinger og kraner'), 'Spindelforlenger XO 147-266 cm', null, '3351032', 'spindelforlenger-xo-147-266-cm', 'stk', 621.25, 776.56, 0, 0, 19)
+on conflict do nothing;
 
 -- ══════════════════════════════════════════════════════════════════════
 -- 20260810130000_prisimport.sql
@@ -3660,3 +3706,277 @@ begin
 exception when insufficient_privilege or wrong_object_type then
   raise warning 'Fikk ikke oppdatert policyene på storage.objects (%). Se README under «Bilde i mottakskontrollen».', sqlerrm;
 end $$;
+
+-- ══════════════════════════════════════════════════════════════════════
+-- 20260903094000_authenticated_utan_truncate.sql
+-- ══════════════════════════════════════════════════════════════════════
+
+-- Tredje runde: det Supabase gir bort til «authenticated», og tal som ikkje er tal.
+--
+-- BAKGRUNN
+--
+-- Supabase køyrer `alter default privileges in schema public grant all on
+-- tables to anon, authenticated`. «all» er ikkje select/insert/update/delete –
+-- det er òg TRUNCATE, REFERENCES, TRIGGER og MAINTAIN.
+--
+-- Migrasjonane hittil har trekt dette tilbake frå anon, og resonnementet står
+-- skrive i dei: «RLS stoppar dei tre første, men RLS dekkjer ikkje TRUNCATE».
+-- Det er rett. Det stoppa berre eitt steg for tidleg: authenticated fekk behalde
+-- heile settet, og authenticated er i denne modellen kven som helst som har
+-- registrert seg – sjølvregistrering er open, og ein konto utan rad i
+-- system_users har ingen tilgang, men han ER authenticated.
+--
+--   truncate public.system_users cascade;   -- heile tilgangsmodellen borte
+--   truncate public.pipe_types cascade;     -- heile katalogen borte
+--   select setval('public.projects_project_number_seq', 9999);
+--
+-- RLS ser ingen av dei: TRUNCATE går utanom policyar, og setval krev UPDATE på
+-- sekvensen, ikkje SELECT – og det var berre SELECT som blei trekt.
+--
+-- PostgREST sender aldri TRUNCATE eller setval, så dette er ein liggjande
+-- rettigheit og ikkje ein open veg inn. Det er likevel presis den rettigheita
+-- ingen har bruk for, og ho kostar ingenting å ta bort.
+
+-- ═══════════════════════════════════════════════════════════════════
+--  Tabellane: berre dei fire rettigheitene appen faktisk brukar
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- RLS avgjer framleis kva rader kvar av dei når. Dette avgjer berre kva
+-- verb som finst.
+
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'pipe_categories', 'pipe_types', 'pipe_settings', 'pipe_orders',
+    'pipe_order_lines', 'pipe_invoices', 'pipe_stock_log',
+    'system_users', 'super_admins',
+    'projects', 'project_members', 'project_orders', 'project_order_lines',
+    'project_receipts', 'project_receipt_lines', 'project_receipt_photos'
+  ]
+  loop
+    execute format('revoke all on public.%I from authenticated', t);
+    execute format('grant select, insert, update, delete on public.%I to authenticated', t);
+  end loop;
+end $$;
+
+-- ═══════════════════════════════════════════════════════════════════
+--  Sekvensane: UPDATE er setval
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- SELECT blei trekt i førre runde fordi eit nummer fortel kor mange
+-- bestillingar huset har. UPDATE er verre: med han kan kven som helst innlogga
+-- skru nummerserien framover, eller bakover så to bestillingar får same nummer.
+-- USAGE blir ståande – nextval er det kontoret treng når det legg inn direkte.
+
+do $$
+declare
+  s text;
+begin
+  foreach s in array array[
+    'projects_project_number_seq',
+    'project_orders_order_number_seq',
+    'project_receipts_receipt_number_seq',
+    'pipe_orders_order_number_seq',
+    'pipe_invoices_invoice_number_seq'
+  ]
+  loop
+    if to_regclass('public.' || s) is not null then
+      execute format('revoke update on sequence public.%I from public, anon, authenticated', s);
+    end if;
+  end loop;
+end $$;
+
+-- ═══════════════════════════════════════════════════════════════════
+--  Dei to funksjonane ingen hadde trekt
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Ingen av dei er SECURITY DEFINER, og ingen av dei gjer noko: triggeren
+-- nektar å bli kalla direkte, og slugifyen er ein rein strengfunksjon. Dei blir
+-- trekte fordi ei oppteljing som ikkje går heilt opp, sluttar å bli lesen.
+
+revoke all on function public.pipe_touch_updated_at() from public, anon;
+revoke all on function public.pipe_slugify(text) from public, anon;
+
+-- ═══════════════════════════════════════════════════════════════════
+--  NaN er ikkje eit antal
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Postgres sorterer NaN som det STØRSTE numeriske talet. Difor er «NaN <= 0»
+-- usant, «NaN > 0» sant, og både vakta i funksjonane og CHECK-en på kolonnen
+-- slepp han gjennom. Verre: statusutrekninga spør «mottatt < bestilt», og
+-- NaN < 10 er usant – så ei bestilling der det kom «NaN» av ei vare, står som
+-- fullt mottatt.
+--
+-- Infinity er same historia. Begge kjem inn som JSON-strengar, som numeric
+-- godtek: '{"received_qty":"NaN"}'.
+
+alter table public.project_order_lines
+  drop constraint if exists project_order_lines_requested_qty_check;
+alter table public.project_order_lines
+  add constraint project_order_lines_requested_qty_check
+  check (requested_qty > 0 and requested_qty < 'Infinity'::numeric);
+
+alter table public.project_order_lines
+  drop constraint if exists project_order_lines_ordered_qty_check;
+alter table public.project_order_lines
+  add constraint project_order_lines_ordered_qty_check
+  check (ordered_qty is null or (ordered_qty >= 0 and ordered_qty < 'Infinity'::numeric));
+
+alter table public.project_receipt_lines
+  drop constraint if exists project_receipt_lines_received_qty_check;
+alter table public.project_receipt_lines
+  add constraint project_receipt_lines_received_qty_check
+  check (received_qty >= 0 and received_qty < 'Infinity'::numeric);
+
+-- ═══════════════════════════════════════════════════════════════════
+--  project_recompute_status: vakta inn i kroppen
+-- ═══════════════════════════════════════════════════════════════════
+--
+-- Funksjonen er SECURITY DEFINER og har ingen vakt i det heile – det einaste
+-- som held han stengd, er «revoke execute» frå førre runde. Det held i dag, og
+-- «create or replace» tek vare på rettigheitene. Men ein «drop» + «create» i ein
+-- seinare migrasjon ville stille gitt han tilbake til anon og authenticated,
+-- gjennom nettopp dei default privileges denne fila handlar om.
+--
+-- Ei linje i kroppen overlever det.
+
+create or replace function public.project_recompute_status(p_order_id uuid)
+returns text
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_status text;
+  v_prosjekt uuid;
+  v_bestilte integer;
+  v_uferdige integer;
+  v_motteke integer;
+begin
+  select status, project_id into v_status, v_prosjekt
+    from public.project_orders where id = p_order_id;
+  if not found then
+    raise exception 'Fant ikke bestillingen';
+  end if;
+
+  -- ── DET EINASTE SOM ER NYTT I DENNE FUNKSJONEN ──
+  -- Kontoret, eller nokon som høyrer prosjektet til: same krins som resten av
+  -- skrivevegane inn på ei bestilling. Same melding som dei andre, så han ikkje
+  -- fortel skilnaden på «finst ikkje» og «ikkje din».
+  if not public.hm_er_kontor()
+     and not exists (
+       select 1 from public.project_members m
+        where m.project_id = v_prosjekt
+          and m.email = lower(coalesce(auth.jwt() ->> 'email', ''))
+     )
+  then
+    raise exception 'Fant ikke bestillingen';
+  end if;
+
+  -- 'meldt' og 'avvist' ligg før leveransen og skal ikkje rørast her
+  if v_status in ('meldt', 'avvist') then
+    return v_status;
+  end if;
+
+  select count(*) into v_bestilte
+    from public.project_order_lines
+   where order_id = p_order_id and coalesce(ordered_qty, 0) > 0;
+
+  if v_bestilte = 0 then
+    return v_status;
+  end if;
+
+  select
+    count(*) filter (where mottatt < l.ordered_qty),
+    count(*) filter (where mottatt > 0)
+    into v_uferdige, v_motteke
+  from public.project_order_lines l
+  cross join lateral (
+    select coalesce(sum(rl.received_qty), 0) as mottatt
+      from public.project_receipt_lines rl
+      join public.project_receipts r on r.id = rl.receipt_id
+     where rl.order_line_id = l.id and r.order_id = p_order_id
+  ) s
+  where l.order_id = p_order_id and coalesce(l.ordered_qty, 0) > 0;
+
+  v_status := case
+    when v_uferdige = 0 then 'mottatt'
+    when v_motteke > 0 then 'delvis'
+    else 'bestilt'
+  end;
+
+  update public.project_orders set status = v_status where id = p_order_id;
+  return v_status;
+end;
+$$;
+
+revoke all on function public.project_recompute_status(uuid) from public, anon, authenticated;
+
+-- ══════════════════════════════════════════════════════════════════════
+-- 20260903095000_avvik_handtert.sql
+-- ══════════════════════════════════════════════════════════════════════
+
+-- Eit avvik skal kunne lukkast.
+--
+-- Avvika kom fram: plassen registrerer «skadet» eller «feil vare», og kontoret
+-- ser det under Å bestille → Avvik. Men lista hadde ingen botn. Ingen dato,
+-- ingen filter, ingen måte å seie «denne er ordna». Ho voks berre.
+--
+-- Etter ein sesong er ho historikk med reklamasjonar frå i fjor øvst i
+-- synsfeltet, og då sluttar ho å bli lesen. Ei liste ingen les er funksjonelt
+-- det same som eit avvik som aldri kom fram – berre med eit skjermbilde som ser
+-- ut som om det verkar.
+
+alter table public.project_receipt_lines
+  add column if not exists resolved_at timestamptz,
+  add column if not exists resolved_by text;
+
+-- Uhandsama avvik først. Indeksen er delvis: dei handsama er dei mange, og det
+-- er dei uhandsama spørjinga alltid leitar etter.
+create index if not exists idx_receipt_lines_uhandsama
+  on public.project_receipt_lines (receipt_id)
+  where deviation <> 'ingen' and resolved_at is null;
+
+/*
+ * Kontoret krysser av.
+ *
+ * Går gjennom ein funksjon og ikkje rett på tabellen, av same grunn som resten
+ * av skrivevegane: policyen på project_receipt_lines slepp plassen til for at
+ * han skal få skrive mottaket sitt, og han skal ikkje kunne lukke sitt eige
+ * avvik. Det er kontoret som følgjer det opp mot leverandøren.
+ */
+create or replace function public.project_resolve_deviation(
+  p_line_id uuid,
+  p_handtert boolean default true
+)
+returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_avvik text;
+begin
+  if not public.hm_er_kontor() then
+    raise exception 'Bare kontoret kan håndtere avvik';
+  end if;
+
+  select deviation into v_avvik from public.project_receipt_lines where id = p_line_id;
+  if not found then
+    raise exception 'Fant ikke avviket';
+  end if;
+  if v_avvik = 'ingen' then
+    raise exception 'Denne linjen har ikke noe avvik';
+  end if;
+
+  update public.project_receipt_lines
+     set resolved_at = case when p_handtert then now() else null end,
+         resolved_by = case when p_handtert then nullif(auth.jwt() ->> 'email', '') else null end
+   where id = p_line_id;
+end;
+$$;
+
+revoke all on function public.project_resolve_deviation(uuid, boolean) from public, anon;
+grant execute on function public.project_resolve_deviation(uuid, boolean) to authenticated;

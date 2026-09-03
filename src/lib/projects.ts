@@ -399,6 +399,22 @@ export async function markOrdered(input: {
 }
 
 /**
+ * Kryssar av eit avvik som følgt opp.
+ *
+ * Går gjennom RPC-en og ikkje rett på tabellen: policyen slepp plassen til
+ * project_receipt_lines for at han skal få skrive mottaket sitt, og han skal
+ * ikkje kunne lukke sitt eige avvik. Det er kontoret som tek det med
+ * leverandøren.
+ */
+export async function resolveDeviation(lineId: string, håndtert: boolean): Promise<void> {
+  const { error } = await supabase.rpc("project_resolve_deviation", {
+    p_line_id: lineId,
+    p_handtert: håndtert,
+  });
+  if (error) throw new Error(error.message || "Klarte ikke å oppdatere avviket");
+}
+
+/**
  * Mottakskontrollen. Ei skriving, heil eller ingen.
  *
  * clientRef er laga FØR første forsøk og er den same om brukaren prøver på
