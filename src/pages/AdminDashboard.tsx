@@ -1,13 +1,25 @@
 // Adminpanelet. Sjølve arbeidet ligg i fanene under @/components/admin – denne
 // fila held vakta på innlogginga, topplinja og kva fane som er open.
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { FileText, Loader2, LogOut, Package, Palette, QrCode, Settings, ShieldAlert, ShoppingCart, Users } from "lucide-react";
+import {
+  FileText,
+  FolderKanban,
+  Loader2,
+  LogOut,
+  Package,
+  Palette,
+  QrCode,
+  Settings,
+  ShieldAlert,
+  ShoppingBag,
+  ShoppingCart,
+  Users,
+} from "lucide-react";
 import hmLogo from "@/assets/hm-logo.png";
-import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -17,9 +29,13 @@ import { StockTab } from "@/components/admin/StockTab";
 import { QrTab } from "@/components/admin/QrTab";
 import { InvoiceTab } from "@/components/admin/InvoiceTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
+import { ProjectsTab } from "@/components/admin/ProjectsTab";
+import { ToOrderTab } from "@/components/admin/ToOrderTab";
 
 const TABS = [
   { value: "bestillinger", label: "Bestillinger", Icon: ShoppingCart },
+  { value: "abestille", label: "Å bestille", Icon: ShoppingBag },
+  { value: "prosjekt", label: "Prosjekt", Icon: FolderKanban },
   { value: "lager", label: "Lager", Icon: Package },
   { value: "qr", label: "QR-koder", Icon: QrCode },
   { value: "faktura", label: "Faktura", Icon: FileText },
@@ -32,72 +48,26 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
 
-  // "checking" hindrar at panelet blinkar fram for ein utlogga besøkande
-  const [checking, setChecking] = useState(true);
-  const [email, setEmail] = useState<string | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-
-    const handle = (session: Session | null) => {
-      if (!alive) return;
-      setEmail(session?.user?.email ?? null);
-      if (!session) navigate("/login", { replace: true });
-    };
-
-    // Lyttaren blir sett opp før getSession, slik at ei utlogging i ei anna fane
-    // ikkje kan gli forbi medan den første sjekken går
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => handle(session));
-
-    supabase.auth.getSession().then(({ data }) => {
-      handle(data.session);
-      if (alive) setChecking(false);
-    });
-
-    return () => {
-      alive = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [navigate]);
-
-  // Brukarsida er berre for superadmin. Svaret endrar seg ikkje i ei økt,
-  // difor eitt kall som blir liggjande i cachen.
-  const { data: isSuperAdmin } = useQuery({
-    queryKey: ["is_super_admin"],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("is_super_admin");
-      // Eit feila kall er ikkje det same som eit nei. Svelgjer vi feilen, blir
-      // «false» liggjande i cachen resten av økta og lenkja er borte utan grunn –
-      // kastar vi, kan react-query prøve på nytt.
-      if (error) throw new Error(error.message);
-      return Boolean(data);
-    },
-    enabled: !checking && !!email,
-    staleTime: Infinity,
-  });
+  /*
+   * Økt og rolle. Låg tidlegare som to useQuery og ein useEffect her; er no
+   * delt med prosjektsidene, som treng nøyaktig det same.
+   *
+   * hm_rolle gir 'super_admin' for dei som står i super_admins, så det eigne
+   * is_super_admin-kallet trengst ikkje lenger.
+   */
+  const { checking, email, role, roleKnown } = useAuth(() => navigate("/login", { replace: true }));
+  const isSuperAdmin = role === "super_admin";
 
   /*
-   * Innlogging er ikkje det same som tilgang lenger.
+   * Prosjektbrukarar høyrer ikkje heime her.
    *
-   * Kvar policy krev no ei rad i system_users, og sjølvregistrering er open i
-   * prosjektet. Utan denne sjekken ville ein framand som registrerte seg fått
-   * eit heilt tomt panel: kvar spørjing svarar 200 med null rader, som ser ut
-   * som ein app der alt er tomt eller øydelagt.
-   *
-   * Same grunngjeving som over: eit feila kall er ikkje eit nei. Databasen
-   * håndhevar tilgangen uansett, så her vinn vi ingenting på å nekte i tvil –
-   * vi ville berre vist ei falsk nekting til nokon som har tilgang.
+   * Dei har tilgang til appen, men ikkje til admindelen: hm_er_kontor() er
+   * usann for dei, så kvar spørjing på denne sida ville svart 200 med null
+   * rader. Eit tomt panel er ei dårleg forklaring – dei skal til prosjektsida.
    */
-  const { data: harTilgang } = useQuery({
-    queryKey: ["hm_har_tilgang"],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc("hm_har_tilgang");
-      if (error) throw new Error(error.message);
-      return Boolean(data);
-    },
-    enabled: !checking && !!email,
-    staleTime: Infinity,
-  });
+  useEffect(() => {
+    if (role === "prosjekt") navigate("/prosjekt", { replace: true });
+  }, [role, navigate]);
 
   const logout = async () => {
     await supabase.auth.signOut();
@@ -120,9 +90,26 @@ export default function AdminDashboard() {
     );
   }
 
-  // Berre eit definitivt `false` gir nekting. undefined betyr «ikkje svart
-  // enno», og eit tomt panel i eit halvt sekund er betre enn ei falsk nekting.
-  if (harTilgang === false) {
+  /*
+   * Vent på rolla før fanene blir monterte.
+   *
+   * useEffect-en over sender prosjektbrukaren vidare, men rendringa skjer
+   * først. Gjekk han rett til /admin?fane=lager, monterte StockTab og henta
+   * pipe_types før omdirigeringa rakk å skje – stengt for rolla, så det gav
+   * null rader og eit blaff av tomt panel. Ingen lekkasje, men eit kall som
+   * aldri skulle vore gjort.
+   */
+  if (!roleKnown || role === "prosjekt") {
+    return (
+      <div className="min-h-dvh hm-page flex items-center justify-center">
+        <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />
+        <span className="sr-only">Henter tilgangen din</span>
+      </div>
+    );
+  }
+
+  // Berre eit definitivt nei gir nekting.
+  if (role === null) {
     return (
       <div className="min-h-dvh hm-page flex flex-col items-center justify-center gap-4 px-6 text-center">
         <div className="rounded-full bg-primary/10 p-4 ring-8 ring-primary/5">
@@ -217,6 +204,12 @@ export default function AdminDashboard() {
 
           <TabsContent value="bestillinger" className="animate-fade-in">
             <OrdersTab />
+          </TabsContent>
+          <TabsContent value="abestille" className="animate-fade-in">
+            <ToOrderTab />
+          </TabsContent>
+          <TabsContent value="prosjekt" className="animate-fade-in">
+            <ProjectsTab />
           </TabsContent>
           <TabsContent value="lager" className="animate-fade-in">
             <StockTab />

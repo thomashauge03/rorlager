@@ -26,7 +26,13 @@ export type PipeSort = { key: "name" | "dimension" | "stock" | "price" | "status
  * eitt. Folk søkjer på det dei har framfor seg – "110", "A-01" eller "pvc" –
  * og skal finne røret uansett kva av dei dei skreiv.
  */
-export function matchesSearch(t: PipeType, term: string): boolean {
+// Tek eit strukturelt utsnitt og ikkje PipeType: katalogvisninga manglar
+// cost_price, og søket har uansett aldri sett på den kolonnen.
+export type Søkbar = Pick<PipeType, "name" | "dimension" | "sku" | "location" | "description"> & {
+  category_name?: string | null;
+};
+
+export function matchesSearch(t: Søkbar, term: string): boolean {
   const q = searchKey(term);
   if (!q) return true;
   const haystack = searchKey(
@@ -35,10 +41,14 @@ export function matchesSearch(t: PipeType, term: string): boolean {
   return q.split(" ").every((word) => haystack.includes(word));
 }
 
-export function filterAndSortPipes(
-  rows: PipeType[],
+// Generisk over rada: både PipeType (kontoret) og CatalogItem (kundeflyten) skal
+// kunne filtrerast og sorterast her, og cost_price er ikkje med i noko av det.
+export function filterAndSortPipes<
+  T extends Søkbar & Pick<PipeType, "active" | "category_id" | "stock" | "price" | "low_stock_threshold">,
+>(
+  rows: T[],
   opts: { search?: string; categoryId?: string | null; onlyActive?: boolean; sort?: PipeSort } = {},
-): PipeType[] {
+): T[] {
   const { search = "", categoryId = null, onlyActive = false, sort = { key: "name", dir: "asc" } } = opts;
   const dir = sort.dir === "asc" ? 1 : -1;
   const nb = (a: string, b: string) => (a ?? "").localeCompare(b ?? "", "nb", { numeric: true });

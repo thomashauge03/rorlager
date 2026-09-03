@@ -8,13 +8,13 @@ import type { PipeOrderLineRow, PipeOrderRow } from "@/lib/types";
 // Forholdet må haldast, elles blir merket klemt
 const LOGO_RATIO = 278 / 450;
 
-const BLACK: [number, number, number] = [17, 17, 17];
-const RED: [number, number, number] = [211, 18, 28];
-const GREY: [number, number, number] = [110, 110, 110];
-const ZEBRA: [number, number, number] = [247, 247, 247];
-const HAIRLINE: [number, number, number] = [222, 222, 222];
+export const BLACK: [number, number, number] = [17, 17, 17];
+export const RED: [number, number, number] = [211, 18, 28];
+export const GREY: [number, number, number] = [110, 110, 110];
+export const ZEBRA: [number, number, number] = [247, 247, 247];
+export const HAIRLINE: [number, number, number] = [222, 222, 222];
 
-const MARGIN = 16;
+export const MARGIN = 16;
 
 export type CompanyInfo = {
   name: string;
@@ -35,12 +35,12 @@ type MergedLine = { name: string; dimension: string | null; sku: string | null; 
 
 /* ---------- Små hjelparar ---------- */
 
-const setText = (doc: jsPDF, c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
-const setFill = (doc: jsPDF, c: [number, number, number]) => doc.setFillColor(c[0], c[1], c[2]);
-const setDraw = (doc: jsPDF, c: [number, number, number]) => doc.setDrawColor(c[0], c[1], c[2]);
+export const setText = (doc: jsPDF, c: [number, number, number]) => doc.setTextColor(c[0], c[1], c[2]);
+export const setFill = (doc: jsPDF, c: [number, number, number]) => doc.setFillColor(c[0], c[1], c[2]);
+export const setDraw = (doc: jsPDF, c: [number, number, number]) => doc.setDrawColor(c[0], c[1], c[2]);
 
 /** Filnamn utan teikn som Windows eller nettlesaren kan surre med */
-const safeName = (s: string) =>
+export const safeName = (s: string) =>
   (s || "").replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "") || "kunde";
 
 /** Meter og stykk kan ikkje leggjast saman – kvar eining må summerast for seg */
@@ -54,7 +54,7 @@ const unitSums = (lines: { unit: string; quantity: number }[]) => {
 
 /** Topp: logo til venstre, tittel og to grå linjer til høgre, raud strek under.
  *  Returnerer y-posisjonen der innhaldet kan starte. */
-function drawHeader(doc: jsPDF, title: string, company: CompanyInfo, rightLine?: string) {
+export function drawHeader(doc: jsPDF, title: string, company: CompanyInfo, rightLine?: string) {
   const pw = doc.internal.pageSize.getWidth();
   const contentW = pw - MARGIN * 2;
 
@@ -84,7 +84,7 @@ function drawHeader(doc: jsPDF, title: string, company: CompanyInfo, rightLine?:
 }
 
 /** Botntekst blir teikna til slutt – først då veit vi kor mange sider det blei */
-function drawFooter(doc: jsPDF, company: CompanyInfo, note?: string) {
+export function drawFooter(doc: jsPDF, company: CompanyInfo, note?: string) {
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
   const contentW = pw - MARGIN * 2;

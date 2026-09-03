@@ -4,18 +4,46 @@
 export type {
   PipeCategoryRow,
   PipeTypeRow,
+  PipeCatalogRow,
   PipeOrderRow,
   PipeOrderLineRow,
   PipeStockLogRow,
   PipeInvoiceRow,
   PipeSettingsRow,
+  PipePublicSettingsRow,
   SystemUserRow,
+  ProjectRow,
+  ProjectMemberRow,
+  ProjectOrderRow,
+  ProjectOrderLineRow,
+  ProjectOrderStatus,
+  ProjectReceiptRow,
+  ProjectReceiptLineRow,
+  Deviation,
 } from "@/integrations/supabase/types";
 
-import type { PipeTypeRow, PipeOrderRow, PipeOrderLineRow } from "@/integrations/supabase/types";
+import type {
+  PipeTypeRow,
+  PipeCatalogRow,
+  PipeOrderRow,
+  PipeOrderLineRow,
+  ProjectOrderRow,
+  ProjectOrderLineRow,
+  ProjectOrderStatus,
+  ProjectReceiptRow,
+  ProjectReceiptLineRow,
+  Deviation,
+} from "@/integrations/supabase/types";
 
 /** Ei rørtype med kategorinamnet slått opp – det er slik lista blir vist. */
 export type PipeType = PipeTypeRow & { category_name?: string | null };
+
+/**
+ * Same som PipeType, men utan cost_price. Dette er typen alle sider utanfor
+ * kontoret skal bruke – typesystemet stoppar då eit uhell der innkjøpsprisen
+ * blir teikna på ei kundeside.
+ */
+export type CatalogItem = PipeCatalogRow & { category_name?: string | null };
 
 /** Ei linje i handlekurven. Ligg i localStorage, difor berre det nødvendige. */
 export type CartLine = {
@@ -64,3 +92,35 @@ export type SubmittedOrder = {
 };
 
 export type StockStatus = "tomt" | "snart" | "pa_lager";
+
+// ── Prosjekt, bestilling og mottakskontroll ──
+
+export const PROJECT_ORDER_STATUS_LABEL: Record<ProjectOrderStatus, string> = {
+  meldt: "Meldt inn",
+  bestilt: "Bestilt",
+  delvis: "Delvis mottatt",
+  mottatt: "Mottatt",
+  avvist: "Avvist",
+};
+
+export const DEVIATION_LABEL: Record<Deviation, string> = {
+  ingen: "Ingen avvik",
+  mangler: "Mangler",
+  skadet: "Skadet",
+  feil_vare: "Feil vare",
+  for_mye: "For mye",
+};
+
+/** Ei bestillingslinje med det som er mottatt på henne rekna ut. */
+export type ProjectOrderLine = ProjectOrderLineRow & {
+  /** Summen av alle mottak på linja, over alle puljer. */
+  received_qty: number;
+  /** Bestilt minus mottatt. Negativ når det kom for mykje. */
+  remaining_qty: number;
+};
+
+/** Ei bestilling slik ho blir vist: hovudrada, linjene og mottaka. */
+export type ProjectOrderWithLines = ProjectOrderRow & {
+  lines: ProjectOrderLine[];
+  receipts: (ProjectReceiptRow & { lines: ProjectReceiptLineRow[] })[];
+};

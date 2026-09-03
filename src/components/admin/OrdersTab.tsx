@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Stat } from "@/components/Stat";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, isoDate, kr, krShort, num, pipeLabel, qtyLabel, shortDate } from "@/lib/format";
@@ -41,15 +42,6 @@ function unitSummary(lines: { unit: string; quantity: number }[]): string {
   lines.forEach((l) => per.set(l.unit, (per.get(l.unit) ?? 0) + (l.quantity || 0)));
   const parts = [...per.entries()].map(([unit, qty]) => qtyLabel(Math.round(qty * 10000) / 10000, unit));
   return parts.length ? parts.join(" · ") : "–";
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="hm-stat">
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="text-lg font-bold text-foreground tabular leading-tight mt-0.5">{value}</p>
-    </div>
-  );
 }
 
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {

@@ -45,7 +45,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, createPipeTypes, fetchCategories, fetchPipeTypes, importCosts } from "@/lib/orders";
 import { diffAgainstCatalog, parsePriceWorkbook, type ImportDiff, type ParseResult } from "@/lib/price-import";
-import { useSettings } from "@/lib/settings";
+import { useOfficeSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 
 const ROUNDING = [
@@ -116,7 +116,8 @@ function MoreRow({ total, span }: { total: number; span: number }) {
 
 export function PriceImport() {
   const qc = useQueryClient();
-  const settings = useSettings();
+  // Prisimporten reknar med påslaget, så han må ha kontorrada.
+  const settings = useOfficeSettings();
   const types = useQuery({ queryKey: QK.types, queryFn: fetchPipeTypes });
   const categories = useQuery({ queryKey: QK.categories, queryFn: fetchCategories });
 

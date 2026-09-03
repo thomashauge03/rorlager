@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import type { CartLine, PipeType } from "@/lib/types";
+import type { CartLine, CatalogItem } from "@/lib/types";
 
 const KEY = "rorlager.kurv.v1";
 const CUSTOMER_KEY = "rorlager.kunde.v1";
@@ -77,7 +77,9 @@ export function writeCustomer(c: SavedCustomer) {
   }
 }
 
-export const cartLineFromType = (t: PipeType, quantity: number): CartLine => ({
+// CatalogItem og ikkje PipeType: kurven blir fylt frå kundesida, som les
+// katalogvisninga utan innkjøpspris. Ein PipeType passar like fullt inn her.
+export const cartLineFromType = (t: CatalogItem, quantity: number): CartLine => ({
   pipe_type_id: t.id,
   name: t.name,
   dimension: t.dimension,

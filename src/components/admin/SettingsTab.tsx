@@ -30,7 +30,7 @@ import { PriceImport } from "@/components/admin/PriceImport";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
-import { saveSettings, useSettings } from "@/lib/settings";
+import { saveSettings, useOfficeSettings } from "@/lib/settings";
 import type { PipeSettingsRow, PipeType } from "@/lib/types";
 
 /** Skjemaet held alt som tekst, slik at eit halvskrive tal ikkje blir tolka
@@ -93,7 +93,8 @@ const MAX_MARKUP = 1000;
 export function SettingsTab() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const query = useSettings();
+  // Kontorrada, med påslaget. Den offentlege visninga har det ikkje.
+  const query = useOfficeSettings();
 
   // Heile katalogen, ikkje berre dei aktive: RPC-en rører alt som har
   // innkjøpspris, og då må førehandsvisinga telje det same.

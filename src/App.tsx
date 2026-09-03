@@ -12,6 +12,10 @@ import Receipt from "./pages/Receipt";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
+import Projects from "./pages/Projects";
+import ProjectPage from "./pages/ProjectPage";
+import ProjectRequest from "./pages/ProjectRequest";
+import ProjectReceipt from "./pages/ProjectReceipt";
 import Personvern from "./pages/Personvern";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/InstallPrompt";
@@ -49,6 +53,11 @@ const App = () => (
             <Route path="/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/brukere" element={<AdminUsers />} />
+            {/* Byggjeplassen: melde behov og kvittere for mottak */}
+            <Route path="/prosjekt" element={<Projects />} />
+            <Route path="/prosjekt/:id" element={<ProjectPage />} />
+            <Route path="/prosjekt/:id/behov" element={<ProjectRequest />} />
+            <Route path="/prosjekt/:id/mottak/:ordreId" element={<ProjectReceipt />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
           {/* Ligg utanfor Routes, så dei overlever navigering mellom sidene */}

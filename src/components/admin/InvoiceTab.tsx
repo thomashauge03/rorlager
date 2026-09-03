@@ -38,7 +38,7 @@ import { QK, createInvoice, deleteInvoice, fetchInvoices, fetchOrders } from "@/
 import { buildInvoicePDF, downloadInvoicePDF, type InvoiceDoc } from "@/lib/invoice-pdf";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { useSettings } from "@/lib/settings";
-import type { OrderWithLines, PipeInvoiceRow, PipeSettingsRow } from "@/lib/types";
+import type { OrderWithLines, PipeInvoiceRow, PipePublicSettingsRow } from "@/lib/types";
 
 /** Same kunde kan vere skriven "Ola  Nordmann" og "ola nordmann". Vi grupperer
  *  på ein normalisert nøkkel, men viser namnet slik det sist blei skrive. */
@@ -51,7 +51,9 @@ const orderDay = (o: OrderWithLines) => isoDate(new Date(o.created_at));
 const missingPrice = (l: { unit_price: number | null; line_total: number | null }) =>
   l.unit_price === null || l.unit_price === undefined || l.line_total === null || l.line_total === undefined;
 
-const companyFrom = (s: PipeSettingsRow): CompanyInfo => ({
+// Den offentlege innstillingsrada held: fakturagrunnlaget treng firmainfo og
+// mva-satsen, aldri påslaget.
+const companyFrom = (s: PipePublicSettingsRow): CompanyInfo => ({
   name: s?.company_name || "Hauge Maskin AS",
   orgNumber: s?.org_number ?? null,
   address: s?.address ?? null,

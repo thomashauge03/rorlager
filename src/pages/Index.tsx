@@ -15,12 +15,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { QK, fetchCategories, fetchPipeTypes } from "@/lib/orders";
+import { QK, fetchCatalog, fetchCategories } from "@/lib/orders";
 import { useSettings } from "@/lib/settings";
 import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { kr, num, pipeLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
-import type { PipeType } from "@/lib/types";
+import type { CatalogItem } from "@/lib/types";
 
 const DEFAULT_INTRO =
   "Skann QR-koden som henger på hylla, eller søk opp røret i lista under. Tast inn hvor mye du tar ut, og legg det i handlekurven.";
@@ -216,7 +216,9 @@ function NoScanDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (op
 /*  Varekort                                                           */
 /* ------------------------------------------------------------------ */
 
-function PipeCard({ pipe, showPrice }: { pipe: PipeType; showPrice: boolean }) {
+// CatalogItem og ikkje PipeType: framsida les katalogvisninga, som ikkje har
+// cost_price. Typen held innkjøpsprisen ute av kundesida for godt.
+function PipeCard({ pipe, showPrice }: { pipe: CatalogItem; showPrice: boolean }) {
   const status = stockStatus(pipe);
 
   return (
@@ -269,7 +271,10 @@ export default function Index() {
   const [scanOpen, setScanOpen] = useState(false);
   const [noScanOpen, setNoScanOpen] = useState(false);
 
-  const typesQuery = useQuery({ queryKey: QK.types, queryFn: fetchPipeTypes });
+  // Katalogvisninga, ikkje pipe_types. Framsida blir opna av kundar utan
+  // innlogging, og tabellen er stengd for dei – i tillegg til at ho ber på
+  // innkjøpsprisen, som ingen kunde skal sjå.
+  const typesQuery = useQuery({ queryKey: QK.catalog, queryFn: fetchCatalog });
   const categoriesQuery = useQuery({ queryKey: QK.categories, queryFn: fetchCategories });
 
   const showPrices = settings?.show_prices ?? true;

@@ -5,8 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { searchKey } from "@/lib/stock";
 import type {
+  CatalogItem,
   OrderStatus,
   OrderWithLines,
+  PipeCatalogRow,
   PipeCategoryRow,
   PipeInvoiceRow,
   PipeOrderLineRow,
@@ -20,12 +22,31 @@ import type {
 /** Nøklane react-query deler på tvers av faner. Ligg her fordi det er her
  *  dataa blir henta – då kan ein invalidere utan å gjette på nøkkelen. */
 export const QK = {
+  /** Heile rørtypen, cost_price inkludert. Berre kontoret får rader her. */
   types: ["pipe_types"],
+  /**
+   * Katalogen utan innkjøpspris – det kundar og prosjektbrukarar ser.
+   *
+   * Ligg UNDER types-prefikset med vilje. Dei ni stadene som allereie
+   * invaliderer QK.types etter ei lagerendring treffer då katalogen òg, utan at
+   * kvar av dei må hugse ein nøkkel til.
+   *
+   * Oppslag på éin slug ligg under sitt eige ord (sjå PipePage). Utan det ville
+   * eit rør med qr_slug «katalog» delt cache-oppføring med heile lista.
+   */
+  catalog: ["pipe_types", "katalog"],
+  /** Eitt rør, slått opp på QR-kode eller varenummer. */
+  bySlug: (slug: string) => ["pipe_types", "slug", slug],
   categories: ["pipe_categories"],
   orders: ["pipe_orders"],
   invoices: ["pipe_invoices"],
   settings: ["pipe_settings"],
+  /** Innstillingane med påslaget. Under settings-prefikset, same grunn. */
+  officeSettings: ["pipe_settings", "kontor"],
   stockLog: ["pipe_stock_log"],
+  projects: ["projects"],
+  projectOrders: ["project_orders"],
+  projectReceipts: ["project_receipts"],
 } as const;
 
 /** Postgres-feil er engelske og kryptiske. Vi set på norsk kontekst så brukaren
@@ -41,42 +62,69 @@ const nb = (a: string | null | undefined, b: string | null | undefined) =>
 
 // ---------------------------------------------------------------- rørtypar
 
+/** Same sortering overalt: sort_order, så namn, så dimensjon. */
+function sorterKatalog<T extends { sort_order: number; name: string; dimension: string | null }>(rader: T[]): T[] {
+  return rader.sort((a, b) => {
+    const bySort = (a.sort_order ?? 0) - (b.sort_order ?? 0);
+    if (bySort !== 0) return bySort;
+    const byName = nb(a.name, b.name);
+    return byName !== 0 ? byName : nb(a.dimension, b.dimension);
+  });
+}
+
+/**
+ * Heile rørtypen, innkjøpsprisen inkludert. BERRE for kontoret.
+ *
+ * pipe_types er stengd for anon og gir null rader til ein prosjektbrukar. Skal
+ * du vise katalogen til nokon utanfor kontoret, bruk fetchCatalog.
+ */
 export async function fetchPipeTypes(): Promise<PipeType[]> {
   const { data, error } = await supabase.from("pipe_types").select("*, pipe_categories(name)");
   if (error) fail("Klarte ikke å hente rørtypene", error);
 
   const rows = (data ?? []) as unknown as (PipeTypeRow & { pipe_categories?: { name: string } | null })[];
 
-  return rows
-    .map(({ pipe_categories, ...row }) => ({ ...row, category_name: pipe_categories?.name ?? null }))
-    .sort((a, b) => {
-      const bySort = (a.sort_order ?? 0) - (b.sort_order ?? 0);
-      if (bySort !== 0) return bySort;
-      const byName = nb(a.name, b.name);
-      return byName !== 0 ? byName : nb(a.dimension, b.dimension);
-    });
+  return sorterKatalog(rows.map(({ pipe_categories, ...row }) => ({ ...row, category_name: pipe_categories?.name ?? null })));
+}
+
+/**
+ * Katalogen slik kundar og prosjektbrukarar ser henne – utan cost_price.
+ *
+ * Les visninga pipe_catalog. Fram til
+ * 20260903090200_katalog_utan_innkjopspris.sql las denne sida pipe_types
+ * direkte, og då låg innkjøpsprisen open for kven som helst på nettet.
+ */
+export async function fetchCatalog(): Promise<CatalogItem[]> {
+  const { data, error } = await supabase.from("pipe_catalog").select("*, pipe_categories(name)");
+  if (error) fail("Klarte ikke å hente rørtypene", error);
+
+  const rows = (data ?? []) as unknown as (PipeCatalogRow & { pipe_categories?: { name: string } | null })[];
+
+  return sorterKatalog(rows.map(({ pipe_categories, ...row }) => ({ ...row, category_name: pipe_categories?.name ?? null })));
 }
 
 /**
  * Slaar opp eit rør frå QR-koden. Fell tilbake til varenummeret fordi ein
  * skada etikett ofte blir taua inn manuelt – då er det SKU-en folk har for seg.
  */
-export async function fetchPipeTypeBySlug(slug: string): Promise<PipeType | null> {
+export async function fetchPipeTypeBySlug(slug: string): Promise<CatalogItem | null> {
   const key = (slug ?? "").trim();
   if (!key) return null;
 
   const select = "*, pipe_categories(name)";
-  const flatten = (row: any): PipeType | null => {
+  const flatten = (row: any): CatalogItem | null => {
     if (!row) return null;
     const { pipe_categories, ...rest } = row;
-    return { ...rest, category_name: pipe_categories?.name ?? null } as PipeType;
+    return { ...rest, category_name: pipe_categories?.name ?? null } as CatalogItem;
   };
 
-  const bySlug = await supabase.from("pipe_types").select(select).eq("qr_slug", key.toLowerCase()).maybeSingle();
+  // Visninga, ikkje tabellen: dette er QR-sida, og ho blir opna av kundar utan
+  // innlogging.
+  const bySlug = await supabase.from("pipe_catalog").select(select).eq("qr_slug", key.toLowerCase()).maybeSingle();
   if (bySlug.error) fail("Klarte ikke å hente røret", bySlug.error);
   if (bySlug.data) return flatten(bySlug.data);
 
-  const bySku = await supabase.from("pipe_types").select(select).ilike("sku", key).maybeSingle();
+  const bySku = await supabase.from("pipe_catalog").select(select).ilike("sku", key).maybeSingle();
   if (bySku.error) fail("Klarte ikke å hente røret", bySku.error);
   return flatten(bySku.data);
 }
@@ -103,8 +151,11 @@ export async function savePipeType(patch: Partial<PipeTypeRow> & { id?: string }
 }
 
 export async function deletePipeType(id: string): Promise<void> {
-  const { error } = await supabase.from("pipe_types").delete().eq("id", id);
+  // .select() med vilje: PostgREST svarar 204 utan feil når ein policy
+  // filtrerer bort rada, så eit nei ville sett ut som eit ja.
+  const { data, error } = await supabase.from("pipe_types").delete().eq("id", id).select("id");
   if (error) fail("Klarte ikke å slette rørtypen", error);
+  if (!data?.length) throw new Error("Varen ble ikke slettet. Du har kanskje ikke tilgang.");
 }
 
 export async function saveCategory(patch: Partial<PipeCategoryRow> & { id?: string }): Promise<PipeCategoryRow> {
@@ -120,8 +171,9 @@ export async function saveCategory(patch: Partial<PipeCategoryRow> & { id?: stri
 }
 
 export async function deleteCategory(id: string): Promise<void> {
-  const { error } = await supabase.from("pipe_categories").delete().eq("id", id);
+  const { data, error } = await supabase.from("pipe_categories").delete().eq("id", id).select("id");
   if (error) fail("Klarte ikke å slette kategorien", error);
+  if (!data?.length) throw new Error("Kategorien ble ikke slettet. Du har kanskje ikke tilgang.");
 }
 
 // ------------------------------------------------------------ bestillingar

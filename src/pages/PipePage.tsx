@@ -37,7 +37,7 @@ export default function PipePage() {
   // Nøkkelen ligg under QK.types med vilje: då treffer invalideringane etter
   // lagerendring denne sida òg, og kunden ser same beholdning som framsida
   const pipeQuery = useQuery({
-    queryKey: [...QK.types, slug],
+    queryKey: QK.bySlug(slug ?? ""),
     queryFn: () => fetchPipeTypeBySlug(slug),
     enabled: Boolean(slug),
   });
