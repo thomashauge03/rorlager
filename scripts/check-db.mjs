@@ -139,6 +139,26 @@ for (const [tabell, hvorfor] of stengde) {
   }
 }
 
+// ── Det anon kan LESE, men ikke skrive ──
+//
+// Katalogen og kategoriene skal være åpne for kunden. Men lesetilgang er ikke
+// det samme som skrivetilgang, og Supabase deler ut ALT på nye objekter til
+// anon som standard — så en `grant select` legger bare til, den avgrenser
+// ingenting.
+//
+// Denne sjekken fantes ikke da pipe_catalog ble laget, og da lå hele katalogen
+// åpen for en anonym DELETE. Den står her nå fordi et hull uten en test er et
+// hull som kommer tilbake.
+
+console.log("\nLesbart for kunden, men ikke skrivbart:");
+for (const tabell of ["pipe_categories", "pipe_catalog", "pipe_public_settings"]) {
+  const { error, status } = await supabase.from(tabell).delete().neq("id", "00000000-0000-0000-0000-000000000000");
+  // 204 uten feil betyr at rettigheten er der og bare RLS stanset radene.
+  // Rettigheten skal ikke være der i det hele tatt.
+  if (error) ok(`${tabell} — DELETE nektes`);
+  else nei(tabell, `ANONYME HAR DELETE (svarte ${status}). Kjør supabase-setup.sql på nytt.`);
+}
+
 // ── Funksjonane ──
 
 console.log("\nFunksjoner:");
