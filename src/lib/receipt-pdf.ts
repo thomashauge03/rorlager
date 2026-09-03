@@ -23,7 +23,7 @@ import {
   setText,
   type CompanyInfo,
 } from "@/lib/order-pdf";
-import { hentBildeData } from "@/lib/mottak-bilde";
+import { hentBildeData, type Bildedata } from "@/lib/mottak-bilde";
 import { dateTime, isoDate, num, pipeLabel } from "@/lib/format";
 import { DEVIATION_LABEL } from "@/lib/types";
 import type { ProjectOrderWithLines, ProjectReceiptRow, ProjectReceiptLineRow } from "@/lib/types";
@@ -34,11 +34,21 @@ export type ReceiptPdfDoc = {
   projectAddress: string | null;
   order: ProjectOrderWithLines;
   receipt: ProjectReceiptRow & { lines: ProjectReceiptLineRow[] };
-  /** Bileta som data-URL-ar. jsPDF kan ikkje hente dei sjølv. */
-  photos?: string[];
+  /** Bileta med måla sine. jsPDF kan ikkje hente dei sjølv. */
+  photos?: Bildedata[];
+  /** Bilete som skulle vore med, men ikkje lét seg hente. */
+  photosMissing?: number;
 };
 
-export function buildReceiptPDF({ company, projectName, projectAddress, order, receipt, photos = [] }: ReceiptPdfDoc) {
+export function buildReceiptPDF({
+  company,
+  projectName,
+  projectAddress,
+  order,
+  receipt,
+  photos = [],
+  photosMissing = 0,
+}: ReceiptPdfDoc) {
   const doc = new jsPDF({ unit: "mm", format: "a4" });
   const pw = doc.internal.pageSize.getWidth();
   const ph = doc.internal.pageSize.getHeight();
@@ -176,27 +186,63 @@ export function buildReceiptPDF({ company, projectName, projectAddress, order, r
     doc.setFontSize(9);
     setText(doc, BLACK);
     doc.text(`Bilder fra mottaket (${photos.length})`, MARGIN, y);
-    y += 4;
+    y += 6;
 
-    const kolBreidd = (contentW - 6) / 2;
-    const høgd = kolBreidd * 0.75;
+    /*
+     * SIDEFORHOLDET BLIR BEVART.
+     *
+     * Tidlegare fekk kvart bilete ein fast 4:3-boks, og jsPDF fyller det
+     * rektangelet uansett kva bildet har av mål. Eit mobilbilete i portrett –
+     * altså normalen når nokon fotograferer ein palle – blei strekt nesten det
+     * dobbelte på breidda. Eit reklamasjonsdokument som viser ein forvrengd
+     * palle er verre enn ingen bilete.
+     *
+     * Kvart bilete blir no skalert INN i ruta si, sentrert, med sine eigne mål.
+     */
+    const rute = (contentW - 6) / 2;
+    const ruteHøgd = rute * 0.75;
 
-    photos.forEach((data, i) => {
+    photos.forEach((f, i) => {
       const kol = i % 2;
       if (kol === 0) {
-        if (y + høgd > ph - 26) {
+        if (y + ruteHøgd > ph - 26) {
           doc.addPage();
           y = MARGIN + 6;
         }
-        y += 4;
       }
+
+      const skala = Math.min(rute / f.bredde, ruteHøgd / f.høgde);
+      const b = f.bredde * skala;
+      const h = f.høgde * skala;
+      const x = MARGIN + kol * (rute + 6) + (rute - b) / 2;
+
       try {
-        doc.addImage(data, MARGIN + kol * (kolBreidd + 6), y, kolBreidd, høgd, undefined, "FAST");
+        doc.addImage(f.data, x, y + (ruteHøgd - h) / 2, b, h, undefined, "FAST");
       } catch {
         /* eit bilete som ikkje let seg teikne skal ikkje velte heile PDF-en */
       }
-      if (kol === 1 || i === photos.length - 1) y += høgd;
+      if (kol === 1 || i === photos.length - 1) y += ruteHøgd + 4;
     });
+    y += 6;
+  }
+
+  /*
+   * Bilete som skulle vore her, men ikkje kom.
+   *
+   * Utan denne linja ser eit dokument der alle bileta feila å hente NØYAKTIG
+   * ut som eit mottak der det aldri blei tatt bilete. For eit
+   * reklamasjonsgrunnlag er stille utelating verre enn ei feilmelding.
+   */
+  if (photosMissing > 0) {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    setText(doc, RED);
+    doc.text(
+      `${photosMissing} ${photosMissing === 1 ? "bilde" : "bilder"} kunne ikke hentes — be om utskriften på nytt`,
+      MARGIN,
+      y,
+    );
+    doc.setFont("helvetica", "normal");
     y += 8;
   }
 
@@ -261,11 +307,11 @@ export async function downloadReceiptPDFMedBilder(
   input: Omit<ReceiptPdfDoc, "photos"> & { photoPaths: string[] },
 ): Promise<void> {
   const { photoPaths, ...resten } = input;
-  let photos: string[] = [];
+  let photos: Bildedata[] = [];
   try {
     photos = await hentBildeData(photoPaths);
   } catch {
-    /* PDF-en blir laga utan */
+    /* PDF-en blir laga utan, men seier frå om det */
   }
-  downloadReceiptPDF({ ...resten, photos });
+  downloadReceiptPDF({ ...resten, photos, photosMissing: photoPaths.length - photos.length });
 }

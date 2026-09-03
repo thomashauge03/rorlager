@@ -6,16 +6,17 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardList, FolderOpen, Loader2, LogOut, MapPin, ShieldAlert } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TopBar } from "@/components/TopBar";
 import { QK } from "@/lib/orders";
 import { fetchAllProjectOrders, fetchProjects, isOverdue } from "@/lib/projects";
-import { useAuth } from "@/lib/auth";
+import { loggUt, useAuth } from "@/lib/auth";
 
 export default function Projects() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const auth = useAuth(() => navigate("/login", { replace: true }));
 
   const projects = useQuery({
@@ -32,8 +33,16 @@ export default function Projects() {
     enabled: !auth.checking && !!auth.email,
   });
 
+  /*
+   * Null returnerast medan vi ikkje VEIT.
+   *
+   * Før stod det «Ingenting venter på mottak» på kvart kort så snart spørjinga
+   * feila – permanent, og usant. Ei påstand om at ingenting ventar er verre
+   * enn inga påstand.
+   */
   const status = (projectId: string) => {
-    const mine = (orders.data ?? []).filter((o) => o.project_id === projectId);
+    if (!orders.isSuccess) return null;
+    const mine = orders.data.filter((o) => o.project_id === projectId);
     return {
       venter: mine.filter((o) => o.status === "bestilt" || o.status === "delvis").length,
       forsinka: mine.filter((o) => isOverdue(o)).length,
@@ -41,7 +50,7 @@ export default function Projects() {
   };
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    await loggUt(queryClient);
     navigate("/login", { replace: true });
   };
 
@@ -139,7 +148,15 @@ export default function Projects() {
                       <p className="truncate font-semibold text-foreground">{p.name}</p>
                       {p.client ? <p className="truncate text-sm text-muted-foreground">{p.client}</p> : null}
                     </div>
-                    <span className="tabular shrink-0 text-xs text-muted-foreground">#{p.project_number}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      {/* Eit avslutta prosjekt såg heilt normalt ut her – det låg
+                          berre lenger ned i lista. Då melder nokon inn behov til
+                          ein ferdig jobb. */}
+                      {p.status === "avsluttet" ? (
+                        <span className="hm-chip border border-border bg-muted text-muted-foreground">Avsluttet</span>
+                      ) : null}
+                      <span className="tabular text-xs text-muted-foreground">#{p.project_number}</span>
+                    </span>
                   </div>
 
                   {p.address ? (
@@ -153,7 +170,16 @@ export default function Projects() {
                       ingenting om kva som hastar, og kunne til og med lesast
                       som ein imperativ. */}
                   {(() => {
-                    const { venter, forsinka } = status(p.id);
+                    const s = status(p.id);
+                    if (!s) {
+                      return (
+                        <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+                          <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          {orders.isError ? "Fikk ikke hentet bestillingene" : "Henter bestillinger …"}
+                        </p>
+                      );
+                    }
+                    const { venter, forsinka } = s;
                     return (
                       <p
                         className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${

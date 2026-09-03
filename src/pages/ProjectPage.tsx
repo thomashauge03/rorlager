@@ -128,10 +128,17 @@ export default function ProjectPage() {
           </p>
         ) : null}
 
-        <Button className="h-14 w-full text-base [&_svg]:size-6" onClick={() => navigate(`/prosjekt/${id}/behov`)}>
-          <Plus className="mr-2" aria-hidden="true" />
-          Meld inn behov
-        </Button>
+        {p?.status === "avsluttet" ? (
+          <p className="hm-card border-warning/40 bg-warning/10 p-4 text-sm text-warning-ink dark:text-warning">
+            Prosjektet er avsluttet. Du kan se det som er bestilt og kvittere for leveranser som fortsatt kommer, men
+            ikke melde inn nye behov.
+          </p>
+        ) : (
+          <Button className="h-14 w-full text-base [&_svg]:size-6" onClick={() => navigate(`/prosjekt/${id}/behov`)}>
+            <Plus className="mr-2" aria-hidden="true" />
+            Meld inn behov
+          </Button>
+        )}
 
         <div className="mt-5">
           {orders.isLoading ? (

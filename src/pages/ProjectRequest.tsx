@@ -20,24 +20,31 @@ import { useAuth } from "@/lib/auth";
 import { matchesSearch } from "@/lib/stock";
 import { parseNum, pipeLabel } from "@/lib/format";
 
-const NAVN_NØKKEL = "rorlager.prosjekt.navn";
+/**
+ * Nøkkelen er PER BRUKAR.
+ *
+ * Var global før. På eit delt nettbrett på plassen stod namnefeltet ferdig
+ * utfylt med førre manns namn – og det er feltet som seier kven som tok imot
+ * leveransen, på eit dokument som blir signert og sendt leverandøren.
+ */
+const NAVN_NØKKEL = (epost: string | null) => `rorlager.prosjekt.navn.${epost ?? "ukjend"}`;
 const UTKAST_NØKKEL = (id: string) => `rorlager.prosjekt.utkast.${id}`;
 
 /** Så mange treff blir viste om gongen. Står som ei konstant fordi talet blir
  *  vist til brukaren når lista er kappa. */
 const TREFF_TAK = 8;
 
-const lesNavn = () => {
+const lesNavn = (epost: string | null) => {
   try {
-    return localStorage.getItem(NAVN_NØKKEL) ?? "";
+    return localStorage.getItem(NAVN_NØKKEL(epost)) ?? "";
   } catch {
     return "";
   }
 };
 
-const skrivNavn = (v: string) => {
+const skrivNavn = (epost: string | null, v: string) => {
   try {
-    localStorage.setItem(NAVN_NØKKEL, v);
+    localStorage.setItem(NAVN_NØKKEL(epost), v);
   } catch {
     /* ignorer – berre ei bekvemmelegheit */
   }
@@ -82,7 +89,7 @@ export default function ProjectRequest() {
 
   const [søk, setSøk] = useState("");
   const [linjer, setLinjer] = useState<Utkast[]>(() => lesUtkast(id));
-  const [navn, setNavn] = useState(lesNavn);
+  const [navn, setNavn] = useState(() => lesNavn(auth.email));
   const [trengsInnen, setTrengsInnen] = useState("");
   const [notat, setNotat] = useState("");
   const [fritekst, setFritekst] = useState("");
@@ -150,7 +157,7 @@ export default function ProjectRequest() {
         };
       });
 
-      skrivNavn(navn.trim());
+      skrivNavn(auth.email, navn.trim());
       // Utkastet blir rydda i onSuccess, ikkje her: feilar innsendinga, skal
       // lista framleis liggje der brukaren la ho.
       return createProjectOrder({

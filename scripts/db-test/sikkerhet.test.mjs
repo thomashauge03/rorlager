@@ -141,6 +141,49 @@ await som(db, { epost: "stor@bokstav.no" }, async () => {
   sjekk("ser ingen fakturaer", await antal(`select id from public.pipe_invoices`), 0);
 });
 
+/*
+ * TABULATOR, IKKE BARE MELLOMROM.
+ *
+ * Sammenligningen brukte `btrim()`, som med standardargument fjerner BARE
+ * mellomrom. En rolle skrevet 'prosjekt\t' ble dermed regnet som noe annet enn
+ * 'prosjekt' — altså som kontor, med full tilgang til fakturagrunnlag og
+ * innkjøpspriser.
+ *
+ * Edge-funksjonen normaliserer med JS .trim(), som fjerner tab. Men det
+ * forsvaret gjelder bare den ene veien inn; en rad lagt inn fra SQL Editor
+ * eller et importskript var ikke dekket.
+ */
+for (const [rolle, kva] of [
+  ["prosjekt\t", "tabulator"],
+  ["prosjekt\n", "linjeskift"],
+  [" prosjekt", "hardt mellomrom"],
+  ["  PROSJEKT  ", "store bokstaver og mellomrom"],
+]) {
+  const e = `blank-${Buffer.from(kva).toString("hex").slice(0, 8)}@test.no`;
+  await db.query(`insert into public.system_users (email, role) values ($1, $2)`, [e, rolle]);
+  await som(db, { epost: e }, async () => {
+    const k = (await en(`select public.hm_er_kontor() as v`)).v;
+    k === false ? ok(`rolle med ${kva} er ikke kontor`) : nei(`rolle med ${kva}`, "BLE REGNET SOM KONTOR");
+    sjekk(`  og hm_rolle svarer rent`, (await en(`select public.hm_rolle() as v`)).v, "prosjekt");
+  });
+}
+
+console.log("\n── Medlemskap kan ikke gis av en selv ──\n");
+// Policyen er riktig, men ingen test spurte om det. Blir «project_members les»
+// en gang endret fra `for select` til `for all`, får plassen tilgang til hvert
+// prosjekts bestillinger, kvitteringer og bilder — og alt annet står grønt.
+
+{
+  const pB = await en(`insert into public.projects (name) values ('Andres plass') returning id`);
+  await som(db, KARI, async () => {
+    const m = await nekta(() =>
+      db.query(`insert into public.project_members (project_id, email) values ($1, 'kari@plassen.no')`, [pB.id]),
+    );
+    m ? ok("Kari kan ikke sette seg selv på et fremmed prosjekt") : nei("selvpåmelding", "GIKK GJENNOM");
+    sjekk("og ser det fortsatt ikke", await antal(`select id from public.projects where id = $1`, [pB.id]), 0);
+  });
+}
+
 console.log("\n── Kontorets side av det ──\n");
 
 await som(db, KONTOR, async () => {

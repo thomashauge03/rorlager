@@ -56,6 +56,9 @@ export async function krymp(fil: File): Promise<Blob> {
  * client_ref, nøkkelen som alt gjer innsendinga idempotent; mottaket finst
  * ikkje enno når bildet blir lasta opp.
  */
+/** Formata bøtta tek imot. Alt anna blir avvist av Storage, ikkje av oss. */
+const GODTEKNE = ["image/jpeg", "image/png", "image/webp"] as const;
+
 export async function lastOppBilde(
   projectId: string,
   clientRef: string,
@@ -63,11 +66,30 @@ export async function lastOppBilde(
   nummer: number,
 ): Promise<string> {
   const blob = await krymp(fil);
-  const endelse = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";
+
+  /*
+   * Kom komprimeringa ikkje i mål, held vi ikkje fram med eit format bøtta
+   * nektar å ta imot.
+   *
+   * createImageBitmap klarar ikkje HEIC i Chrome og Firefox. Då fall koden
+   * tilbake til originalfila – men sette samtidig endelsa til «jpg» medan
+   * contentType framleis var «image/heic», og opplastinga blei avvist med ei
+   * engelsk Postgres-melding. Kommentaren sa «eit stort bilete er betre enn
+   * ingen»; på den stien blei det ingen.
+   */
+  const type = GODTEKNE.includes(blob.type as (typeof GODTEKNE)[number]) ? blob.type : null;
+  if (!type) {
+    throw new Error(
+      "Nettleseren klarte ikke å lese dette bildeformatet. Ta bildet med kameraet i appen i stedet for å velge det fra galleriet.",
+    );
+  }
+
+  const endelse = type === "image/png" ? "png" : type === "image/webp" ? "webp" : "jpg";
+  // Berre teikn stien og policyen godtek: bokstavar, tal, punktum, bindestrek
   const sti = `${projectId}/${clientRef}/${nummer}-${Date.now()}.${endelse}`;
 
   const { error } = await supabase.storage.from(BØTTE).upload(sti, blob, {
-    contentType: blob.type || "image/jpeg",
+    contentType: type,
     upsert: false,
   });
 
@@ -81,9 +103,16 @@ export async function lastOppBilde(
   return sti;
 }
 
-/** Fjernar eit bilete som er lasta opp, men ikkje kvittert for enno. */
+/**
+ * Fjernar eit bilete som er lasta opp, men ikkje kvittert for enno.
+ *
+ * Kastar ved feil. Tidlegare blei svaret ikkje lese i det heile, og kallaren
+ * svelgde det – så brukaren såg miniatyren forsvinne frå skjermen medan fila
+ * blei liggjande i bøtta. Han trudde biletet var borte. Det var det ikkje.
+ */
 export async function slettBilde(sti: string): Promise<void> {
-  await supabase.storage.from(BØTTE).remove([sti]);
+  const { error } = await supabase.storage.from(BØTTE).remove([sti]);
+  if (error) throw new Error(`Bildet ble ikke fjernet: ${error.message}`);
 }
 
 /**
@@ -95,23 +124,28 @@ export async function slettBilde(sti: string): Promise<void> {
  * Feilar eitt av dei, blir det hoppa over. Ein PDF utan eitt bilete er langt
  * betre enn ingen PDF når du står i ein reklamasjon.
  */
-export async function hentBildeData(stiar: string[]): Promise<string[]> {
+export type Bildedata = { data: string; bredde: number; høgde: number };
+
+export async function hentBildeData(stiar: string[]): Promise<Bildedata[]> {
   const lenker = await signerteLenker(stiar);
-  const ut: string[] = [];
+  const ut: Bildedata[] = [];
 
   for (const sti of stiar) {
     const url = lenker[sti];
     if (!url) continue;
     try {
       const blob = await (await fetch(url)).blob();
-      ut.push(
-        await new Promise<string>((res, rej) => {
-          const r = new FileReader();
-          r.onload = () => res(String(r.result));
-          r.onerror = rej;
-          r.readAsDataURL(blob);
-        }),
-      );
+      const data = await new Promise<string>((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result));
+        r.onerror = rej;
+        r.readAsDataURL(blob);
+      });
+      // Målene følgjer med: utan dei må PDF-en gjette eit sideforhold, og eit
+      // portrettbilete av ein palle blir strekt på tvers.
+      const bit = await createImageBitmap(blob);
+      ut.push({ data, bredde: bit.width, høgde: bit.height });
+      bit.close?.();
     } catch {
       /* hopp over dette biletet */
     }

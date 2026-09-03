@@ -20,6 +20,24 @@ function norwegianAuthError(message: string): string {
   return "Klarte ikke å logge inn. Prøv igjen.";
 }
 
+
+/**
+ * Sender brukaren dit han faktisk høyrer heime.
+ *
+ * Begge stadene gjekk til /admin uansett rolle. Ein prosjektbrukar hamna då i
+ * adminpanelet, såg ein spinnar, og blei kasta vidare av AdminDashboard. Det
+ * virka – men berre så lenge rollekallet lukkast. Feila det, sat han fast på
+ * ein spinnar i eit panel han ikkje har tilgang til.
+ */
+async function heimeside(): Promise<string> {
+  try {
+    const { data } = await supabase.rpc("hm_rolle");
+    return data === "prosjekt" ? "/prosjekt" : "/admin";
+  } catch {
+    return "/admin";
+  }
+}
+
 export default function AdminLogin() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -34,7 +52,7 @@ export default function AdminLogin() {
     let alive = true;
     supabase.auth.getSession().then(({ data }) => {
       if (!alive) return;
-      if (data.session) navigate("/admin", { replace: true });
+      if (data.session) heimeside().then((v) => navigate(v, { replace: true }));
       else setChecking(false);
     });
     return () => {
@@ -68,7 +86,7 @@ export default function AdminLogin() {
       toast({ title: "Innlogging feilet", description: norwegianAuthError(error.message), variant: "destructive" });
       return;
     }
-    navigate("/admin", { replace: true });
+    navigate(await heimeside(), { replace: true });
   };
 
   if (checking) {

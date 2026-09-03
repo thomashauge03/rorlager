@@ -97,13 +97,36 @@ await som(db, KONTOR, async () => {
     : nei("fremmed bildesti", framand ?? "GIKK GJENNOM");
 });
 
+console.log("\n── Bildet må faktisk finnes ──\n");
+// Kravet talte tidligere bare elementer i et array, og løkka sjekket bare
+// teksten. En klient som ville slippe unna bildekravet trengte ikke laste opp
+// noe — det holdt å dikte opp en sti.
+
+await som(db, KONTOR, async () => {
+  const { orderId, linjer } = await klarBestilling(pA.id, "Oppdiktet sti");
+  const m = await nekta(() =>
+    db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, array[$3])`, [
+      orderId,
+      linjer,
+      `${pA.id}/tull/finnesikke.jpg`,
+    ]),
+  );
+  m && /Fant ikke bildet/.test(m)
+    ? ok("en oppdiktet bildesti blir avvist")
+    : nei("oppdiktet sti", m ?? "GIKK GJENNOM");
+});
+
 await som(db, KONTOR, async () => {
   const { orderId, linjer } = await klarBestilling(pA.id, "Egen sti");
+  const sti = `${pA.id}/abc/1.jpg`;
+
+  // Slik Storage ville lagt den inn ved en ekte opplasting
+  await db.query(`insert into storage.objects (bucket_id, name) values ('mottak-bilder', $1)`, [sti]);
 
   await db.query(`select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, array[$3])`, [
     orderId,
     linjer,
-    `${pA.id}/abc/1.jpg`,
+    sti,
   ]);
   const n = await en(
     `select count(*)::int c
@@ -115,6 +138,44 @@ await som(db, KONTOR, async () => {
   sjekk("bildet blir knyttet til mottaket", n.c, 1);
 });
 
+console.log("\n── Idempotensnøkkelen røper ikke andres kvittering ──\n");
+/*
+ * Oppslaget på client_ref sto FØR medlemssjekken, og returnerte hele
+ * kvitteringsraden — navn, signatur, notat — til enhver innlogget som kjente
+ * nøkkelen, uansett prosjekt.
+ *
+ * Praktisk vanskelig: nøkkelen er en tilfeldig uuid som aldri forlater
+ * nettleseren til den som lagde den. Men rekkefølgen var feil av tilfeldige
+ * grunner, og da blir den riktig av tilfeldige grunner neste gang.
+ */
+{
+  const nøkkel = "abcdabcd-1111-2222-3333-444444444444";
+  // klarBestilling kaller project_mark_ordered, som krever kontor — den må
+  // derfor kjøre inne i en økt, ikke som eier uten JWT.
+  let orderId, linjer;
+  await som(db, KONTOR, async () => {
+    ({ orderId, linjer } = await klarBestilling(pA.id, "Nøkkeltest"));
+    await db.query(
+      `select public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, 'hemmeleg notat', $3, null, 'testkjøring')`,
+      [orderId, linjer, nøkkel],
+    );
+  });
+
+  // Ola er på et annet prosjekt og skal ikke se noe, uansett hva han kjenner
+  await som(db, OLA, async () => {
+    const m = await nekta(() =>
+      db.query(`select public.project_submit_receipt($1, 'Ola', $2::jsonb, null, null, $3, null, 'x')`, [
+        orderId,
+        linjer,
+        nøkkel,
+      ]),
+    );
+    m && /tilgang/i.test(m)
+      ? ok("fremmed med riktig nøkkel blir avvist på tilgang, ikke besvart med kvitteringen")
+      : nei("nøkkellekkasje", m ?? "FIKK KVITTERINGEN");
+  });
+}
+
 console.log("\n── Bøtta og tilgangen til filene ──\n");
 
 {
@@ -123,6 +184,12 @@ console.log("\n── Bøtta og tilgangen til filene ──\n");
   sjekk("den er IKKE offentlig", b?.public, false);
   b?.file_size_limit ? ok(`størrelsesgrense satt (${Math.round(b.file_size_limit / 1048576)} MB)`) : nei("grense", "ingen");
 }
+
+// Tømmer først: testene over har lagt inn filer, og denne bolken teller.
+// Faste tall mot en bøtte andre tester skriver i, er en test som går i stykker
+// av at noen legger til en test lenger oppe.
+await db.query(`delete from public.project_receipt_photos`);
+await db.query(`delete from storage.objects where bucket_id = 'mottak-bilder'`);
 
 // Filer lagt inn direkte, slik Storage ville gjort det
 await db.query(
@@ -140,15 +207,50 @@ await som(db, KARI, async () => {
   );
   m ? ok("kan ikke laste opp til et annet prosjekt") : nei("opplasting", "GIKK GJENNOM");
 
+  // Sitt eige, IKKJE kvitterte bilete skal han få fjerne. Tidlegare var
+  // slettinga kontorets aleine, og då forsvann miniatyren frå skjermen medan
+  // fila blei liggjande i bøtta — brukaren trudde biletet var borte.
   await nekta(() => db.query(`delete from storage.objects where bucket_id = 'mottak-bilder'`));
 });
 
-// Talet må hentast UTANFOR Kari si økt. Inne i henne filtrerer RLS bort fila frå
-// det andre prosjektet, så to filer ville sett ut som éi — og testen ville målt
-// si eiga skjerming i staden for slettinga.
+/*
+ * Tala må hentast UTANFOR Kari si økt.
+ *
+ * Inne i henne filtrerer RLS bort fila frå det andre prosjektet, så to filer
+ * ville sett ut som éi — og testen ville målt si eiga skjerming i staden for
+ * slettinga.
+ */
 {
-  const att = (await db.query(`select id from storage.objects where bucket_id = 'mottak-bilder'`)).rows.length;
-  sjekk("kan ikke slette dokumentasjon i ettertid", att, 2);
+  const att = (await db.query(`select name from storage.objects where bucket_id = 'mottak-bilder'`)).rows;
+  sjekk("Kari fjernet sitt eget ukvitterte bilde", att.length, 1);
+  att[0]?.name?.startsWith(pB.id) ? ok("og Olas fil står urørt") : nei("feil fil igjen", att[0]?.name);
+}
+
+console.log("\n── Men dokumentasjon kan ikke fjernes ──\n");
+// Det er hele grunnen til at bildet er der. I det mottaket er registrert, er
+// bildet kontorets — plassen skal ikke kunne rydde vekk et bevis i ettertid.
+
+{
+  const sti = `${pA.id}/kvittert/1.jpg`;
+  await db.query(`insert into storage.objects (bucket_id, name) values ('mottak-bilder', $1)`, [sti]);
+
+  let mottakId;
+  await som(db, KONTOR, async () => {
+    const { orderId, linjer } = await klarBestilling(pA.id, "Kvittert bilde");
+    const r = await en(
+      `select (public.project_submit_receipt($1, 'Kontoret', $2::jsonb, null, null, null, array[$3])).id as id`,
+      [orderId, linjer, sti],
+    );
+    mottakId = r.id;
+  });
+  mottakId ? ok("mottak med bilde er registrert") : nei("oppsett", "fikk ikke laget mottaket");
+
+  await som(db, KARI, async () => {
+    await nekta(() => db.query(`delete from storage.objects where name = $1`, [sti]));
+  });
+
+  const finst = (await db.query(`select id from storage.objects where name = $1`, [sti])).rows.length;
+  sjekk("bildet som er kvittert for står urørt", finst, 1);
 }
 
 await som(db, OLA, async () => {

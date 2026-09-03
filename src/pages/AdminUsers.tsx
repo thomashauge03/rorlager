@@ -98,12 +98,29 @@ export default function AdminUsers() {
   const [prosjektStatus, setProsjektStatus] = useState<"laster" | "klar" | "feil">("klar");
 
   // Prosjektlista trengst både i opprettingsskjemaet og i redigeringsdialogen.
-  useEffect(() => {
-    if (!allowed) return;
+  /*
+   * Statusen følgjer med, òg for opprettingsskjemaet.
+   *
+   * Feila hentinga før, blei ho svelgd, og ProsjektVelger sto med tom liste og
+   * teksten «Ingen prosjekter opprettet ennå» – til ein superadmin som laga eit
+   * prosjekt to minutt tidlegare. Valde han rolla Prosjekt, stoppa vakta han
+   * med «Velg minst ett prosjekt», eit krav han ikkje kunne oppfylle.
+   */
+  const [prosjektListeStatus, setProsjektListeStatus] = useState<"laster" | "klar" | "feil">("laster");
+
+  const hentProsjekt = useCallback(() => {
+    setProsjektListeStatus("laster");
     fetchProjects()
-      .then(setProsjekt)
-      .catch(() => setProsjekt([]));
-  }, [allowed]);
+      .then((p) => {
+        setProsjekt(p);
+        setProsjektListeStatus("klar");
+      })
+      .catch(() => setProsjektListeStatus("feil"));
+  }, []);
+
+  useEffect(() => {
+    if (allowed) hentProsjekt();
+  }, [allowed, hentProsjekt]);
 
   /*
    * Hentar prosjekta til den som blir redigert.
@@ -462,6 +479,8 @@ export default function AdminUsers() {
               valgte={draft.projectIds}
               onEndre={(ids) => setDraft((d) => ({ ...d, projectIds: ids }))}
               paakrevd={draft.role === PROSJEKT}
+              status={prosjektListeStatus}
+              onPrøvIgjen={hentProsjekt}
             />
 
             <Button className="h-11 w-full sm:w-auto" onClick={addUser} disabled={saving || !draft.email.trim()}>

@@ -29,11 +29,18 @@ import { useAuth } from "@/lib/auth";
 import { num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import { DEVIATION_LABEL, type Deviation, type ProjectOrderLine } from "@/lib/types";
 
-const NAVN_NØKKEL = "rorlager.prosjekt.navn";
+/**
+ * Nøkkelen er PER BRUKAR.
+ *
+ * Var global før. På eit delt nettbrett på plassen stod namnefeltet ferdig
+ * utfylt med førre manns namn – og det er feltet som seier kven som tok imot
+ * leveransen, på eit dokument som blir signert og sendt leverandøren.
+ */
+const NAVN_NØKKEL = (epost: string | null) => `rorlager.prosjekt.navn.${epost ?? "ukjend"}`;
 
-const lesNavn = () => {
+const lesNavn = (epost: string | null) => {
   try {
-    return localStorage.getItem(NAVN_NØKKEL) ?? "";
+    return localStorage.getItem(NAVN_NØKKEL(epost)) ?? "";
   } catch {
     return "";
   }
@@ -75,7 +82,7 @@ export default function ProjectReceipt() {
   });
 
   const [rader, setRader] = useState<Record<string, Rad>>({});
-  const [navn, setNavn] = useState(lesNavn);
+  const [navn, setNavn] = useState(() => lesNavn(auth.email));
   const [signatur, setSignatur] = useState<string | null>(null);
   const [notat, setNotat] = useState("");
   const navnRef = useRef<HTMLInputElement | null>(null);
@@ -97,7 +104,10 @@ export default function ProjectReceipt() {
    * dårleg dekning, svarar databasen med det same mottaket i staden for å lage
    * ei pulje nummer to med dei same tala.
    */
-  const clientRef = useRef<string>(lagNøkkel());
+  // Lazy: `useRef(lagNøkkel())` ville kalla generatoren ved kvar einaste
+  // render og kasta resultatet.
+  const clientRef = useRef<string | null>(null);
+  if (clientRef.current === null) clientRef.current = lagNøkkel();
 
   // Berre linjer kontoret faktisk tinga, og som ikkje alt er fullt levert.
   const linjer: ProjectOrderLine[] = useMemo(
@@ -174,14 +184,41 @@ export default function ProjectReceipt() {
     if (filRef.current) filRef.current.value = "";
   };
 
+  /**
+   * Fjernar biletet – òg frå bøtta.
+   *
+   * Feilar slettinga, blir miniatyren LAGT TILBAKE. Tidlegare forsvann ho frå
+   * skjermen uansett, og brukaren trudde biletet var borte medan fila låg att
+   * i bøtta, lesbar for alle på prosjektet. Eit bilete av folk på ein
+   * byggjeplass skal ikkje bli liggjande fordi ei sletting stille feila.
+   */
   const fjernBilde = async (sti: string) => {
     const bildet = bilder.find((b) => b.sti === sti);
     setBilder((f) => f.filter((b) => b.sti !== sti));
-    if (bildet) URL.revokeObjectURL(bildet.url);
-    // Rydder i bøtta òg: eit bilete som ikkje blir kvittert for, skal ikkje bli
-    // liggjande att som eit foto ingen har bedt om å lagre.
-    await slettBilde(sti).catch(() => undefined);
+    try {
+      await slettBilde(sti);
+      if (bildet) URL.revokeObjectURL(bildet.url);
+    } catch (err) {
+      if (bildet) setBilder((f) => [...f, bildet]);
+      toast({
+        variant: "destructive",
+        title: "Bildet ble ikke fjernet",
+        description: err instanceof Error ? err.message : "Prøv igjen.",
+      });
+    }
   };
+
+  /*
+   * Frigjer blob-URL-ane ved avmontering.
+   *
+   * Dei held referansen til ORIGINALFILENE, ikkje dei komprimerte. Seks bilete
+   * à 3–8 MB er 20–50 MB per mottak, og appen er ei enkeltside – ein
+   * plassleiar som kvitterer for fem leveransar i eit skift utan å laste sida
+   * på nytt, samlar opp hundrevis av megabyte. iOS Safari drep fana.
+   */
+  const bilderRef = useRef(bilder);
+  bilderRef.current = bilder;
+  useEffect(() => () => bilderRef.current.forEach((b) => URL.revokeObjectURL(b.url)), []);
 
   const nullstill = () => {
     setRader(Object.fromEntries(linjer.map((l) => [l.id, tomRad(l.remaining_qty)])));
@@ -215,14 +252,24 @@ export default function ProjectReceipt() {
 
       if (ut.length === 0) throw new Error("Ingen linjer å kvittere for. Fyll inn hva som kom.");
 
+      /*
+       * OPPLASTINGEN SJEKKES FØRST.
+       *
+       * Motsatt rekkefølge ga en melding som var direkte usann: brukeren tok
+       * tre bilder, de lastet fortsatt, og fikk «Ta minst ett bilde» mens
+       * knappen over sa «Laster opp 3 bilder …». Det sannsynlige utfallet var
+       * at han trykket «Fikk ikke tatt bilde» og skrev en grunn — og mottaket
+       * ble registrert uten bilder som allerede lå i bøtta.
+       */
+      if (lasterOpp > 0) throw new Error("Vent til bildene er lastet opp.");
+
       // Databasen krev det same, men meldinga herifrå er den brukaren treng.
       if (bilder.length === 0 && !utenBildeGrunn.trim()) {
         throw new Error("Ta minst ett bilde av leveransen, eller skriv hvorfor det ikke lot seg gjøre.");
       }
-      if (lasterOpp > 0) throw new Error("Vent til bildene er lastet opp.");
 
       try {
-        localStorage.setItem(NAVN_NØKKEL, navn.trim());
+        localStorage.setItem(NAVN_NØKKEL(auth.email), navn.trim());
       } catch {
         /* ignorer – berre ei bekvemmelegheit */
       }

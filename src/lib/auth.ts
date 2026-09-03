@@ -5,10 +5,38 @@
 // ei utlogging i ei anna fane kan gli forbi.
 
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchRole } from "@/lib/projects";
+
+/**
+ * Loggar ut, og tømmer alt som høyrer den forrige brukaren til.
+ *
+ * TO TING SOM BEIT:
+ *
+ * Rolla ligg i cachen med staleTime: Infinity. Utan queryClient.clear() ville
+ * ein prosjektbrukar som logga inn i same fane arva «super_admin» frå den
+ * førre – og bli ståande i adminpanelet han aldri skulle sett. RLS gir han
+ * tomme tabellar, så det lek ingenting, men han kjem seg ikkje vidare.
+ *
+ * Namnet i mottakskontrollen låg under ein GLOBAL nøkkel. På eit delt nettbrett
+ * på plassen stod feltet ferdig utfylt med førre manns namn, og det er feltet
+ * som seier kven som tok imot leveransen – på eit dokument som blir signert og
+ * sendt leverandøren ved reklamasjon. Nøklane er no per e-post, men vi ryddar
+ * likevel her.
+ */
+export async function loggUt(queryClient: QueryClient): Promise<void> {
+  try {
+    for (const n of Object.keys(localStorage)) {
+      if (n.startsWith("rorlager.prosjekt.")) localStorage.removeItem(n);
+    }
+  } catch {
+    /* privat modus – då finst det ingenting å rydde */
+  }
+  await supabase.auth.signOut();
+  queryClient.clear();
+}
 
 export type Auth = {
   /** Sant til første sesjonssjekk er ferdig. Hindrar at sida blinkar fram. */
@@ -18,6 +46,9 @@ export type Auth = {
   role: string | null;
   /** undefined betyr «ikkje svart enno» – ikkje det same som eit nei. */
   roleKnown: boolean;
+  /** Oppslaget gav opp. Skil «ventar» frå «kom aldri». */
+  roleFailed: boolean;
+  prøvRolleIgjen: () => void;
   isProsjekt: boolean;
   isKontor: boolean;
 };
@@ -64,8 +95,10 @@ export function useAuth(onSignedOut?: () => void): Auth {
    * «ingen rolle» liggjande i cachen resten av økta. Databasen håndhevar
    * tilgangen uansett, så vi vinn ingenting på å nekte i tvil.
    */
-  const { data: role, isSuccess } = useQuery({
-    queryKey: ["hm_rolle"],
+  const { data: role, isSuccess, isError, refetch } = useQuery({
+    // Nøkla på e-post: loggar nokon andre inn i same fane, skal ikkje rolla
+    // hans arvast frå den førre.
+    queryKey: ["hm_rolle", email],
     queryFn: fetchRole,
     enabled: !checking && !!email,
     staleTime: Infinity,
@@ -76,6 +109,9 @@ export function useAuth(onSignedOut?: () => void): Auth {
     email,
     role: role ?? null,
     roleKnown: isSuccess,
+    /** Sann når oppslaget gav opp. Utan denne blir sida ståande på ein spinnar for alltid. */
+    roleFailed: isError,
+    prøvRolleIgjen: () => void refetch(),
     isProsjekt: role === "prosjekt",
     isKontor: isSuccess && role !== null && role !== "prosjekt",
   };

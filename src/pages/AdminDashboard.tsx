@@ -18,8 +18,8 @@ import {
   Users,
 } from "lucide-react";
 import hmLogo from "@/assets/hm-logo.png";
-import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/lib/auth";
+import { useQueryClient } from "@tanstack/react-query";
+import { loggUt, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,7 +55,10 @@ export default function AdminDashboard() {
    * hm_rolle gir 'super_admin' for dei som står i super_admins, så det eigne
    * is_super_admin-kallet trengst ikkje lenger.
    */
-  const { checking, email, role, roleKnown } = useAuth(() => navigate("/login", { replace: true }));
+  const queryClient = useQueryClient();
+  const { checking, email, role, roleKnown, roleFailed, prøvRolleIgjen } = useAuth(() =>
+    navigate("/login", { replace: true }),
+  );
   const isSuperAdmin = role === "super_admin";
 
   /*
@@ -70,7 +73,7 @@ export default function AdminDashboard() {
   }, [role, navigate]);
 
   const logout = async () => {
-    await supabase.auth.signOut();
+    await loggUt(queryClient);
     navigate("/login", { replace: true });
   };
 
@@ -99,6 +102,36 @@ export default function AdminDashboard() {
    * null rader og eit blaff av tomt panel. Ingen lekkasje, men eit kall som
    * aldri skulle vore gjort.
    */
+  /*
+   * Gav rolleoppslaget opp, seier vi det.
+   *
+   * Tidlegare var vilkåret berre `!roleKnown`, og roleKnown blir aldri sann på
+   * ein feila spørjing – så eit nettverksglipp gav «Henter tilgangen din» for
+   * alltid, utan feilmelding, utan «Prøv igjen» og utan «Logg ut». Kontoret
+   * måtte lukke appen.
+   */
+  if (roleFailed) {
+    return (
+      <div className="min-h-dvh hm-page flex flex-col items-center justify-center gap-4 px-6 text-center">
+        <div className="rounded-full bg-primary/10 p-4 ring-8 ring-primary/5">
+          <ShieldAlert className="h-7 w-7 text-primary" aria-hidden="true" />
+        </div>
+        <div className="space-y-1">
+          <h1 className="text-xl font-semibold">Fikk ikke sjekket tilgangen din</h1>
+          <p className="max-w-md text-sm text-muted-foreground">
+            Sjekk at du har nett, og prøv igjen. Står det seg, logg ut og inn på nytt.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <Button onClick={prøvRolleIgjen}>Prøv igjen</Button>
+          <Button variant="outline" onClick={logout}>
+            Logg ut
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
   if (!roleKnown || role === "prosjekt") {
     return (
       <div className="min-h-dvh hm-page flex items-center justify-center">
