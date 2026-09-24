@@ -4462,7 +4462,19 @@ begin
    * ein framand med kvitteringar frå Hauge Maskin, eller fylt lista til kontoret
    * med falske bestillingar. Ingen av dei trekkjer lageret – det gjer berre
    * godkjenninga – men begge kostar.
+   *
+   * LÅSEN. Begge taka er ei teljing følgt av ein insert, utan noko som bind dei
+   * saman. Under READ COMMITTED kan fleire samtidige kall alle telje under
+   * grensa før nokon av dei har sett inn rada si, og alle slepp gjennom – eit
+   * skript kunne då sendt langt fleire enn fem eller tretti. Låsen gjer
+   * innsendingane serielle: det neste kallet ventar til det førre er ferdig, og
+   * tel då rada det nettopp sette inn. Éin global nøkkel er nok – innsending
+   * skjer sjeldan, og begge taka skal vere eksakte. Transaksjonsomfanget
+   * (xact) sleppar låsen automatisk når funksjonen er ferdig, anten ho lykkast
+   * eller feilar.
    */
+  perform pg_advisory_xact_lock(hashtext('pipe_submit_pickup_order'));
+
   if (select count(*) from public.pipe_orders
        where kind = 'bestilling' and customer_email = v_email
          and created_at > now() - interval '24 hours') >= 5 then

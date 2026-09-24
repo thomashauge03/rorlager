@@ -634,6 +634,24 @@ await somAnon(db, async () => {
   await avvist("den 31. bestillingen i timen avvises", SEND, privat({ epost: "nr31@tak.no" }), /veldig mange bestillinger/);
 });
 
+/*
+ * Eit ekte kappløp kan ikkje testast her: PGlite kompilerer Postgres til WASM
+ * og køyrer «strictly in a single-process mode» (README-en til
+ * @electric-sql/pglite) – det finst ingen andre backend-prosessar å køyre
+ * samtidig med, så to overlappande transaksjonar er ikkje til å setje opp.
+ * Det testbare er at låsen som gjer taka eksakte, faktisk står i
+ * funksjonskroppen, så ei seinare omskriving ikkje kan fjerne han stille.
+ */
+sjekk(
+  "innsendingen låser mot kappløp før den teller opp taket, så det ikke kan fjernes stille",
+  (
+    await en(
+      `select prosrc like '%pg_advisory_xact_lock%' as har from pg_proc where proname = 'pipe_submit_pickup_order'`,
+    )
+  ).har,
+  true,
+);
+
 // Timetaket er brukt opp. Flytt bestillingane to timar bak, så resten av fila
 // kan sende nye – dei er framleis innanfor døgnet e-postane reknar med.
 await db.exec(
