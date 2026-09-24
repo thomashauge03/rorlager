@@ -17,6 +17,7 @@ import ProjectPage from "./pages/ProjectPage";
 import ProjectRequest from "./pages/ProjectRequest";
 import ProjectReceipt from "./pages/ProjectReceipt";
 import Personvern from "./pages/Personvern";
+import PickupShop from "./pages/PickupShop";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -50,6 +51,8 @@ const App = () => (
             <Route path="/kasse" element={<Checkout />} />
             <Route path="/kvittering" element={<Receipt />} />
             <Route path="/personvern" element={<Personvern />} />
+            {/* Bestilling til henting: butikken, kassen og kvitteringa */}
+            <Route path="/bestill" element={<PickupShop />} />
             <Route path="/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/brukere" element={<AdminUsers />} />
