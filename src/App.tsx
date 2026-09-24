@@ -19,6 +19,7 @@ import ProjectReceipt from "./pages/ProjectReceipt";
 import Personvern from "./pages/Personvern";
 import PickupShop from "./pages/PickupShop";
 import PickupCheckout from "./pages/PickupCheckout";
+import PickupOrder from "./pages/PickupOrder";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { SetupBanner } from "@/components/SetupBanner";
@@ -55,6 +56,7 @@ const App = () => (
             {/* Bestilling til henting: butikken, kassen og kvitteringa */}
             <Route path="/bestill" element={<PickupShop />} />
             <Route path="/bestill/kasse" element={<PickupCheckout />} />
+            <Route path="/bestilling/:id" element={<PickupOrder />} />
             <Route path="/login" element={<AdminLogin />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/brukere" element={<AdminUsers />} />
