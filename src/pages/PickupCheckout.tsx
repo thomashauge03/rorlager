@@ -10,6 +10,7 @@ import { TopBar } from "@/components/TopBar";
 import { QuantityInput } from "@/components/QuantityInput";
 import { LegalFooter } from "@/components/LegalFooter";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +24,7 @@ import {
   lesUtkast,
   skrivKunde,
   skrivUtkast,
+  slettKunde,
   slettUtkast,
   usePickupCart,
 } from "@/lib/pickup-cart";
@@ -121,6 +123,9 @@ export default function PickupCheckout() {
   const katalog = useQuery({ queryKey: QK.catalog, queryFn: fetchCatalog });
 
   const [skjema, setSkjema] = useState<KasseSkjema>(() => ({ ...TOMT_SKJEMA, ...lesKunde(), ...lesUtkast() }));
+  // Eininga hugsar kunden berre når han har bede om det. Ligg det noko lagra,
+  // kryssa han av sist, og krysset står til han tek det bort.
+  const [husk, setHusk] = useState(() => Object.keys(lesKunde()).length > 0);
   const [feil, setFeil] = useState<Feltfeil | null>(null);
   const [sender, setSender] = useState(false);
   // Etter innsending er kurva tom med vilje – då skal vakta under ikkje slå til
@@ -181,6 +186,18 @@ export default function PickupCheckout() {
       toast({ title: "Fjern varene som ikke kan bestilles", variant: "destructive" });
       return;
     }
+    // Prisane i kurva er frå då varene blei lagde i henne. Kunden skal sjå
+    // totalprisen han faktisk blir fakturert for, så utan dagens prisar blir
+    // ingenting sendt.
+    if (!katalog.data) {
+      if (katalog.isError) void katalog.refetch();
+      toast({
+        title: katalog.isError ? "Klarte ikke å hente dagens priser" : "Henter dagens priser",
+        description: "Prøv igjen om et øyeblikk.",
+        variant: "destructive",
+      });
+      return;
+    }
     const f = sjekkSkjema(skjema, { kreverTelefon, iDag });
     if (f) {
       setFeil(f);
@@ -201,7 +218,8 @@ export default function PickupCheckout() {
       // Kvitteringa og varselet til kontoret. Ventar ikkje: bestillinga er lagra,
       // og ein e-post som feilar skal aldri kunne stoppe henne.
       requestEmailsInBackground(id);
-      skrivKunde(skjema);
+      if (husk) skrivKunde(skjema);
+      else slettKunde();
       slettUtkast();
       sendt.current = true;
       clearPickupCart();
@@ -508,6 +526,12 @@ export default function PickupCheckout() {
                     className="h-12 text-base"
                   />
                 </Felt>
+                <div className="flex items-center gap-3">
+                  <Checkbox id="kasse-husk" checked={husk} onCheckedChange={(v) => setHusk(v === true)} className="h-5 w-5" />
+                  <Label htmlFor="kasse-husk" className="cursor-pointer py-1 text-sm font-normal text-foreground">
+                    Husk opplysningene mine på denne enheten
+                  </Label>
+                </div>
               </>
             ) : null}
           </section>
@@ -565,7 +589,11 @@ export default function PickupCheckout() {
             )}
           </section>
 
-          <Button type="submit" disabled={sender || harProblem} className="h-16 w-full text-lg font-semibold [&_svg]:size-6">
+          <Button
+            type="submit"
+            disabled={sender || harProblem || !katalog.data}
+            className="h-16 w-full text-lg font-semibold [&_svg]:size-6"
+          >
             {sender ? (
               <>
                 <Loader2 className="animate-spin" aria-hidden="true" />
@@ -578,6 +606,25 @@ export default function PickupCheckout() {
               </>
             )}
           </Button>
+          {/* Knappen står sperra til dagens prisar er henta. Her står kvifor. */}
+          {!katalog.data ? (
+            <p role="status" className="text-center text-sm text-muted-foreground">
+              {katalog.isError ? (
+                <>
+                  Klarte ikke å hente dagens priser.{" "}
+                  <button
+                    type="button"
+                    onClick={() => void katalog.refetch()}
+                    className="inline-flex min-h-11 items-center px-1 font-medium text-foreground underline underline-offset-2"
+                  >
+                    Prøv igjen
+                  </button>
+                </>
+              ) : (
+                "Henter dagens priser …"
+              )}
+            </p>
+          ) : null}
 
           {/* Informasjonsplikta i GDPR artikkel 13 gjeld på innsamlingstidspunktet */}
           <p className="pb-2 text-center text-xs text-muted-foreground">

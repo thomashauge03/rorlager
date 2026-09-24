@@ -115,17 +115,22 @@ export default function Personvern() {
               Data ligger hos Supabase, som er databehandler for oss. E-postene om
               bestillinger sendes gjennom Resend, som også er databehandler.
               Resend er et amerikansk selskap, og overføringen til USA skjer etter
-              databehandleravtalen med Resend, som bygger på EUs godkjente
-              overføringsgrunnlag. Vi selger ikke opplysninger videre, og bruker
-              dem ikke til markedsføring.
+              databehandleravtalen med Resend, som bygger på EUs
+              standardavtalevilkår (SCC). Vi selger ikke opplysninger videre, og
+              bruker dem ikke til markedsføring.
             </p>
           </Avsnitt>
 
           <Avsnitt tittel="Informasjonskapsler">
             <p>
-              Siden bruker bare lagring som er nødvendig for at handlekurven,
-              bestillingen og innloggingen skal virke. Vi har ingen analyse- eller
-              markedsføringssporing, og derfor heller ikke noe samtykkebanner.
+              Siden lagrer bare det som trengs for at handlekurven, bestillingen
+              og innloggingen skal virke. Mens du fyller ut en bestilling, ligger
+              skjemaet i nettleseren til du lukker fanen. Bestillingskassen husker
+              navn og kontaktopplysninger, med adresse eller organisasjonsnummer,
+              på enheten bare hvis du krysser av for det. Kassen for uttak husker
+              navn, telefon, e-post, firma og prosjekt på enheten til neste uttak.
+              Vi har ingen analyse- eller markedsføringssporing, og derfor heller
+              ikke noe samtykkebanner.
               Kodeleseren som lar kameraet lese QR-koder på iPhone, lastes fra
               vårt eget domene.
             </p>

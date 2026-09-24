@@ -9,6 +9,7 @@ import {
   readPickupCart,
   skrivKunde,
   skrivUtkast,
+  slettKunde,
   slettUtkast,
   usePickupCart,
   writePickupCart,
@@ -110,6 +111,21 @@ describe("kundeopplysningar og utkast", () => {
     expect(k.navn).toBe("Ola");
     expect("hentedag" in k).toBe(false);
     expect("kommentar" in k).toBe(false);
+  });
+
+  it("kontaktopplysningane kan slettast frå eininga, og kurva og utkastet blir ståande", () => {
+    writePickupCart([linje()]);
+    skrivUtkast({ ...TOMT_SKJEMA, kommentar: "Ring før" });
+    skrivKunde({ ...TOMT_SKJEMA, kundetype: "privat", navn: "Ola", epost: "ola@privat.no" });
+    slettKunde();
+    expect(lesKunde()).toEqual({});
+    expect(readPickupCart()).toHaveLength(1);
+    expect(lesUtkast().kommentar).toBe("Ring før");
+  });
+
+  it("sletting utan noko lagra går fint", () => {
+    expect(() => slettKunde()).not.toThrow();
+    expect(lesKunde()).toEqual({});
   });
 
   it("utkastet lever i økta og kan slettast", () => {

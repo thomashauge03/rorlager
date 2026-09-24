@@ -123,8 +123,9 @@ export function usePickupCart() {
 
 // ── Kundeopplysningane ──
 //
-// Same person bestiller ofte, og skal sleppe å taste alt på nytt. Hentedag og
-// kommentar høyrer til éi bestilling og blir ikkje hugsa.
+// Same person bestiller ofte, og kan sleppe å taste alt på nytt – men berre når
+// han har kryssa av for at eininga skal hugse det. Utan kryss blir det som låg
+// der, sletta. Hentedag og kommentar høyrer til éi bestilling og blir ikkje hugsa.
 
 export type LagraKunde = Pick<
   KasseSkjema,
@@ -149,6 +150,14 @@ export function skrivKunde(k: LagraKunde) {
     localStorage.setItem(KUNDE_KEY, JSON.stringify(berre));
   } catch {
     /* berre ei bekvemmelegheit */
+  }
+}
+
+export function slettKunde() {
+  try {
+    localStorage.removeItem(KUNDE_KEY);
+  } catch {
+    /* privat modus */
   }
 }
 
