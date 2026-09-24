@@ -62,9 +62,9 @@ describe("kvitteringa til kunden", () => {
     expect(e.text).toContain(`${APP}/bestilling/${ID}`);
   });
 
-  it("kodar namnet og tek ikkje med kommentaren", () => {
-    expect(e.html).toContain("Ola &lt;b&gt;Privat&lt;/b&gt;");
-    expect(e.html).not.toContain("<b>Privat</b>");
+  it("tek ikkje med namnet eller kommentaren – ingenting frå skjemaet", () => {
+    expect(e.html).not.toContain("Ola");
+    expect(e.text).not.toContain("Ola");
     expect(e.html).not.toContain("Ring meg");
     expect(e.text).not.toContain("Ring meg");
   });
@@ -133,6 +133,12 @@ describe("klar og avvist", () => {
     expect(e.html).toContain("14 dagers angrerett");
   });
 
+  it("«klar» kodar namnet", () => {
+    const html = byggEpost("klar", krav({ status: "behandlet" }), APP, "ola@privat.no")!.html;
+    expect(html).toContain("Ola &lt;b&gt;Privat&lt;/b&gt;");
+    expect(html).not.toContain("<b>Privat</b>");
+  });
+
   it("«avvist» har grunngjevinga", () => {
     const e = byggEpost("avvist", krav({ status: "avvist", customer_message: "Utgått hos leverandøren" }), APP, "ola@privat.no")!;
     expect(e.subject).toBe("Bestilling nr. 1042 – vi kan dessverre ikke levere");
@@ -161,7 +167,7 @@ describe("lenkjene", () => {
 
 describe("fritekst frå kunden", () => {
   it("namnet blir éi linje, også i tekstdelen", () => {
-    const e = byggEpost("kvittering", krav({ customer_name: "Ola\nKjøp billig på x.no" }), APP, "x@y.no")!;
+    const e = byggEpost("klar", krav({ status: "behandlet", customer_name: "Ola\nKjøp billig på x.no" }), APP, "x@y.no")!;
     expect(e.text).toContain("Hei Ola Kjøp billig på x.no.");
     expect(e.text).not.toMatch(/Ola\r?\n/);
   });

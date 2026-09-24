@@ -256,8 +256,13 @@ function kvittering(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: 
     : "Kontoret går gjennom den, og du får en ny e-post når varene er klare til henting.";
   const grunn = `Du får denne e-posten fordi adressen ble oppgitt i en bestilling hos ${f.name}. Var det ikke deg, kan du se bort fra den.`;
 
+  // Kvitteringa går til adressa som blei skriven i skjemaet, og der kan kven som
+  // helst skrive kva som helst. Difor står ingenting frå skjemaet i henne, heller
+  // ikkje namnet: elles kunne ein sende sin eigen tekst i ei ekte e-post frå
+  // firmaet til ein framand. «Klar» og «avvist» går først når kontoret har sett
+  // bestillinga, og der står namnet.
   const innhald = `
-    <p style="margin:0 0 16px;font-size:15px">Hei ${esc(o.customer_name)}. Takk for bestillingen. ${esc(neste)}</p>
+    <p style="margin:0 0 16px;font-size:15px">Takk for bestillingen. ${esc(neste)}</p>
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px">
       ${rad("Bestilling", `nr. ${esc(o.order_number)}`)}
       ${rad("Status", "Venter på godkjenning")}
@@ -276,7 +281,7 @@ function kvittering(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: 
     text: [
       `Vi har mottatt bestillingen din – ${f.name}`,
       "",
-      `Hei ${o.customer_name}. Takk for bestillingen. ${neste}`,
+      `Takk for bestillingen. ${neste}`,
       "",
       `Bestilling nr. ${o.order_number}`,
       "Status: Venter på godkjenning",
