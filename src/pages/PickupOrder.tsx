@@ -23,7 +23,7 @@ import type { CompanyInfo } from "@/lib/order-pdf";
 import { cn } from "@/lib/utils";
 
 const STATUS = {
-  ny: { Ikon: Clock, tittel: "Bestillingen er mottatt", ramme: "border-primary/30 bg-primary/10", farge: "text-primary" },
+  ny: { Ikon: Clock, tittel: "Venter på godkjenning", ramme: "border-primary/30 bg-primary/10", farge: "text-primary" },
   behandlet: { Ikon: PackageCheck, tittel: "Klar til henting", ramme: "border-success/30 bg-success/10", farge: "text-success" },
   levert: { Ikon: CheckCircle2, tittel: "Hentet", ramme: "border-success/30 bg-success/10", farge: "text-success" },
   avvist: {
@@ -38,8 +38,8 @@ function statusTekst(o: Bestilling): string {
   switch (o.status) {
     case "ny":
       return o.pickup_now
-        ? "Kontoret har fått beskjed om at du henter nå. Siden oppdaterer seg når bestillingen er godkjent."
-        : "Kontoret går gjennom bestillingen. Du får e-post når den er klar til henting.";
+        ? "Bestillingen er mottatt. Kontoret har fått beskjed om at du henter nå. Siden oppdaterer seg når bestillingen er godkjent."
+        : "Bestillingen er mottatt. Kontoret går gjennom bestillingen. Du får e-post når den er klar til henting.";
     case "behandlet":
       return o.pickup_now ? "Du kan hente nå." : `Du kan hente ${longDate(o.pickup_date)}.`;
     case "levert":
@@ -128,7 +128,7 @@ export default function PickupOrder() {
     );
   }
 
-  if (q.isError) {
+  if (q.isError && !o) {
     return (
       <div className="hm-page min-h-screen">
         <TopBar title="Bestilling" />
@@ -240,6 +240,7 @@ export default function PickupOrder() {
         <section className="hm-card mt-4 divide-y divide-border p-4">
           <Rad label="Hentes" value={o.pickup_now ? `Henter nå – ${longDate(o.pickup_date)}` : longDate(o.pickup_date)} />
           <Rad label="Hentested" value={selger.adresse ? `Lageret, ${selger.adresse}` : "Lageret"} />
+          <Rad label="Henting" value={selger.henteinfo} />
           <Rad label="Betaling" value={`Faktura, ${selger.betalingsfrist} dager`} />
           {privat ? (
             <>
@@ -257,13 +258,6 @@ export default function PickupOrder() {
           <Rad label="E-post" value={o.customer_email} />
           <Rad label="Kommentar" value={o.comment} />
         </section>
-
-        {settings?.pickup_note ? (
-          <div className="mt-4 flex items-start gap-2 rounded-lg border border-border bg-muted/60 px-4 py-3">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-            <p className="text-sm leading-relaxed text-muted-foreground">{settings.pickup_note}</p>
-          </div>
-        ) : null}
 
         {privat && o.status !== "avvist" ? (
           <p className="mt-4 text-sm text-muted-foreground">
