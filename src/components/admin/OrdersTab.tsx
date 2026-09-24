@@ -33,6 +33,7 @@ import { useToast } from "@/hooks/use-toast";
 import { dateTime, isoDate, kr, krShort, num, pipeLabel, qtyLabel, shortDate } from "@/lib/format";
 import { deleteOrder, fetchOrders, QK, setOrderStatus, updateOrder } from "@/lib/orders";
 import { downloadOrderPDF, downloadPickListPDF, type CompanyInfo } from "@/lib/order-pdf";
+import { summer } from "@/lib/mva";
 import { downloadPickupPDF } from "@/lib/pickup-pdf";
 import { somBestilling, useWaitingPickupOrders } from "@/lib/pickup-orders";
 import { useOrderSettings, useSettings } from "@/lib/settings";
@@ -143,6 +144,10 @@ export function OrdersTab() {
   // datofilteret finst berre i stripa, så ho blir henta derifrå.
   const open = alle.find((o) => o.id === openId) ?? venter.find((o) => o.id === openId) ?? null;
   useEffect(() => setNote(open?.admin_note ?? ""), [openId, open?.admin_note]);
+
+  // Ei bestilling viser mva som kunden såg henne. Uttak står eks. mva som før.
+  const mvaSats = settings?.vat_rate ?? 25;
+  const openSum = open && erBestilling(open) ? summer([open.total], mvaSats) : null;
 
   // Eit val som ikkje lenger er i lista skal ikkje henge att i handlingane
   const selectedOrders = orders.filter((o) => selected.includes(o.id));
@@ -543,10 +548,27 @@ export function OrdersTab() {
                         </div>
                       </div>
                     ))}
-                    <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
-                      <span className="text-sm font-semibold text-foreground">Sum eks. mva</span>
-                      <span className="text-sm font-bold text-primary tabular">{kr(open.total)} kr</span>
-                    </div>
+                    {openSum ? (
+                      <div className="space-y-0.5 px-3 py-2 bg-muted/50">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Sum eks. mva</span>
+                          <span className="text-sm text-muted-foreground tabular">{kr(openSum.eks)} kr</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-muted-foreground">Mva {num(mvaSats)} %</span>
+                          <span className="text-sm text-muted-foreground tabular">{kr(openSum.mva)} kr</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-semibold text-foreground">Sum inkl. mva</span>
+                          <span className="text-sm font-bold text-primary tabular">{kr(openSum.inkl)} kr</span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
+                        <span className="text-sm font-semibold text-foreground">Sum eks. mva</span>
+                        <span className="text-sm font-bold text-primary tabular">{kr(open.total)} kr</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -607,10 +629,18 @@ export function OrdersTab() {
                     <Download className="h-4 w-4 mr-2" aria-hidden="true" />
                     Last ned PDF
                   </Button>
-                  <Button variant="destructive" className="h-11" onClick={() => setConfirmDelete(true)} disabled={busy}>
-                    <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
-                    Slett
-                  </Button>
+                  {/* Ei bestilling er ein avtale med kunden. Ho blir avvist, så kunden
+                      får beskjed, før ho kan slettast. */}
+                  {erBestilling(open) && open.status !== "avvist" ? (
+                    <p className="self-center text-sm text-muted-foreground">
+                      En bestilling slettes ikke før den er avvist – avvis den, så får kunden beskjed.
+                    </p>
+                  ) : (
+                    <Button variant="destructive" className="h-11" onClick={() => setConfirmDelete(true)} disabled={busy}>
+                      <Trash2 className="h-4 w-4 mr-2" aria-hidden="true" />
+                      Slett
+                    </Button>
+                  )}
                 </div>
 
                 <p className="text-xs text-muted-foreground">Registrert {shortDate(open.created_at)}</p>

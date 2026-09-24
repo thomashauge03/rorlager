@@ -22,6 +22,8 @@ import {
 } from "@/lib/pickup-orders";
 import { visOrgnr } from "@/lib/orgnr";
 import { dateTime, kr, longDate, num, pipeLabel, qtyLabel, shortDate } from "@/lib/format";
+import { summer } from "@/lib/mva";
+import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
 import type { OrderWithLines } from "@/lib/types";
 
@@ -35,10 +37,34 @@ const EPOST_NAVN: Record<string, string> = {
 };
 
 /** Kva e-posten gav, sagt slik kontoret treng det. */
-export function epostMelding(r: EmailResult | null, type: "klar" | "avvist"): string {
-  if (r && !r.satt_opp) return "E-post er ikke satt opp, så kunden har ikke fått beskjed. Ring kunden.";
-  if (r?.sendt.includes(type)) return "Kunden har fått e-post.";
+export function epostMelding(r: EmailResult | null, type: "klar" | "avvist", alleredeSendt = false): string {
+  if (r && !r.satt_opp)
+    return "E-post er ikke satt opp, så kunden har ikke fått beskjed. Ring kunden, og skriv ut PDF-en til privatkunder ved henting.";
+  if (r?.sendt.includes(type) || alleredeSendt) return "Kunden har fått e-post.";
+  if (r && r.feilet.length === 0)
+    return "E-posten er ikke sendt ennå – dagens grense for e-post kan være nådd. Prøv igjen senere, eller ring kunden.";
   return "E-posten gikk ikke. Prøv igjen fra bestillingen, eller ring kunden.";
+}
+
+/**
+ * Ingenting sendt og ingenting feila: kundesida eller ei anna fane kan ha sendt
+ * e-posten først, og då står ho som sendt i loggen. Berre då blir loggen lesen.
+ */
+async function sendtAlt(r: EmailResult | null, id: string, type: "klar" | "avvist"): Promise<boolean> {
+  if (!(r?.satt_opp && !r.sendt.includes(type) && r.feilet.length === 0)) return false;
+  const rows = await fetchOrderEmails(id);
+  return rows.some((e) => e.type === type && e.sent_at);
+}
+
+/**
+ * «Klar» eller «avvist» – det kunden ventar på etter statusen, så lenge
+ * e-postfunksjonen framleis sender det: same døgn som i pipe_email_claim.
+ */
+function kundenVentarPa(o: OrderWithLines, naa = Date.now()): "klar" | "avvist" | null {
+  const iDogn = (t: string | null | undefined) => !!t && naa - new Date(t).getTime() < 24 * 60 * 60 * 1000;
+  if (o.status === "behandlet" && iDogn(o.stock_drawn_at)) return "klar";
+  if (o.status === "avvist" && iDogn(o.handled_at)) return "avvist";
+  return null;
 }
 
 /** Beholdninga per vare, til åtvaringane. Kontoret les pipe_types. */
@@ -83,11 +109,13 @@ export function PickupHandlingDialog({ handling, onClose }: { handling: Handling
       else await rejectPickupOrder(o.id, melding.trim());
       qc.invalidateQueries({ queryKey: QK.orders });
       qc.invalidateQueries({ queryKey: QK.types });
+      const type = godkjenn ? "klar" : "avvist";
       const r = await requestEmails(o.id);
+      const alleredeSendt = await sendtAlt(r, o.id, type);
       qc.invalidateQueries({ queryKey: QK.orderEmails(o.id) });
       toast({
         title: godkjenn ? `Bestilling #${o.order_number} er godkjent` : `Bestilling #${o.order_number} er avvist`,
-        description: epostMelding(r, godkjenn ? "klar" : "avvist"),
+        description: epostMelding(r, type, alleredeSendt),
       });
       onClose();
     } catch (err) {
@@ -170,6 +198,8 @@ export function PickupHandlingDialog({ handling, onClose }: { handling: Handling
 export function PickupQueue({ onOpen }: { onOpen: (id: string) => void }) {
   const { data: venter = [] } = useWaitingPickupOrders(true);
   const lager = useLagerKart();
+  const { data: settings } = useSettings();
+  const mva = settings?.vat_rate ?? 25;
   const [handling, setHandling] = useState<Handling>(null);
 
   if (venter.length === 0) return null;
@@ -198,8 +228,8 @@ export function PickupQueue({ onOpen }: { onOpen: (id: string) => void }) {
                   {o.company ? <span className="text-muted-foreground"> · {o.customer_name}</span> : null}
                 </span>
                 <span className="tabular block text-xs text-muted-foreground">
-                  {o.lines.length} {o.lines.length === 1 ? "linje" : "linjer"} · {kr(o.total)} kr eks. mva · sendt{" "}
-                  {shortDate(o.created_at)}
+                  {o.lines.length} {o.lines.length === 1 ? "linje" : "linjer"} · {kr(summer([o.total], mva).eks)} kr eks. ·{" "}
+                  {kr(summer([o.total], mva).inkl)} kr inkl. mva · sendt {shortDate(o.created_at)}
                 </span>
                 {forLite(o, lager).length > 0 ? (
                   <span className="mt-1 flex items-center gap-1 text-xs font-medium text-warning-ink">
@@ -261,12 +291,18 @@ export function PickupDetails({ order }: { order: OrderWithLines }) {
   const sendIgjen = async () => {
     setBusy(true);
     const r = await requestEmails(order.id);
+    // Ingenting sendt og ingenting feila er ikkje det same som «alt er sendt»:
+    // er grensa for dagen nådd, står «klar» eller «avvist» framleis usendt.
+    const type = kundenVentarPa(order);
+    const alleredeSendt = type ? await sendtAlt(r, order.id, type) : false;
     qc.invalidateQueries({ queryKey: QK.orderEmails(order.id) });
     setBusy(false);
     if (!r) toast({ variant: "destructive", title: "E-posten gikk ikke", description: "Prøv igjen om litt." });
     else if (!r.satt_opp) toast({ title: "E-post er ikke satt opp", description: "Se docs/bestilling-epost.md." });
     else if (r.sendt.length) toast({ title: "Sendt", description: r.sendt.map((t) => EPOST_NAVN[t] ?? t).join(", ") });
     else if (r.feilet.length) toast({ variant: "destructive", title: "E-posten gikk ikke", description: "Prøv igjen om litt." });
+    else if (type)
+      toast({ title: alleredeSendt ? "Ingenting å sende" : "Ikke sendt", description: epostMelding(r, type, alleredeSendt) });
     else toast({ title: "Ingenting å sende", description: "Alt er allerede sendt, eller hendelsen er eldre enn et døgn." });
   };
 
