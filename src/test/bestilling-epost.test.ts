@@ -133,7 +133,7 @@ describe("klar og avvist", () => {
     expect(e.html).toContain("14 dagers angrerett");
   });
 
-  it("«klar» har heile vilkåra og angreskjemaet for ein privatperson – han er ordrestadfestinga", () => {
+  it("«klar» har heile vilkåra og angreskjemaet for ein privatperson – ho er ordrestadfestinga", () => {
     const e = byggEpost("klar", krav({ status: "behandlet" }), APP, "ola@privat.no")!;
     expect(e.html).toContain("Reklamasjon");
     expect(e.html).toContain("Angreskjema");

@@ -1,4 +1,4 @@
-// Fanen Bestillinger: ei bestilling kan berre slettast når ho er avvist, og ho
+// Fana «Bestillinger»: ei bestilling kan berre slettast når ho er avvist, og ho
 // viser summen med og utan mva. Uttaka er som før.
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -57,7 +57,7 @@ const ordre = (over: Partial<OrderWithLines> = {}) =>
     ...over,
   }) as unknown as OrderWithLines;
 
-/** Viser fanen med éi rad og opnar ho i sidepanelet. */
+/** Viser fana med éi rad og opnar ho i sidepanelet. */
 const opne = async (o: OrderWithLines) => {
   fetchOrders.mockResolvedValue([o]);
   render(

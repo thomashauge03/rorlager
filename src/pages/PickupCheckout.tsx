@@ -528,7 +528,8 @@ export default function PickupCheckout() {
                 </Felt>
                 <div className="flex items-center gap-3">
                   <Checkbox id="kasse-husk" checked={husk} onCheckedChange={(v) => setHusk(v === true)} className="h-5 w-5" />
-                  <Label htmlFor="kasse-husk" className="cursor-pointer py-1 text-sm font-normal text-foreground">
+                  {/* Luft i etiketten, så heile rada er lett å treffe med tommelen */}
+                  <Label htmlFor="kasse-husk" className="flex-1 cursor-pointer py-3 text-sm font-normal leading-snug text-foreground">
                     Husk opplysningene mine på denne enheten
                   </Label>
                 </div>

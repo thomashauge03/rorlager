@@ -90,7 +90,7 @@ const fritekst = (v: unknown) => esc(v).replace(/\r?\n/g, "<br>");
 /** Emnefeltet kan ikkje ha linjeskift – det er vegen inn til eigne e-posthovud. */
 const einLinje = (s: string) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
 
-const kr =(n: number) => Number(n).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const kr = (n: number) => Number(n).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const tal = (n: number) => Number(n).toLocaleString("nb-NO", { maximumFractionDigits: 2 });
 
 /** «2026-10-02» -> «fredag 2. oktober». */
