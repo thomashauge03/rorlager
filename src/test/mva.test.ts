@@ -24,6 +24,13 @@ describe("linjesum", () => {
   it("returnerer 0, ikkje -0", () => {
     expect(Object.is(linjesum(0, 7), 0)).toBe(true);
   });
+
+  it("reknar eksakt òg når prisen har fleire enn to desimalar, slik Postgres gjer", () => {
+    // 103,375 × 12,5 = 1292,1875, som Postgres rundar til 1292,19. Å runde
+    // prisen til øre først ville gitt 103,38 × 12,5 = 1292,25.
+    expect(linjesum(103.375, 12.5)).toBe(1292.19);
+    expect(linjesum(-103.375, 12.5)).toBe(-1292.19);
+  });
 });
 
 describe("summer", () => {

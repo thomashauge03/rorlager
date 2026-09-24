@@ -231,6 +231,29 @@ await stengtForAnon("pipe_email_claim", { p_order_id: INGEN });
 await stengtForAnon("pipe_email_mark_sent", { p_order_id: INGEN, p_type: "kvittering", p_provider_id: null });
 await stengtForAnon("pipe_email_release", { p_order_id: INGEN, p_type: "kvittering" });
 
+// ── E-postfunksjonen ──
+//
+// Kassen kallar bestilling-epost utan innlogging: ein enkel førespurnad, så han
+// kjem fram òg når fana blir lukka. Blir funksjonen rulla ut på nytt utan
+// --no-verify-jwt, krev Supabase ein JWT, og kvart e-postkall feilar stilt med
+// 401. Kroppen er tom med vilje – utan id sender funksjonen ingenting. Og kva
+// som enn skjer med nettet, skal ikkje denne sjekken velte skriptet.
+
+console.log("\nE-postfunksjonen:");
+try {
+  const res = await fetch(`${url.replace(/\/+$/, "")}/functions/v1/bestilling-epost`, {
+    method: "POST",
+    body: "{}",
+    headers: { "Content-Type": "text/plain" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (res.status === 401) nei("bestilling-epost krever innlogging – rull den ut på nytt med --no-verify-jwt", "svarte 401");
+  else if (res.status === 404) ok("bestilling-epost er ikke rullet ut ennå (e-post kan vente)");
+  else ok("bestilling-epost svarer uten innlogging");
+} catch (e) {
+  ok(`bestilling-epost kunne ikke nås (${e instanceof Error ? e.message : String(e)}) – sjekk den igjen når e-post settes opp`);
+}
+
 console.log(
   problemer === 0
     ? "\nAlt i orden. Databasen er klar.\n"

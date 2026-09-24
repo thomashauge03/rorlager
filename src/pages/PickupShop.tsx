@@ -49,11 +49,12 @@ function Pris({ price, unit, vat }: { price: number | null; unit: string; vat: n
 
 function VareKort({ vare, vat, onVelg }: { vare: CatalogItem; vat: number; onVelg: (v: CatalogItem) => void }) {
   const namn = pipeLabel(vare.name, vare.dimension);
+  // Utan aria-label: då les skjermlesaren namnet, prisen og lagerstatusen frå
+  // kortet sjølv, og til slutt kva knappen gjer.
   return (
     <button
       type="button"
       onClick={() => onVelg(vare)}
-      aria-label={vare.price === null ? `${namn}, ring for pris` : `${namn}, legg i bestillingen`}
       className="hm-card hm-card-interactive animate-fade-in flex flex-col gap-2 p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
     >
       <span className="flex items-start justify-between gap-3">
@@ -69,6 +70,7 @@ function VareKort({ vare, vat, onVelg }: { vare: CatalogItem; vat: number; onVel
         <span className="text-xs text-muted-foreground">{vare.sku ?? ""}</span>
         <Pris price={vare.price} unit={vare.unit} vat={vat} />
       </span>
+      <span className="sr-only">{vare.price === null ? "Ring for pris" : "Legg i bestillingen"}</span>
     </button>
   );
 }

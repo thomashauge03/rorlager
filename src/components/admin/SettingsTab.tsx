@@ -215,6 +215,8 @@ export function SettingsTab() {
       if (markup === null || markup < 0 || markup > MAX_MARKUP) {
         throw new Error(`Påslaget må være et tall mellom 0 og ${MAX_MARKUP}.`);
       }
+      // Number("") er 0, så eit tømt felt ville blitt «0 dager» utan eit ord.
+      if (!draft.payment_terms_days.trim()) throw new Error("Betalingsfristen må fylles ut (0–90 dager).");
       const frist = Number(draft.payment_terms_days.trim());
       if (!Number.isInteger(frist) || frist < 0 || frist > 90) {
         throw new Error("Betalingsfristen må være et helt antall dager mellom 0 og 90.");

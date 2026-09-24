@@ -35,16 +35,38 @@ async function lagDetektor(): Promise<Detektor> {
     }
   }
 
-  const [{ BarcodeDetector, prepareZXingModule }, { default: wasmUrl }] = await Promise.all([
-    import("barcode-detector/ponyfill"),
-    import("zxing-wasm/reader/zxing_reader.wasm?url"),
-  ]);
-  prepareZXingModule({
-    overrides: {
-      locateFile: (path: string, prefix: string) => (path.endsWith(".wasm") ? wasmUrl : prefix + path),
-    },
-  });
+  const BarcodeDetector = await lesarIKlienten();
   return new BarcodeDetector({ formats: [...FORMATER] }) as unknown as Detektor;
+}
+
+type Ponyfill = typeof import("barcode-detector/ponyfill");
+
+/*
+ * Éin gong per sidelasting. prepareZXingModule samanliknar overrides med dei
+ * førre, og eit nytt locateFile kvar gong kameraet blei opna, kasta den ferdige
+ * WebAssembly-modulen, som då måtte byggjast på nytt. No er det same objektet
+ * heile tida. Kvar opning lagar framleis sin eigen detektor.
+ */
+let lesar: Promise<Ponyfill["BarcodeDetector"]> | null = null;
+
+function lesarIKlienten(): Promise<Ponyfill["BarcodeDetector"]> {
+  lesar ??= (async () => {
+    const [{ BarcodeDetector, prepareZXingModule }, { default: wasmUrl }] = await Promise.all([
+      import("barcode-detector/ponyfill"),
+      import("zxing-wasm/reader/zxing_reader.wasm?url"),
+    ]);
+    prepareZXingModule({
+      overrides: {
+        locateFile: (path: string, prefix: string) => (path.endsWith(".wasm") ? wasmUrl : prefix + path),
+      },
+    });
+    return BarcodeDetector;
+  })().catch((e: unknown) => {
+    // Feila lastinga (dårleg nett), skal neste opning prøve på nytt.
+    lesar = null;
+    throw e;
+  });
+  return lesar;
 }
 
 type ScannerProps = {
