@@ -20,6 +20,19 @@ De to kjedene er holdt fra hverandre med vilje. `pipe_*`-tabellene handler om
 varer firmaet **eier** og tar ut av lageret; `project_*`-tabellene om varer
 firmaet **kjøper**. Ingen beholdning trekkes ned av en prosjektbestilling.
 
+Og en tredje: **bestilling for henting**. Bedrifter og privatpersoner bestiller
+rør i butikken på `/bestill` – nå eller til en valgt dag – og kontoret godkjenner
+før lageret trekkes:
+
+```
+/bestill  ->  venter på godkjenning  ->  kontoret godkjenner  ->  klar til henting  ->  hentet  ->  faktura
+              e-post: kvittering         lageret trekkes          e-post: klar
+              e-post: til kontoret       (eller: avvist + e-post)
+```
+
+En bestilling er et uttak meldt på forhånd, og ligger i `pipe_orders` med
+`kind = 'bestilling'`.
+
 ## Kom i gang
 
 ```bash
@@ -137,6 +150,10 @@ et nytt fra nøkkel-ikonet i brukerlista.
 | `/kurv` | Handlekurven |
 | `/kasse` | Navn, telefon, prosjekt, eventuell signatur |
 | `/kvittering` | Kvittering med ordrenummer og PDF |
+| `/bestill` | Butikken: søk eller skann, legg i bestillingen |
+| `/bestill/kasse` | Når kunden henter, hvem som bestiller, sum og «Bestill med betalingsplikt» |
+| `/bestilling/:id` | Status og PDF for én bestilling – samme side som e-posten lenker til |
+| `/vilkar` | Kjøpsvilkår, angrerett og angreskjema |
 | `/login` | Innlogging |
 | `/admin` | Bestillinger, Å bestille, Prosjekt, Lager, QR-koder, Faktura, Innstillinger |
 | `/admin` → **Å bestille** | Fire utsnitt: Å bestille, Underveis, Mottak, Avvik |
@@ -239,6 +256,53 @@ Uttrykket er det samme i alle tre, og står ordrett i
 at stien har uuid-form før den blir castet, slik at en oppdiktet sti gir «ingen
 tilgang» og ikke en databasefeil.
 
+## Bestilling for henting
+
+**Lageret trekkes når kontoret godkjenner, ikke når kunden bestiller.** En
+bestilling settes inn med `stock_drawn_at = null`. `pipe_approve_pickup_order`
+trekker lageret, logger det og setter status i samme transaksjon;
+`pipe_reject_pickup_order` legger rørene tilbake hvis de var trukket.
+
+**Regelen ligger i basen.** For en bestilling sier statusen alltid om lageret er
+trukket: `ny` og `avvist` betyr nei, `behandlet` og `levert` betyr ja. En
+`check` (`pipe_orders_bestilling_lager`) stopper enhver vanlig `update` som ville
+fått de to i utakt. Derfor godkjennes bestillinger alltid med knappene i panelet,
+aldri med statusvelgeren.
+
+**Tre steder lærte forskjellen.** `pipe_delete_order` legger bare tilbake det
+som faktisk ble trukket, og `pipe_create_invoice` nekter bestillinger som ikke er
+godkjent.
+
+**Skjemaet er åpent, så basen har tak.** Høyst 5 bestillinger per e-postadresse
+per døgn og 30 totalt i timen. En falsk bestilling trekker aldri lageret –
+det gjør bare godkjenningen.
+
+**Kunden slår opp bestillingen på uuid-en,** aldri på ordrenummeret, som går i
+rekkefølge. `pipe_get_pickup_order` gir aldri ut interne notater eller uttak.
+
+**Bryteren står av** til noen slår den på under Innstillinger → Bestilling på
+nett, og den kan ikke slås på før firmanavn, org.nr., adresse og e-post er fylt
+ut. Vilkårene og angreskjemaet trenger dem.
+
+**Vilkår og angrerett:** privatpersoner kan bestille, så angrerettloven gjelder.
+Teksten ligger i `supabase/functions/_shared/angrerett.ts` og brukes på
+`/vilkar`, i kassen, i PDF-en og i e-postene. Den er et utkast bygget på det
+loven krever – les den før bryteren slås på, og få unntaket for kappede rør
+bekreftet av advokat.
+
+**E-post:** se [`docs/bestilling-epost.md`](docs/bestilling-epost.md).
+
+### Ta det i bruk
+
+1. Lim `supabase-setup.sql` inn i SQL Editor og kjør den.
+2. `npm run check:db` – alt skal være grønt.
+3. Fyll ut firmaopplysningene under Innstillinger, og les `/vilkar`.
+4. Sett opp e-post etter `docs/bestilling-epost.md` (kan vente – alt annet virker uten).
+5. Slå på «Ta imot bestillinger på nett».
+
+Frontend tåler å bli rullet ut før punkt 1: da er butikken stengt, og alt i
+panelet oppfører seg som uttak.
+
 ## Priser og avanse
 
 Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der
@@ -277,8 +341,11 @@ src/
     order-pdf.ts  uttaksseddel og plukkliste
     invoice-pdf.ts fakturagrunnlag
     receipt-pdf.ts mottakskontroll – det du sender leverandøren ved reklamasjon
+    pickup-*.ts   bestillingen: kurv, skjema, datalag og PDF
+    scanner.ts    tolkningen av skannede koder
+    mva.ts, orgnr.ts, vilkar.ts  sender videre fra supabase/functions/_shared
 supabase/migrations/   databaseskjemaet – kilden til supabase-setup.sql
-supabase/functions/    serverfunksjoner (opprett-bruker: midlertidige passord)
+supabase/functions/    serverfunksjoner (opprett-bruker, bestilling-epost) og _shared
 scripts/
   check-db.mjs    sjekker en levende base med anon-nøkkelen
   bygg-setup.mjs  bygger supabase-setup.sql fra migrasjonene
@@ -308,7 +375,7 @@ Supabase gjør, og spør så som fire ulike brukere: kontoret, to prosjektbruker
 hvert sitt prosjekt, en innlogget fremmed uten tilgang, og en anonym besøkende.
 De dekker at innkjøpsprisen er utilgjengelig, at kundeflyten fortsatt virker,
 at prosjektbrukere ikke ser hverandres prosjekter, og hele veien fra behov via
-bestilling til to puljer med mottak.
+bestilling til to puljer med mottak. `bestilling.test.mjs` dekker bestillingene: innsending uten lagertrekk, godkjenning og avvisning, regelen om lager og status, takene og e-postlåsen.
 
 Kjør dette **før** du limer SQL inn i Supabase. Mot en levende base sjekkes det
 samme utenfra med anon-nøkkelen:
