@@ -85,6 +85,24 @@ describe("sjekkSkjema", () => {
     expect(sjekkSkjema(privat({ epost: "ola.privat.no" }), O)?.melding).toBe("E-postadressen ser ikke riktig ut");
   });
 
+  it("godtek berre ei vanleg, heil adresse – same mønster som basen og e-postfunksjonen", () => {
+    for (const epost of [
+      "ola@privat.no.",
+      "<offer@x.no>",
+      "a<offer@x.no>",
+      `"x"<offer@x.no>`,
+      "ola..hansen@x.no",
+      "ola@privat.no,",
+      ".ola@x.no",
+      `${"a".repeat(245)}@privat.no`,
+    ]) {
+      expect(sjekkSkjema(privat({ epost }), O)?.melding, epost).toBe("E-postadressen ser ikke riktig ut");
+    }
+    for (const epost of ["ola@privat.no", "Ola.Hansen+bestilling@firma-navn.no", "o_la@sub.domene.com"]) {
+      expect(sjekkSkjema(privat({ epost }), O), epost).toBeNull();
+    }
+  });
+
   it("stoppar for lange felt med same grenser som basen", () => {
     expect(sjekkSkjema(privat({ navn: "x".repeat(101) }), O)?.felt).toBe("navn");
     expect(sjekkSkjema(bedrift({ firma: "x".repeat(121) }), O)?.felt).toBe("firma");

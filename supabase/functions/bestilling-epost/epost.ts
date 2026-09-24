@@ -10,6 +10,7 @@
  */
 
 import { angreskjema, angrerettAvsnitt, angrerettSomTekst, type Selger } from "../_shared/angrerett.ts";
+import { gyldigEpost } from "../_shared/epostadresse.ts";
 import { prisInklMva, summer } from "../_shared/mva.ts";
 import { visOrgnr } from "../_shared/orgnr.ts";
 
@@ -80,16 +81,7 @@ const fritekst = (v: unknown) => esc(v).replace(/\r?\n/g, "<br>");
 /** Emnefeltet kan ikkje ha linjeskift – det er vegen inn til eigne e-posthovud. */
 const einLinje = (s: string) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
 
-/*
- * Adressa kunden skreiv, er berre sjekka grovt i basen. Svar-til og mailto får
- * henne berre når ho er ei vanleg, heil adresse: avviser Resend svar-til-feltet,
- * går varselet til kontoret tapt – og kontoret skal alltid få beskjed.
- */
-const VANLEG_EPOST =
-  /^[A-Za-z0-9._+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
-const vanlegEpost = (s: string | null | undefined): string | null => (s && VANLEG_EPOST.test(s) ? s : null);
-
-const kr = (n: number) => Number(n).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const kr =(n: number) => Number(n).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const tal = (n: number) => Number(n).toLocaleString("nb-NO", { maximumFractionDigits: 2 });
 
 /** «2026-10-02» -> «fredag 2. oktober». */
@@ -310,7 +302,11 @@ function kontor(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: stri
   const telefon = o.customer_phone
     ? `<a href="tel:${esc(o.customer_phone.replace(/\s/g, ""))}" style="color:#111827">${esc(o.customer_phone)}</a>`
     : "";
-  const svarTil = vanlegEpost(o.customer_email);
+  // Basen sjekkar adressa med same mønster når bestillinga kjem inn, men ei rad
+  // kan ha kome inn andre vegar. Svar-til og mailto får henne berre når ho er ei
+  // vanleg, heil adresse: avviser Resend svar-til-feltet, går varselet til
+  // kontoret tapt – og kontoret skal alltid få beskjed.
+  const svarTil = gyldigEpost(o.customer_email) ? o.customer_email : null;
 
   const innhald = `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px">

@@ -1,6 +1,7 @@
 // Skjemaet i kassen, som reine funksjonar. Same reglar og same ordlyd som
 // pipe_submit_pickup_order: skjemaet seier frå med ein gong, basen avgjer.
 
+import { gyldigEpost } from "@/lib/epostadresse";
 import { gyldigOrgnr, vaskOrgnr } from "@/lib/orgnr";
 import type { CustomerType, PickupOrderInput } from "@/lib/types";
 
@@ -38,8 +39,6 @@ export const TOMT_SKJEMA: KasseSkjema = {
 };
 
 export type Feltfeil = { felt: keyof KasseSkjema; melding: string };
-
-const EPOST = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 /**
  * Dagens dato i Noreg som YYYY-MM-DD. Ikkje toISOString(), som gir UTC og bommar
@@ -96,7 +95,7 @@ export function sjekkSkjema(s: KasseSkjema, o: { kreverTelefon: boolean; iDag: s
 
   const epost = s.epost.trim();
   if (!epost) return { felt: "epost", melding: "E-post må fylles ut" };
-  if (epost.length > 254 || !EPOST.test(epost)) return { felt: "epost", melding: "E-postadressen ser ikke riktig ut" };
+  if (!gyldigEpost(epost)) return { felt: "epost", melding: "E-postadressen ser ikke riktig ut" };
 
   if (s.kommentar.trim().length > 1000) return { felt: "kommentar", melding: "Kommentaren er for lang (høyst 1000 tegn)" };
   return null;

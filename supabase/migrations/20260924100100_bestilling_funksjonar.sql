@@ -109,7 +109,10 @@ begin
   if v_email is null then
     raise exception 'E-post må fylles ut';
   end if;
-  if length(v_email) > 254 or v_email !~ '^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$' then
+  -- Same mønster som i supabase/functions/_shared/epostadresse.ts, der det står
+  -- kvifor det er strengt. Endrar du det eine, endrar du det andre.
+  if length(v_email) > 254
+     or v_email !~ '^[A-Za-z0-9_+-]+(\.[A-Za-z0-9_+-]+)*@[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$' then
     raise exception 'E-postadressen ser ikke riktig ut';
   end if;
 

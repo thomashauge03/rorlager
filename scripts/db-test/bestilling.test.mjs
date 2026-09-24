@@ -448,6 +448,9 @@ await somAnon(db, async () => {
   await feil("navn over 100 tegn", { navn: "x".repeat(101) }, /Navnet er for langt/);
   await feil("tom e-post", { epost: "" }, /E-post må fylles ut/);
   await feil("e-post uten krøllalfa", { epost: "ola.privat.no" }, /ser ikke riktig ut/);
+  await feil("e-post med vinkelparentes", { epost: "a<offer@x.no>" }, /ser ikke riktig ut/);
+  await feil("e-post med punktum til slutt", { epost: "ola@privat.no." }, /ser ikke riktig ut/);
+  await feil("e-post med to punktum etter hverandre", { epost: "ola..hansen@x.no" }, /ser ikke riktig ut/);
   await feil("telefon mangler når den kreves", { telefon: null }, /Telefonnummer må fylles ut/);
   await feil("privat uten adresse", { adresse: " " }, /Fakturaadresse må fylles ut/);
   await feil("adresse over 200 tegn", { adresse: "x".repeat(201) }, /Adressen er for lang/);
