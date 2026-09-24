@@ -256,8 +256,8 @@ export default function PickupShop() {
                 autoComplete="off"
                 value={sok}
                 onChange={(e) => setSok(e.target.value)}
-                placeholder="Søk på navn, dimensjon eller varenummer"
-                className="h-14 pl-11 pr-24 text-base"
+                placeholder="Søk på navn eller varenr."
+                className={cn("h-14 pl-11 text-base", sok ? "pr-24" : "pr-14")}
               />
               <div className="absolute right-1 top-1/2 flex -translate-y-1/2 items-center gap-1">
                 {sok ? (

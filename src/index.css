@@ -109,6 +109,14 @@
     font-family: 'DM Sans', system-ui, sans-serif;
   }
 
+  /* Søkefelta har ein eigen «Tøm søket»-knapp. Nettlesaren sin eigen
+     kryss-knapp ville kome i tillegg, rett ved sida av. */
+  input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+    appearance: none;
+    display: none;
+  }
+
   /* Dempa merkevare-bakgrunn: raud glød frå toppen og eit fint rutenett,
      så flatene ikkje blir heilt kvite og tomme */
   .hm-page {
