@@ -15,6 +15,15 @@ describe("linjesum", () => {
   it("tåler pris 0", () => {
     expect(linjesum(0, 7)).toBe(0);
   });
+
+  it("rundar negative beløp vekk frå null, slik Postgres gjer", () => {
+    expect(linjesum(-103.39, 12.5)).toBe(-1292.38);
+    expect(linjesum(103.39, -12.5)).toBe(-1292.38);
+  });
+
+  it("returnerer 0, ikkje -0", () => {
+    expect(Object.is(linjesum(0, 7), 0)).toBe(true);
+  });
 });
 
 describe("summer", () => {

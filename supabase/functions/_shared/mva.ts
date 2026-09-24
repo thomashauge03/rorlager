@@ -16,11 +16,13 @@ export type Summer = { eks: number; mva: number; inkl: number };
  * I heiltal – øre og hundredelar – fordi flyttal bommar på halve øre:
  * 103,39 × 12,5 = 1292,375 skal bli 1292,38 som i Postgres, men blir 1292,37
  * om ein reknar med desimaltal. Prisen og mengda har høgst to desimalar.
+ * Rundar halve øre vekk frå null, slik Postgres gjer, og passar for negative beløp òg.
  */
 export function linjesum(pris: number, mengde: number): number {
   const p = Math.round(pris * 100);
   const q = Math.round(mengde * 100);
-  return Math.floor((p * q + 50) / 100) / 100;
+  const x = p * q;
+  return (Math.sign(x) * Math.floor((Math.abs(x) + 50) / 100)) / 100 + 0;
 }
 
 /**
@@ -28,6 +30,7 @@ export function linjesum(pris: number, mengde: number): number {
  *
  * Mva blir rekna av summen, ikkje per linje, og runda i øre – nøyaktig same
  * formel som invoice-pdf.ts, så bestillinga og fakturagrunnlaget seier det same.
+ * Tek inn ei liste av beløp som er ikkje-negative.
  */
 export function summer(linjesummer: number[], mvaSats: number): Summer {
   const øre = linjesummer.reduce((s, l) => s + Math.round(l * 100), 0);
@@ -36,7 +39,7 @@ export function summer(linjesummer: number[], mvaSats: number): Summer {
   return { eks, mva, inkl: Math.round((eks + mva) * 100) / 100 };
 }
 
-/** Pris per eining med mva, runda i øre. Det ein privatperson skal sjå. */
+/** Pris per eining med mva, runda i øre. Det ein privatperson skal sjå. Tek inn eit ikkje-negativt beløp. */
 export function prisInklMva(pris: number, mvaSats: number): number {
   return Math.round(pris * (100 + mvaSats)) / 100;
 }
