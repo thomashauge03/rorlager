@@ -27,6 +27,8 @@ const mottak = (lineId: string, qty: number): ProjectReceiptLineRow => ({
   received_qty: qty,
   deviation: "ingen",
   note: null,
+  resolved_at: null,
+  resolved_by: null,
 });
 
 describe("receivedForLine", () => {

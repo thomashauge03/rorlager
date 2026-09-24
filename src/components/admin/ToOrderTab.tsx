@@ -62,6 +62,8 @@ const UTSNITT: { verdi: Utsnitt; navn: string }[] = [
 ];
 
 export function ToOrderTab() {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("bestille");
   const [åpen, setÅpen] = useState<ProjectOrderWithLines | null>(null);
 

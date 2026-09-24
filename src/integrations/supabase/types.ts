@@ -388,6 +388,7 @@ export type Database = {
         };
         Returns: ProjectOrderRow;
       };
+      project_resolve_deviation: { Args: { p_line_id: string; p_handtert?: boolean }; Returns: void };
       project_submit_receipt: {
         Args: {
           p_order_id: string;

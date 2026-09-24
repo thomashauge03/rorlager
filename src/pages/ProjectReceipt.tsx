@@ -24,7 +24,7 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import { fetchProjectOrder, submitReceipt, suggestDeviation } from "@/lib/projects";
-import { MAKS_BILETE, lastOppBilde, slettBilde } from "@/lib/mottak-bilde";
+import { MAKS_BILETE, lastOppBilde, signerteLenker, slettBilde } from "@/lib/mottak-bilde";
 import { useAuth } from "@/lib/auth";
 import { num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import { DEVIATION_LABEL, type Deviation, type ProjectOrderLine } from "@/lib/types";
