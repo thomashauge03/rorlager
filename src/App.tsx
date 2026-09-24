@@ -17,6 +17,7 @@ import ProjectPage from "./pages/ProjectPage";
 import ProjectRequest from "./pages/ProjectRequest";
 import ProjectReceipt from "./pages/ProjectReceipt";
 import Personvern from "./pages/Personvern";
+import Vilkar from "./pages/Vilkar";
 import PickupShop from "./pages/PickupShop";
 import PickupCheckout from "./pages/PickupCheckout";
 import PickupOrder from "./pages/PickupOrder";
@@ -53,6 +54,7 @@ const App = () => (
             <Route path="/kasse" element={<Checkout />} />
             <Route path="/kvittering" element={<Receipt />} />
             <Route path="/personvern" element={<Personvern />} />
+            <Route path="/vilkar" element={<Vilkar />} />
             {/* Bestilling til henting: butikken, kassen og kvitteringa */}
             <Route path="/bestill" element={<PickupShop />} />
             <Route path="/bestill/kasse" element={<PickupCheckout />} />
