@@ -111,7 +111,10 @@ export function InvoiceTab() {
 
   const invoices = useQuery({ queryKey: QK.invoices, queryFn: fetchInvoices });
 
-  const orders = uninvoiced.data ?? [];
+  // Ei bestilling som ventar, eller som er avvist, har ingen rør på seg å
+  // fakturere. Basen nektar henne uansett (pipe_create_invoice); her blir ho
+  // ikkje ein gong vist. Før migrasjonen er feltet undefined, og då er alt uttak.
+  const orders = (uninvoiced.data ?? []).filter((o) => o.stock_drawn_at !== null);
 
   /* ---------------- Steg 1: kundane som har noko å fakturere ---------------- */
 

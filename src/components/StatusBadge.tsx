@@ -2,7 +2,9 @@ import {
   DEVIATION_LABEL,
   ORDER_STATUS_LABEL,
   PROJECT_ORDER_STATUS_LABEL,
+  statusLabel,
   type Deviation,
+  type OrderKind,
   type OrderStatus,
   type ProjectOrderStatus,
   type StockStatus,
@@ -19,8 +21,8 @@ const ORDER_STYLE: Record<OrderStatus, string> = {
   avvist: "bg-muted text-muted-foreground border border-border",
 };
 
-export function StatusBadge({ status }: { status: OrderStatus }) {
-  return <span className={cn("hm-chip", ORDER_STYLE[status] ?? ORDER_STYLE.ny)}>{ORDER_STATUS_LABEL[status] ?? status}</span>;
+export function StatusBadge({ status, kind }: { status: OrderStatus; kind?: OrderKind | null }) {
+  return <span className={cn("hm-chip", ORDER_STYLE[status] ?? ORDER_STYLE.ny)}>{statusLabel(status, kind)}</span>;
 }
 
 const STOCK_STYLE: Record<StockStatus, string> = {

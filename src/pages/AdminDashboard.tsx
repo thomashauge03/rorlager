@@ -31,6 +31,7 @@ import { InvoiceTab } from "@/components/admin/InvoiceTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { ProjectsTab } from "@/components/admin/ProjectsTab";
 import { ToOrderTab } from "@/components/admin/ToOrderTab";
+import { useWaitingPickupOrders } from "@/lib/pickup-orders";
 
 const TABS = [
   { value: "bestillinger", label: "Bestillinger", Icon: ShoppingCart },
@@ -60,6 +61,11 @@ export default function AdminDashboard() {
     navigate("/login", { replace: true }),
   );
   const isSuperAdmin = role === "super_admin";
+
+  // Talet på fana Bestillinger. Berre for kontoret: ein prosjektbrukar blir
+  // send vidare, og ein utan rolle ser ingen faner.
+  const venter = useWaitingPickupOrders(roleKnown && role !== null && role !== "prosjekt");
+  const antallVenter = venter.data?.length ?? 0;
 
   /*
    * Prosjektbrukarar høyrer ikkje heime her.
@@ -230,6 +236,12 @@ export default function AdminDashboard() {
                 >
                   <Icon className="h-4 w-4" aria-hidden="true" />
                   {label}
+                  {value === "bestillinger" && antallVenter > 0 ? (
+                    <span className="tabular ml-0.5 min-w-[1.25rem] rounded-full bg-destructive px-1.5 text-center text-[0.7rem] font-bold leading-5 text-destructive-foreground">
+                      {antallVenter}
+                      <span className="sr-only"> venter på godkjenning</span>
+                    </span>
+                  ) : null}
                 </TabsTrigger>
               ))}
             </TabsList>

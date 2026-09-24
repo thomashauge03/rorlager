@@ -1,5 +1,6 @@
-// Hovudarbeidsflata i adminpanelet: alle uttak i ein periode, med detaljvising,
-// statusbyte, PDF og plukkliste.
+// Hovudarbeidsflata i adminpanelet: alle uttak og bestillingar i ein periode,
+// med detaljvising, statusbyte, PDF og plukkliste. Bestillingar som ventar på
+// godkjenning ligg i ei eiga stripe øvst, uavhengig av datofilteret.
 
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -26,15 +27,27 @@ import {
 } from "@/components/ui/alert-dialog";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Stat } from "@/components/Stat";
+import { PickupDetails, PickupQueue } from "@/components/admin/PickupQueue";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, isoDate, kr, krShort, num, pipeLabel, qtyLabel, shortDate } from "@/lib/format";
 import { deleteOrder, fetchOrders, QK, setOrderStatus, updateOrder } from "@/lib/orders";
 import { downloadOrderPDF, downloadPickListPDF, type CompanyInfo } from "@/lib/order-pdf";
-import { useSettings } from "@/lib/settings";
-import { ORDER_STATUS_LABEL, type OrderStatus, type OrderWithLines } from "@/lib/types";
+import { downloadPickupPDF } from "@/lib/pickup-pdf";
+import { somBestilling, useWaitingPickupOrders } from "@/lib/pickup-orders";
+import { useOrderSettings, useSettings } from "@/lib/settings";
+import { selgerFra } from "@/lib/vilkar";
+import { ORDER_STATUS_LABEL, type OrderKind, type OrderStatus, type OrderWithLines } from "@/lib/types";
 
 const STATUS_OPTIONS: (OrderStatus | "alle")[] = ["alle", "ny", "behandlet", "levert", "avvist"];
+
+const KIND_OPTIONS: { value: OrderKind | "alle"; label: string }[] = [
+  { value: "alle", label: "Uttak og bestillinger" },
+  { value: "uttak", label: "Uttak" },
+  { value: "bestilling", label: "Bestillinger" },
+];
+
+const erBestilling = (o: { kind?: OrderKind | null }) => o.kind === "bestilling";
 
 /** Meter og stykk kan ikkje leggjast saman – kvar eining blir summert for seg. */
 function unitSummary(lines: { unit: string; quantity: number }[]): string {
@@ -42,6 +55,16 @@ function unitSummary(lines: { unit: string; quantity: number }[]): string {
   lines.forEach((l) => per.set(l.unit, (per.get(l.unit) ?? 0) + (l.quantity || 0)));
   const parts = [...per.entries()].map(([unit, qty]) => qtyLabel(Math.round(qty * 10000) / 10000, unit));
   return parts.length ? parts.join(" · ") : "–";
+}
+
+/** Prosjektet for eit uttak; «Henter nå» eller hentedagen for ei bestilling. */
+function ProsjektEllerHenting({ o }: { o: OrderWithLines }) {
+  if (!erBestilling(o)) return <>{o.project || "–"}</>;
+  return o.pickup_now ? (
+    <span className="font-semibold text-destructive">Henter nå</span>
+  ) : (
+    <span>Hentes {shortDate(o.pickup_date)}</span>
+  );
 }
 
 function DetailRow({ label, value }: { label: string; value: ReactNode }) {
@@ -59,10 +82,12 @@ export function OrdersTab() {
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
   const { data: settings } = useSettings();
+  const { data: orderSettings } = useOrderSettings();
 
   const [from, setFrom] = useState(() => isoDate(subDays(new Date(), 29)));
   const [to, setTo] = useState(() => isoDate());
   const [status, setStatus] = useState<OrderStatus | "alle">("alle");
+  const [kind, setKind] = useState<OrderKind | "alle">("alle");
   const [search, setSearch] = useState("");
   const [onlyUninvoiced, setOnlyUninvoiced] = useState(false);
 
@@ -81,10 +106,18 @@ export function OrdersTab() {
 
   const filter = { from, to, status, search: searchTerm, onlyUninvoiced };
 
-  const { data: orders = [], isLoading, isError, error, refetch } = useQuery({
+  const { data: alle = [], isLoading, isError, error, refetch } = useQuery({
     queryKey: [...QK.orders, filter],
     queryFn: () => fetchOrders(filter),
   });
+
+  // Typen blir filtrert i klienten: før migrasjonen finst ikkje kolonnen, og då
+  // skal lista framleis virke – alt er uttak.
+  const orders = useMemo(
+    () => (kind === "alle" ? alle : alle.filter((o) => (o.kind ?? "uttak") === kind)),
+    [alle, kind],
+  );
+  const venter = useWaitingPickupOrders(true).data ?? [];
 
   // show_prices styrer kundeflatene. Admin må sjå beløpa uansett for å kunne
   // fakturere, så innstillinga blir ikkje lesen her.
@@ -106,9 +139,9 @@ export function OrdersTab() {
     };
   }, [orders]);
 
-  // Detaljvisinga les frå den ferske lista, slik at eit statusbyte slår gjennom
-  // i panelet utan at det må lukkast og opnast på nytt
-  const open = orders.find((o) => o.id === openId) ?? null;
+  // Detaljvisinga les frå dei ferske listene. Ei ventande bestilling eldre enn
+  // datofilteret finst berre i stripa, så ho blir henta derifrå.
+  const open = alle.find((o) => o.id === openId) ?? venter.find((o) => o.id === openId) ?? null;
   useEffect(() => setNote(open?.admin_note ?? ""), [openId, open?.admin_note]);
 
   // Eit val som ikkje lenger er i lista skal ikkje henge att i handlingane
@@ -159,14 +192,17 @@ export function OrdersTab() {
     }
   };
 
-  const removeOrder = async (id: string) => {
+  const removeOrder = async (order: OrderWithLines) => {
     setBusy(true);
     try {
-      await deleteOrder(id);
-      setSelected((prev) => prev.filter((x) => x !== id));
+      await deleteOrder(order.id);
+      setSelected((prev) => prev.filter((x) => x !== order.id));
       setOpenId(null);
       refresh();
-      toast({ title: "Bestillingen er slettet", description: "Rørene er lagt tilbake på lageret." });
+      toast({
+        title: "Bestillingen er slettet",
+        description: order.stock_drawn_at === null ? "Lageret var aldri trukket, så beholdningen er urørt." : "Rørene er lagt tilbake på lageret.",
+      });
     } catch (err) {
       fail(err, "Klarte ikke å slette bestillingen");
     } finally {
@@ -175,14 +211,28 @@ export function OrdersTab() {
     }
   };
 
+  /**
+   * Berre uttak. Ei bestilling blir «behandlet» ved godkjenning, som trekkjer
+   * lageret – det skal skje éi og éi, med blikk på lagerstatusen. Basen ville
+   * uansett avvist det, men ei avvisning midt i ein Promise.all er ei dårleg
+   * forklaring.
+   */
   const markSelectedHandled = async () => {
-    if (!selectedOrders.length) return;
+    const uttak = selectedOrders.filter((o) => !erBestilling(o));
+    const hoppa = selectedOrders.length - uttak.length;
+    if (!uttak.length) {
+      toast({ title: "Ingen uttak valgt", description: "Bestillinger godkjennes én og én, fordi godkjenning trekker lageret." });
+      return;
+    }
     setBusy(true);
     try {
-      await Promise.all(selectedOrders.map((o) => setOrderStatus(o.id, "behandlet")));
+      await Promise.all(uttak.map((o) => setOrderStatus(o.id, "behandlet")));
       refresh();
       setSelected([]);
-      toast({ title: `${selectedOrders.length} bestillinger merket som behandlet` });
+      toast({
+        title: `${uttak.length} uttak merket som behandlet`,
+        description: hoppa ? `${hoppa} bestillinger ble hoppet over. De godkjennes én og én.` : undefined,
+      });
     } catch (err) {
       fail(err, "Klarte ikke å oppdatere alle bestillingene");
     } finally {
@@ -205,7 +255,16 @@ export function OrdersTab() {
 
   const orderPdf = (order: OrderWithLines) => {
     try {
-      downloadOrderPDF({ order, lines: order.lines, company }, { showPrices: true });
+      if (erBestilling(order)) {
+        downloadPickupPDF({
+          order: somBestilling(order),
+          company,
+          selger: selgerFra(settings, orderSettings),
+          vatRate: settings?.vat_rate ?? 25,
+        });
+      } else {
+        downloadOrderPDF({ order, lines: order.lines, company }, { showPrices: true });
+      }
     } catch (err) {
       fail(err, "Klarte ikke å lage PDF-en");
     }
@@ -213,9 +272,11 @@ export function OrdersTab() {
 
   return (
     <div className="space-y-4">
+      <PickupQueue onOpen={setOpenId} />
+
       {/* ---------------------------------------------------------- filter */}
       <div className="hm-card p-3 sm:p-4 space-y-3">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1.5">
             <Label htmlFor="ordre-fra">Fra dato</Label>
             <Input id="ordre-fra" type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} />
@@ -223,6 +284,21 @@ export function OrdersTab() {
           <div className="space-y-1.5">
             <Label htmlFor="ordre-til">Til dato</Label>
             <Input id="ordre-til" type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="ordre-type">Type</Label>
+            <Select value={kind} onValueChange={(v) => setKind(v as OrderKind | "alle")}>
+              <SelectTrigger id="ordre-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {KIND_OPTIONS.map((k) => (
+                  <SelectItem key={k.value} value={k.value}>
+                    {k.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="ordre-status">Status</Label>
@@ -249,7 +325,7 @@ export function OrdersTab() {
               <Input
                 id="ordre-sok"
                 className="pl-9"
-                placeholder="Navn, firma, prosjekt eller nr."
+                placeholder="Navn, firma, org.nr. eller nr."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -283,7 +359,7 @@ export function OrdersTab() {
           </Button>
           <Button size="sm" onClick={markSelectedHandled} disabled={busy}>
             {busy ? <Loader2 className="h-4 w-4 mr-2 animate-spin" aria-hidden="true" /> : null}
-            Merk som behandlet
+            Merk uttak som behandlet
           </Button>
           <Button variant="ghost" size="sm" onClick={() => setSelected([])}>
             Nullstill valg
@@ -313,7 +389,7 @@ export function OrdersTab() {
             <Inbox className="h-7 w-7 text-primary" aria-hidden="true" />
           </div>
           <p className="font-semibold text-foreground mt-1">Ingen bestillinger i perioden</p>
-          <p className="text-sm text-muted-foreground max-w-xs">Prøv et annet datointervall eller en annen status.</p>
+          <p className="text-sm text-muted-foreground max-w-xs">Prøv et annet datointervall, en annen type eller status.</p>
         </div>
       ) : isMobile ? (
         <div className="space-y-2">
@@ -326,20 +402,25 @@ export function OrdersTab() {
                 aria-label={`Velg bestilling ${o.order_number}`}
               />
               <button type="button" className="flex-1 min-w-0 text-left" onClick={() => setOpenId(o.id)}>
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-foreground tabular">#{o.order_number}</span>
-                  <StatusBadge status={o.status} />
-                </div>
-                <p className="text-sm text-foreground mt-1 truncate">
+                <span className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-foreground tabular">
+                    #{o.order_number}
+                    {erBestilling(o) ? <span className="ml-2 text-xs font-medium text-primary">Bestilling</span> : null}
+                  </span>
+                  <StatusBadge status={o.status} kind={o.kind} />
+                </span>
+                <span className="block text-sm text-foreground mt-1 truncate">
                   {o.customer_name}
                   {o.company ? <span className="text-muted-foreground"> · {o.company}</span> : null}
-                </p>
-                {o.project ? <p className="text-xs text-muted-foreground truncate">{o.project}</p> : null}
-                <div className="flex items-center justify-between gap-2 mt-1.5 text-xs text-muted-foreground tabular">
+                </span>
+                <span className="block text-xs text-muted-foreground truncate">
+                  <ProsjektEllerHenting o={o} />
+                </span>
+                <span className="flex items-center justify-between gap-2 mt-1.5 text-xs text-muted-foreground tabular">
                   <span>{dateTime(o.created_at)}</span>
                   <span>{unitSummary(o.lines)}</span>
-                </div>
-                <p className="text-sm font-semibold text-foreground tabular mt-1">{kr(o.total)} kr</p>
+                </span>
+                <span className="block text-sm font-semibold text-foreground tabular mt-1">{kr(o.total)} kr</span>
               </button>
             </div>
           ))}
@@ -355,7 +436,7 @@ export function OrdersTab() {
                 <TableHead className="w-16">Nr.</TableHead>
                 <TableHead>Dato</TableHead>
                 <TableHead>Kunde</TableHead>
-                <TableHead>Prosjekt</TableHead>
+                <TableHead>Prosjekt / henting</TableHead>
                 <TableHead className="text-right">Linjer</TableHead>
                 <TableHead>Mengde</TableHead>
                 <TableHead className="text-right">Beløp</TableHead>
@@ -372,18 +453,23 @@ export function OrdersTab() {
                       aria-label={`Velg bestilling ${o.order_number}`}
                     />
                   </TableCell>
-                  <TableCell className="font-semibold tabular">{o.order_number}</TableCell>
+                  <TableCell className="font-semibold tabular">
+                    {o.order_number}
+                    {erBestilling(o) ? <span className="block text-xs font-medium text-primary">Bestilling</span> : null}
+                  </TableCell>
                   <TableCell className="tabular whitespace-nowrap">{dateTime(o.created_at)}</TableCell>
                   <TableCell>
                     <span className="font-medium text-foreground">{o.customer_name}</span>
                     {o.company ? <span className="block text-xs text-muted-foreground">{o.company}</span> : null}
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{o.project || "–"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    <ProsjektEllerHenting o={o} />
+                  </TableCell>
                   <TableCell className="text-right tabular">{o.lines.length}</TableCell>
                   <TableCell className="tabular whitespace-nowrap">{unitSummary(o.lines)}</TableCell>
                   <TableCell className="text-right tabular whitespace-nowrap">{kr(o.total)} kr</TableCell>
                   <TableCell>
-                    <StatusBadge status={o.status} />
+                    <StatusBadge status={o.status} kind={o.kind} />
                   </TableCell>
                 </TableRow>
               ))}
@@ -399,8 +485,10 @@ export function OrdersTab() {
             <>
               <SheetHeader className="text-left">
                 <SheetTitle className="flex items-center gap-3">
-                  <span className="tabular">Bestilling #{open.order_number}</span>
-                  <StatusBadge status={open.status} />
+                  <span className="tabular">
+                    {erBestilling(open) ? "Bestilling" : "Uttak"} #{open.order_number}
+                  </span>
+                  <StatusBadge status={open.status} kind={open.kind} />
                 </SheetTitle>
               </SheetHeader>
 
@@ -434,21 +522,19 @@ export function OrdersTab() {
                   <DetailRow label="Faktura" value={open.invoice_id ? "Fakturert" : "Ikke fakturert"} />
                 </div>
 
+                {erBestilling(open) ? <PickupDetails order={open} /> : null}
+
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2">Varelinjer</p>
                   <div className="divide-y divide-border border border-border rounded-lg">
                     {open.lines.map((line) => (
                       <div key={line.id} className="flex items-start justify-between gap-3 px-3 py-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">
-                            {pipeLabel(line.name, line.dimension)}
-                          </p>
+                          <p className="text-sm font-medium text-foreground">{pipeLabel(line.name, line.dimension)}</p>
                           {line.sku ? <p className="text-xs text-muted-foreground">{line.sku}</p> : null}
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="text-sm font-semibold text-foreground tabular">
-                            {qtyLabel(line.quantity, line.unit)}
-                          </p>
+                          <p className="text-sm font-semibold text-foreground tabular">{qtyLabel(line.quantity, line.unit)}</p>
                           <p className="text-xs text-muted-foreground tabular">
                             {line.line_total === null || line.line_total === undefined
                               ? "Pris mangler"
@@ -458,7 +544,7 @@ export function OrdersTab() {
                       </div>
                     ))}
                     <div className="flex items-center justify-between px-3 py-2 bg-muted/50">
-                      <span className="text-sm font-semibold text-foreground">Sum</span>
+                      <span className="text-sm font-semibold text-foreground">Sum eks. mva</span>
                       <span className="text-sm font-bold text-primary tabular">{kr(open.total)} kr</span>
                     </div>
                   </div>
@@ -467,9 +553,7 @@ export function OrdersTab() {
                 {open.comment ? (
                   <div>
                     <p className="text-sm font-semibold text-foreground mb-1.5">Kommentar fra kunden</p>
-                    <p className="text-sm text-foreground bg-muted/60 rounded-lg px-3 py-2 whitespace-pre-wrap">
-                      {open.comment}
-                    </p>
+                    <p className="text-sm text-foreground bg-muted/60 rounded-lg px-3 py-2 whitespace-pre-wrap">{open.comment}</p>
                   </div>
                 ) : null}
 
@@ -484,21 +568,25 @@ export function OrdersTab() {
                   </div>
                 ) : null}
 
-                <div className="space-y-1.5">
-                  <Label htmlFor="ordre-status-detalj">Status</Label>
-                  <Select value={open.status} onValueChange={(v) => changeStatus(open.id, v as OrderStatus)}>
-                    <SelectTrigger id="ordre-status-detalj" className="h-11">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {(Object.keys(ORDER_STATUS_LABEL) as OrderStatus[]).map((s) => (
-                        <SelectItem key={s} value={s}>
-                          {ORDER_STATUS_LABEL[s]}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+                {/* Ei bestilling byter status gjennom knappane over: godkjenning og
+                    avvisning flyttar rør, og det gjer ikkje ein statusveljar. */}
+                {!erBestilling(open) ? (
+                  <div className="space-y-1.5">
+                    <Label htmlFor="ordre-status-detalj">Status</Label>
+                    <Select value={open.status} onValueChange={(v) => changeStatus(open.id, v as OrderStatus)}>
+                      <SelectTrigger id="ordre-status-detalj" className="h-11">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {(Object.keys(ORDER_STATUS_LABEL) as OrderStatus[]).map((s) => (
+                          <SelectItem key={s} value={s}>
+                            {ORDER_STATUS_LABEL[s]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
 
                 <div className="space-y-1.5">
                   <Label htmlFor="ordre-notat">Internt notat</Label>
@@ -509,11 +597,7 @@ export function OrdersTab() {
                     onChange={(e) => setNote(e.target.value)}
                     placeholder="Synlig kun for administratorer"
                   />
-                  <Button
-                    variant="outline"
-                    onClick={() => saveNote(open.id)}
-                    disabled={busy || note === (open.admin_note ?? "")}
-                  >
+                  <Button variant="outline" onClick={() => saveNote(open.id)} disabled={busy || note === (open.admin_note ?? "")}>
                     Lagre notat
                   </Button>
                 </div>
@@ -542,7 +626,11 @@ export function OrdersTab() {
             <AlertDialogTitle>Slette bestillingen?</AlertDialogTitle>
             <AlertDialogDescription>
               {open
-                ? `Bestilling #${open.order_number} fra ${open.customer_name} blir slettet for godt. Rørene på bestillingen blir lagt tilbake på lageret.`
+                ? `#${open.order_number} fra ${open.customer_name} blir slettet for godt. ${
+                    open.stock_drawn_at === null
+                      ? "Lageret ble aldri trukket for denne, så beholdningen endres ikke."
+                      : "Rørene blir lagt tilbake på lageret."
+                  }`
                 : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -550,7 +638,7 @@ export function OrdersTab() {
             <AlertDialogCancel>Avbryt</AlertDialogCancel>
             <AlertDialogAction
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => open && removeOrder(open.id)}
+              onClick={() => open && removeOrder(open)}
             >
               Slett bestilling
             </AlertDialogAction>
