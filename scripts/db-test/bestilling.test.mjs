@@ -304,5 +304,342 @@ await som(db, LEIF, async () => {
 sjekk("sletting av en godkjent bestilling legger rørene tilbake", await lager(ROR), foerSletting + 7);
 
 // ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Kunden sender inn en bestilling ──\n");
+
+const SEND = `select public.pipe_submit_pickup_order(
+  p_customer_type => $1, p_customer_name => $2, p_customer_email => $3, p_lines => $4::jsonb,
+  p_customer_phone => $5, p_company => $6, p_org_number => $7, p_billing_address => $8,
+  p_pickup_now => $9, p_pickup_date => $10::date, p_comment => $11) as r`;
+
+const iDag = (await en(`select ((now() at time zone 'Europe/Oslo')::date)::text as d`)).d;
+const omDager = async (n) =>
+  (await en(`select (((now() at time zone 'Europe/Oslo')::date) + $1::int)::text as d`, [n])).d;
+const OM_TRE = await omDager(3);
+
+/** Parametrane til SEND for ein privatperson. Overstyr det testen handlar om. */
+const privat = (over = {}) => {
+  const o = {
+    type: "privat",
+    navn: "Ola Privat",
+    epost: "ola@privat.no",
+    telefon: "900 00 000",
+    firma: null,
+    orgnr: null,
+    adresse: "Bakkevegen 3, 5700 Voss",
+    naa: false,
+    dato: OM_TRE,
+    kommentar: "Henter med tilhenger",
+    linjer: [
+      { pipe_type_id: ROR, quantity: 12.5 },
+      { pipe_type_id: BEND, quantity: 4 },
+    ],
+    ...over,
+  };
+  return [o.type, o.navn, o.epost, JSON.stringify(o.linjer), o.telefon, o.firma, o.orgnr, o.adresse, o.naa, o.dato, o.kommentar];
+};
+
+const lagerFoer = [await lager(ROR), await lager(BEND)];
+let bestId, bestNr;
+
+await somAnon(db, async () => {
+  const r = (await en(SEND, privat())).r;
+  bestId = r?.id;
+  bestNr = Number(r?.order_number);
+  bestNr > 0 ? ok(`bestillingen gikk inn med nummer ${bestNr}`) : nei("innsending", JSON.stringify(r));
+  sjekk("svaret er bare id og nummer – kunden henter resten med id-en", Object.keys(r).sort(), ["id", "order_number"]);
+});
+
+sjekk("lageret er ikke rørt", [await lager(ROR), await lager(BEND)], lagerFoer);
+sjekk(
+  "ingen lagerlogg ble skrevet",
+  (await alle(`select id from public.pipe_stock_log where order_id = $1`, [bestId])).length,
+  0,
+);
+
+const b = await en(
+  `select kind, status, stock_drawn_at, customer_type, billing_address, pickup_date::text as dag, pickup_now, total
+     from public.pipe_orders where id = $1`,
+  [bestId],
+);
+sjekk("den er en bestilling som venter", [b.kind, b.status, b.stock_drawn_at], ["bestilling", "ny", null]);
+sjekk("kundetype og fakturaadresse er lagret", [b.customer_type, b.billing_address], ["privat", "Bakkevegen 3, 5700 Voss"]);
+sjekk("hentedagen er den kunden valgte", [b.dag, b.pickup_now], [OM_TRE, false]);
+sjekk("summen er regnet av basens priser: 12,5 × 100 + 4 × 25", tal(b.total), 1350);
+
+const bl = await alle(
+  `select name, unit_price, line_total from public.pipe_order_lines where order_id = $1 order by sort_order`,
+  [bestId],
+);
+sjekk(
+  "linjene har prisene fra katalogen",
+  bl.map((l) => [l.name, tal(l.unit_price), tal(l.line_total)]),
+  [
+    ["Bestillingsrør 110", 100, 1250],
+    ["Bestillingsbend", 25, 100],
+  ],
+);
+
+// Kun innsendinga skjer som anon – NB: verifikasjonen under leser
+// public.pipe_orders direkte, og anon har ingen tilgang til den tabellen (kun
+// til funksjonene). Samme mønster som i blokken over: send som anon, les
+// tilbake med full tilgang etterpå.
+let bedriftId;
+await somAnon(db, async () => {
+  bedriftId = (
+    await en(
+      SEND,
+      privat({
+        type: "Bedrift",
+        navn: "Kari Kontakt",
+        epost: "  Kari@Firma.NO ",
+        firma: "Firma AS",
+        orgnr: "974 760 673",
+        adresse: "Skal ikke lagres",
+      }),
+    )
+  ).r.id;
+});
+const f = await en(
+  `select customer_type, customer_email, company, org_number, billing_address from public.pipe_orders where id = $1`,
+  [bedriftId],
+);
+sjekk(
+  "bedrift: org.nr. uten mellomrom, e-post med små bokstaver",
+  [f.customer_type, f.customer_email, f.company, f.org_number],
+  ["bedrift", "kari@firma.no", "Firma AS", "974760673"],
+);
+sjekk("og en adresse ingen ba om, blir ikke lagret", f.billing_address, null);
+
+let naaId;
+await somAnon(db, async () => {
+  naaId = (await en(SEND, privat({ epost: "naa@kunde.no", naa: true, dato: "2020-01-01" }))).r.id;
+});
+const n = await en(`select pickup_date::text as dag, pickup_now from public.pipe_orders where id = $1`, [naaId]);
+sjekk("«henter nå» gir dagens dato, uansett hva klienten sendte", [n.dag, n.pickup_now], [iDag, true]);
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Det innsendingen ikke godtar ──\n");
+// Kassen stoppar det meste av dette, men kassen er ikkje grensa. Kven som helst
+// kan kalle funksjonen direkte med anon-nøkkelen.
+
+await somAnon(db, async () => {
+  const feil = (tittel, over, mønster) => avvist(tittel, SEND, privat({ epost: "feil@kunde.no", ...over }), mønster);
+
+  await feil("ukjent kundetype", { type: "firma" }, /privatperson eller bedrift/);
+  await feil("tomt navn", { navn: "  " }, /Navn må fylles ut/);
+  await feil("navn over 100 tegn", { navn: "x".repeat(101) }, /Navnet er for langt/);
+  await feil("tom e-post", { epost: "" }, /E-post må fylles ut/);
+  await feil("e-post uten krøllalfa", { epost: "ola.privat.no" }, /ser ikke riktig ut/);
+  await feil("telefon mangler når den kreves", { telefon: null }, /Telefonnummer må fylles ut/);
+  await feil("privat uten adresse", { adresse: " " }, /Fakturaadresse må fylles ut/);
+  await feil("adresse over 200 tegn", { adresse: "x".repeat(201) }, /Adressen er for lang/);
+  await feil("bedrift uten firma", { type: "bedrift", firma: null, orgnr: "974760673" }, /Firmanavn må fylles ut/);
+  await feil(
+    "bedrift med feil kontrollsiffer",
+    { type: "bedrift", firma: "Firma AS", orgnr: "974760674" },
+    /Organisasjonsnummeret er ikke gyldig/,
+  );
+  await feil(
+    "bedrift der kontrollsifferet ville blitt 10",
+    { type: "bedrift", firma: "Firma AS", orgnr: "900000090" },
+    /Organisasjonsnummeret er ikke gyldig/,
+  );
+  await feil("kommentar over 1000 tegn", { kommentar: "x".repeat(1001) }, /Kommentaren er for lang/);
+  await feil("ingen hentedag", { dato: null }, /hvilken dag/);
+  await feil("hentedag i går", { dato: await omDager(-1) }, /tilbake i tid/);
+  await feil("hentedag om 91 dager", { dato: await omDager(91) }, /høyst 90 dager/);
+  await feil("tom bestilling", { linjer: [] }, /Bestillingen er tom/);
+  await feil(
+    "over 100 linjer",
+    { linjer: Array.from({ length: 101 }, () => ({ pipe_type_id: ROR, quantity: 1 })) },
+    /For mange varelinjer/,
+  );
+  await feil(
+    "ukjent vare",
+    { linjer: [{ pipe_type_id: "99999999-9999-9999-9999-999999999999", quantity: 1 }] },
+    /Ukjent vare/,
+  );
+  await feil("en id som ikke er en uuid", { linjer: [{ pipe_type_id: "'; drop table x; --", quantity: 1 }] }, /Ukjent vare/);
+  await feil("mengde 0", { linjer: [{ pipe_type_id: ROR, quantity: 0 }] }, /Ugyldig mengde/);
+  await feil("negativ mengde", { linjer: [{ pipe_type_id: ROR, quantity: -5 }] }, /Ugyldig mengde/);
+  await feil("mengde som tekst", { linjer: [{ pipe_type_id: ROR, quantity: "mye" }] }, /Ugyldig mengde/);
+  await feil("urimelig stor mengde", { linjer: [{ pipe_type_id: ROR, quantity: 100001 }] }, /urimelig stor/);
+  await feil("utgått vare", { linjer: [{ pipe_type_id: UTGATT, quantity: 1 }] }, /ikke tilgjengelig/);
+  await feil("vare uten pris", { linjer: [{ pipe_type_id: UTAN_PRIS, quantity: 1 }] }, /kan ikke bestilles på nett/);
+});
+
+sjekk(
+  "ingen av de avviste bestillingene ligger igjen",
+  (await alle(`select id from public.pipe_orders where customer_email = 'feil@kunde.no'`)).length,
+  0,
+);
+
+await db.exec(`update public.pipe_settings set accept_orders = false where id = 1`);
+await somAnon(db, () =>
+  avvist("bryteren av: ingen bestillinger tas imot", SEND, privat({ epost: "av@kunde.no" }), /tar ikke imot bestillinger/),
+);
+await db.exec(`update public.pipe_settings set accept_orders = true where id = 1`);
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Kontoret godkjenner ──\n");
+
+const GODKJENN = `select public.pipe_approve_pickup_order($1, $2) as r`;
+const AVVIS = `select public.pipe_reject_pickup_order($1, $2) as r`;
+
+await somAnon(db, () => avvist("anon får ikke godkjenne", GODKJENN, [bestId, null], /permission denied/i));
+await somAnon(db, () => avvist("anon får ikke avvise", AVVIS, [bestId, "nei"], /permission denied/i));
+for (const [kven, bruker] of [
+  ["prosjektbrukeren", KARI],
+  ["den fremmede", FREMMED],
+]) {
+  await som(db, bruker, () => avvist(`${kven} får ikke godkjenne`, GODKJENN, [bestId, null], /Ingen tilgang/));
+  await som(db, bruker, () => avvist(`${kven} får ikke avvise`, AVVIS, [bestId, "nei"], /Ingen tilgang/));
+}
+sjekk("lageret er fortsatt urørt", [await lager(ROR), await lager(BEND)], lagerFoer);
+
+await som(db, LEIF, async () => {
+  const r = (await en(GODKJENN, [bestId, "  Ligger klart ved port 2  "])).r;
+  sjekk("godkjent: status «behandlet» og trekktidspunkt satt", [r.status, r.stock_drawn_at !== null], ["behandlet", true]);
+  sjekk("meldingen til kunden er lagret, uten mellomrom rundt", r.customer_message, "Ligger klart ved port 2");
+  sjekk("og hvem som godkjente", r.handled_by, LEIF.uid);
+});
+sjekk("lageret er trukket: 40 − 12,5 og 6 − 4", [await lager(ROR), await lager(BEND)], [lagerFoer[0] - 12.5, lagerFoer[1] - 4]);
+
+const glogg = await alle(
+  `select change, reason, note, created_by from public.pipe_stock_log where order_id = $1 order by change`,
+  [bestId],
+);
+sjekk(
+  "to logglinjer med grunnen «bestilling»",
+  glogg.map((l) => [tal(l.change), l.reason]),
+  [
+    [-12.5, "bestilling"],
+    [-4, "bestilling"],
+  ],
+);
+sjekk("notatet sier at den ble godkjent", glogg[0]?.note, `Bestilling #${bestNr} godkjent`);
+sjekk("og hvem som gjorde det", glogg[0]?.created_by, LEIF.uid);
+
+await som(db, LEIF, () => avvist("en godkjent bestilling kan ikke godkjennes igjen", GODKJENN, [bestId, null], /allerede behandlet/));
+sjekk("og lageret ble ikke trukket to ganger", await lager(ROR), lagerFoer[0] - 12.5);
+
+const uttak = (await en(`insert into public.pipe_orders (customer_name) values ('Uttakskunde') returning id`)).id;
+await som(db, LEIF, async () => {
+  await avvist("et uttak kan ikke godkjennes som en bestilling", GODKJENN, [uttak, null], /uttak, ikke en bestilling/);
+  await avvist("en ukjent bestilling gir beskjed", GODKJENN, ["88888888-8888-8888-8888-888888888888", null], /Fant ikke bestillingen/);
+  await avvist("en melding over 1000 tegn avvises", GODKJENN, [bestId, "x".repeat(1001)], /for lang/);
+  await avvist(
+    "en godkjent bestilling kan ikke settes tilbake til «ny» med en vanlig update",
+    `update public.pipe_orders set status = 'ny' where id = $1`,
+    [bestId],
+    /pipe_orders_bestilling_lager/,
+  );
+  await db.query(`update public.pipe_orders set status = 'levert' where id = $1`, [bestId]);
+  ok("men den kan markeres som hentet");
+  await db.query(`update public.pipe_orders set status = 'behandlet' where id = $1`, [bestId]);
+  ok("og settes tilbake til klar");
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Kontoret avviser ──\n");
+
+await som(db, LEIF, () => avvist("avvisning krever en begrunnelse", AVVIS, [bestId, "   "], /begrunnelse/));
+await som(db, LEIF, async () => {
+  const r = (await en(AVVIS, [bestId, "Røret er utgått hos leverandøren"])).r;
+  sjekk("avvist: status «avvist» og lageret ikke lenger trukket", [r.status, r.stock_drawn_at], ["avvist", null]);
+});
+sjekk("rørene er tilbake på lageret", [await lager(ROR), await lager(BEND)], lagerFoer);
+sjekk(
+  "tilbakeføringen er logget med grunnen «avvist»",
+  (await alle(`select change from public.pipe_stock_log where order_id = $1 and reason = 'avvist' order by change`, [bestId])).map(
+    (l) => tal(l.change),
+  ),
+  [4, 12.5],
+);
+await som(db, LEIF, async () => {
+  await avvist("en avvist bestilling kan ikke avvises igjen", AVVIS, [bestId, "igjen"], /kan ikke avvises nå/);
+  await avvist("og ikke godkjennes", GODKJENN, [bestId, null], /allerede behandlet/);
+});
+
+let venterId;
+await somAnon(db, async () => {
+  venterId = (await en(SEND, privat({ epost: "venter@kunde.no" }))).r.id;
+});
+const foerAvvis = [await lager(ROR), await lager(BEND)];
+await som(db, LEIF, () => db.query(AVVIS, [venterId, "Vi har ikke dette på lager"]));
+sjekk("avvisning av en ventende bestilling rører ikke lageret", [await lager(ROR), await lager(BEND)], foerAvvis);
+sjekk(
+  "og skriver ingen logg",
+  (await alle(`select id from public.pipe_stock_log where order_id = $1`, [venterId])).length,
+  0,
+);
+
+let fakturertId;
+await somAnon(db, async () => {
+  fakturertId = (await en(SEND, privat({ epost: "faktura@kunde.no" }))).r.id;
+});
+await som(db, LEIF, async () => {
+  await db.query(GODKJENN, [fakturertId, null]);
+  await db.query(`select public.pipe_create_invoice('Ola Privat', current_date, current_date, array[$1::uuid], 0)`, [
+    fakturertId,
+  ]);
+  await avvist("en fakturert bestilling kan ikke avvises", AVVIS, [fakturertId, "for sent"], /er fakturert/);
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Kunden slår opp sin egen bestilling ──\n");
+
+await db.query(`update public.pipe_orders set admin_note = 'Intern: treg å betale' where id = $1`, [venterId]);
+await somAnon(db, async () => {
+  const r = (await en(`select public.pipe_get_pickup_order($1) as r`, [venterId])).r;
+  sjekk(
+    "anon får bestillingen med id-en",
+    [r?.order_number > 0, r?.status, r?.customer_message],
+    [true, "avvist", "Vi har ikke dette på lager"],
+  );
+  sjekk("med linjene", r?.lines?.map((l) => l.name), ["Bestillingsrør 110", "Bestillingsbend"]);
+  for (const felt of ["admin_note", "handled_by", "signature", "invoice_id", "stock_drawn_at"]) {
+    sjekk(`men ikke ${felt}`, felt in (r ?? {}), false);
+  }
+  sjekk(
+    "ukjent id gir null",
+    (await en(`select public.pipe_get_pickup_order('77777777-7777-7777-7777-777777777777') as r`)).r,
+    null,
+  );
+  sjekk(
+    "id-en til et uttak gir null – uttak leses ikke denne veien",
+    (await en(`select public.pipe_get_pickup_order($1) as r`, [uttak])).r,
+    null,
+  );
+});
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── Takene ──\n");
+
+await somAnon(db, async () => {
+  for (let i = 0; i < 5; i++) await db.query(SEND, privat({ epost: "mange@kunde.no" }));
+  await avvist(
+    "den sjette bestillingen fra samme adresse samme døgn avvises",
+    SEND,
+    privat({ epost: "MANGE@kunde.no" }),
+    /mange bestillinger/,
+  );
+});
+
+const iTimen = tal(
+  (await en(`select count(*) as n from public.pipe_orders where kind = 'bestilling' and created_at > now() - interval '1 hour'`)).n,
+);
+await somAnon(db, async () => {
+  for (let i = iTimen; i < 30; i++) await db.query(SEND, privat({ epost: `kunde${i}@tak.no` }));
+  await avvist("den 31. bestillingen i timen avvises", SEND, privat({ epost: "nr31@tak.no" }), /veldig mange bestillinger/);
+});
+
+// Timetaket er brukt opp. Flytt bestillingane to timar bak, så resten av fila
+// kan sende nye – dei er framleis innanfor døgnet e-postane reknar med.
+await db.exec(
+  `update public.pipe_orders set created_at = created_at - interval '2 hours' where kind = 'bestilling' and created_at > now() - interval '1 hour'`,
+);
+
+// ════════════════════════════════════════════════════════════════════════════
 console.log(tilstand.feil === 0 ? `\nAlt i orden. Bestillingene holder.\n` : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);
