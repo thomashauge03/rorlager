@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, RefreshCw, Save, Users } from "lucide-react";
+import { Loader2, ExternalLink, RefreshCw, Save, Users } from "lucide-react";
 
 import {
   AlertDialog,
@@ -48,6 +48,9 @@ type Draft = {
   show_prices: boolean;
   require_phone: boolean;
   require_signature: boolean;
+  accept_orders: boolean;
+  order_email: string;
+  payment_terms_days: string;
 };
 
 const toDraft = (s: PipeSettingsRow): Draft => ({
@@ -66,6 +69,9 @@ const toDraft = (s: PipeSettingsRow): Draft => ({
   show_prices: s.show_prices !== false,
   require_phone: s.require_phone !== false,
   require_signature: s.require_signature === true,
+  accept_orders: s.accept_orders === true,
+  order_email: s.order_email ?? "",
+  payment_terms_days: String(s.payment_terms_days ?? 14),
 });
 
 /** Tomme tekstfelt skal bli null i basen, ikkje tomme strengar – då kan resten
@@ -209,6 +215,14 @@ export function SettingsTab() {
       if (markup === null || markup < 0 || markup > MAX_MARKUP) {
         throw new Error(`Påslaget må være et tall mellom 0 og ${MAX_MARKUP}.`);
       }
+      const frist = Number(draft.payment_terms_days.trim());
+      if (!Number.isInteger(frist) || frist < 0 || frist > 90) {
+        throw new Error("Betalingsfristen må være et helt antall dager mellom 0 og 90.");
+      }
+      const varsel = draft.order_email.trim();
+      if (varsel && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(varsel)) {
+        throw new Error("E-postadressen for varsler ser ikke riktig ut.");
+      }
 
       const patch: Partial<PipeSettingsRow> = {
         company_name: name,
@@ -225,6 +239,19 @@ export function SettingsTab() {
         require_signature: draft.require_signature,
         updated_at: new Date().toISOString(),
       };
+      // Bestillingsfelta blir berre sende når dei er endra. Er appen rulla ut før
+      // migrasjonen, finst ikkje kolonnene – og då skal resten av innstillingane
+      // framleis kunne lagrast.
+      const bestillingEndra =
+        !base ||
+        draft.accept_orders !== base.accept_orders ||
+        draft.order_email !== base.order_email ||
+        draft.payment_terms_days !== base.payment_terms_days;
+      if (bestillingEndra) {
+        patch.accept_orders = draft.accept_orders;
+        patch.order_email = orNull(draft.order_email);
+        patch.payment_terms_days = frist;
+      }
       await saveSettings(patch);
     },
     onSuccess: () => {
@@ -277,6 +304,16 @@ export function SettingsTab() {
       value: draft.require_signature,
     },
   ];
+
+  // Bryteren kan ikkje slåast på før seljaren finst – same regel som
+  // pipe_settings_accept_orders_check i basen.
+  const mangler = [
+    !draft.company_name.trim() && "firmanavn",
+    !draft.org_number.trim() && "organisasjonsnummer",
+    !draft.address.trim() && "adresse",
+    !draft.email.trim() && "e-post",
+  ].filter(Boolean) as string[];
+  const manglerTekst = mangler.join(", ").replace(/, ([^,]*)$/, " og $1");
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -626,6 +663,72 @@ export function SettingsTab() {
               <p className="mt-1 max-w-prose pr-12 text-xs text-muted-foreground">{t.hint}</p>
             </div>
           ))}
+        </CardContent>
+      </Card>
+
+      <Card className="hm-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Bestilling på nett</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Butikken på /bestill, der bedrifter og privatpersoner bestiller rør til henting. Hver bestilling må
+            godkjennes under Bestillinger før lageret trekkes.
+          </p>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-start justify-between gap-4 border-b border-border pb-4">
+            <div>
+              <Label htmlFor="inn-accept_orders" className="cursor-pointer text-sm font-semibold">
+                Ta imot bestillinger på nett
+              </Label>
+              <p className="mt-1 max-w-prose pr-12 text-xs text-muted-foreground">
+                {mangler.length && !draft.accept_orders
+                  ? `Fyll ut ${manglerTekst} under Firmaopplysninger først. Vilkårene og angreskjemaet kunden får, må si hvem som selger og hvor en angremelding skal sendes.`
+                  : "Av: /bestill sier «ring oss», og ingen bestilling tas imot. Les vilkårene før du slår på."}
+              </p>
+            </div>
+            <Switch
+              id="inn-accept_orders"
+              checked={draft.accept_orders}
+              disabled={!draft.accept_orders && mangler.length > 0}
+              onCheckedChange={(v) => set("accept_orders", v)}
+            />
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inn-ordre-epost">Varsel om nye bestillinger sendes til</Label>
+              <Input
+                id="inn-ordre-epost"
+                className="h-11"
+                type="email"
+                inputMode="email"
+                placeholder={draft.email || "kontor@firma.no"}
+                value={draft.order_email}
+                onChange={(e) => set("order_email", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Tom betyr firmaets e-post. Varselet går for hver bestilling, også dem som skal hentes en annen dag.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inn-frist">Betalingsfrist (dager)</Label>
+              <Input
+                id="inn-frist"
+                className="h-11 tabular"
+                inputMode="numeric"
+                value={draft.payment_terms_days}
+                onChange={(e) => set("payment_terms_days", e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Står i vilkårene, i kassen, på PDF-en og i e-postene.</p>
+            </div>
+          </div>
+
+          <Button asChild variant="outline" size="sm">
+            <Link to="/vilkar" target="_blank" rel="noopener noreferrer">
+              <ExternalLink className="mr-2 h-4 w-4" aria-hidden="true" />
+              Se vilkårene kunden møter
+            </Link>
+          </Button>
         </CardContent>
       </Card>
 
