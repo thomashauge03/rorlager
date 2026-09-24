@@ -36,14 +36,14 @@ const telLenke = (telefon: string) => `tel:${telefon.replace(/\s/g, "")}`;
  * bestiller.
  */
 function Pris({ price, unit, vat }: { price: number | null; unit: string; vat: number }) {
-  if (price === null) return <p className="text-sm font-medium text-muted-foreground">Ring oss for pris</p>;
+  if (price === null) return <span className="block text-sm font-medium text-muted-foreground">Ring oss for pris</span>;
   return (
-    <div className="text-right">
-      <p className="tabular text-base font-bold text-foreground">
+    <span className="block text-right">
+      <span className="tabular block text-base font-bold text-foreground">
         {kr(prisInklMva(price, vat))} kr/{unit}
-      </p>
-      <p className="tabular text-xs text-muted-foreground">{kr(price)} eks. mva</p>
-    </div>
+      </span>
+      <span className="tabular block text-xs text-muted-foreground">{kr(price)} eks. mva</span>
+    </span>
   );
 }
 
