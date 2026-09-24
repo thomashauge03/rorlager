@@ -172,6 +172,7 @@ export default function PickupCheckout() {
     vat,
   );
   const feilFor = (felt: keyof KasseSkjema) => (feil?.felt === felt ? feil.melding : undefined);
+  const feilId = (felt: keyof KasseSkjema) => (feilFor(felt) ? `kasse-${felt}-feil` : undefined);
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -348,6 +349,7 @@ export default function PickupCheckout() {
                   value={skjema.hentedag}
                   onChange={(e) => set("hentedag", e.target.value)}
                   aria-invalid={Boolean(feilFor("hentedag"))}
+                  aria-describedby={feilId("hentedag")}
                   className="h-12 text-base"
                 />
               </Felt>
@@ -385,6 +387,7 @@ export default function PickupCheckout() {
                     value={skjema.firma}
                     onChange={(e) => set("firma", e.target.value)}
                     aria-invalid={Boolean(feilFor("firma"))}
+                    aria-describedby={feilId("firma")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -402,6 +405,7 @@ export default function PickupCheckout() {
                     value={skjema.orgnr}
                     onChange={(e) => set("orgnr", e.target.value)}
                     aria-invalid={Boolean(feilFor("orgnr"))}
+                    aria-describedby={feilId("orgnr")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -412,6 +416,7 @@ export default function PickupCheckout() {
                     value={skjema.navn}
                     onChange={(e) => set("navn", e.target.value)}
                     aria-invalid={Boolean(feilFor("navn"))}
+                    aria-describedby={feilId("navn")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -425,6 +430,7 @@ export default function PickupCheckout() {
                     value={skjema.navn}
                     onChange={(e) => set("navn", e.target.value)}
                     aria-invalid={Boolean(feilFor("navn"))}
+                    aria-describedby={feilId("navn")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -435,6 +441,7 @@ export default function PickupCheckout() {
                     value={skjema.gate}
                     onChange={(e) => set("gate", e.target.value)}
                     aria-invalid={Boolean(feilFor("gate"))}
+                    aria-describedby={feilId("gate")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -448,6 +455,7 @@ export default function PickupCheckout() {
                       value={skjema.postnr}
                       onChange={(e) => set("postnr", e.target.value)}
                       aria-invalid={Boolean(feilFor("postnr"))}
+                      aria-describedby={feilId("postnr")}
                       className="h-12 text-base"
                     />
                   </Felt>
@@ -458,6 +466,7 @@ export default function PickupCheckout() {
                       value={skjema.sted}
                       onChange={(e) => set("sted", e.target.value)}
                       aria-invalid={Boolean(feilFor("sted"))}
+                      aria-describedby={feilId("sted")}
                       className="h-12 text-base"
                     />
                   </Felt>
@@ -476,6 +485,7 @@ export default function PickupCheckout() {
                     value={skjema.telefon}
                     onChange={(e) => set("telefon", e.target.value)}
                     aria-invalid={Boolean(feilFor("telefon"))}
+                    aria-describedby={feilId("telefon")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -494,6 +504,7 @@ export default function PickupCheckout() {
                     value={skjema.epost}
                     onChange={(e) => set("epost", e.target.value)}
                     aria-invalid={Boolean(feilFor("epost"))}
+                    aria-describedby={feilId("epost")}
                     className="h-12 text-base"
                   />
                 </Felt>
@@ -509,6 +520,8 @@ export default function PickupCheckout() {
                 rows={3}
                 value={skjema.kommentar}
                 onChange={(e) => set("kommentar", e.target.value)}
+                aria-invalid={Boolean(feilFor("kommentar"))}
+                aria-describedby={feilId("kommentar")}
                 className="text-base"
               />
             </Felt>
