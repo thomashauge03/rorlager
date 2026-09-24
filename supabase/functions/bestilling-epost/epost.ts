@@ -80,6 +80,15 @@ const fritekst = (v: unknown) => esc(v).replace(/\r?\n/g, "<br>");
 /** Emnefeltet kan ikkje ha linjeskift – det er vegen inn til eigne e-posthovud. */
 const einLinje = (s: string) => s.replace(/[\r\n]+/g, " ").replace(/\s+/g, " ").trim();
 
+/*
+ * Adressa kunden skreiv, er berre sjekka grovt i basen. Svar-til og mailto får
+ * henne berre når ho er ei vanleg, heil adresse: avviser Resend svar-til-feltet,
+ * går varselet til kontoret tapt – og kontoret skal alltid få beskjed.
+ */
+const VANLEG_EPOST =
+  /^[A-Za-z0-9._+-]+@[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*\.[A-Za-z]{2,}$/;
+const vanlegEpost = (s: string | null | undefined): string | null => (s && VANLEG_EPOST.test(s) ? s : null);
+
 const kr = (n: number) => Number(n).toLocaleString("nb-NO", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const tal = (n: number) => Number(n).toLocaleString("nb-NO", { maximumFractionDigits: 2 });
 
@@ -301,6 +310,7 @@ function kontor(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: stri
   const telefon = o.customer_phone
     ? `<a href="tel:${esc(o.customer_phone.replace(/\s/g, ""))}" style="color:#111827">${esc(o.customer_phone)}</a>`
     : "";
+  const svarTil = vanlegEpost(o.customer_email);
 
   const innhald = `
     <table role="presentation" cellpadding="0" cellspacing="0" style="margin-bottom:16px">
@@ -315,7 +325,7 @@ function kontor(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: stri
             rad("Kontaktperson", esc(o.customer_name))
       }
       ${rad("Telefon", telefon)}
-      ${rad("E-post", `<a href="mailto:${esc(o.customer_email)}" style="color:#111827">${esc(o.customer_email)}</a>`)}
+      ${rad("E-post", svarTil ? `<a href="mailto:${esc(svarTil)}" style="color:#111827">${esc(svarTil)}</a>` : esc(o.customer_email))}
     </table>
     ${varetabell(o, linjer, f, true)}
     ${o.comment ? `<div style="margin-top:16px">${boks("Kommentar fra kunden", fritekst(o.comment))}</div>` : ""}
@@ -350,7 +360,7 @@ function kontor(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: stri
       "",
       `Adminpanelet: ${url}`,
     ].join("\n"),
-    replyTo: o.customer_email,
+    replyTo: svarTil ?? undefined,
   };
 }
 
@@ -420,7 +430,9 @@ function avvist(o: Bestilling, f: Firma, til: string): Epost {
 
 /** Éi e-post av typen. Null når kravet manglar bestillinga eller firmaet. */
 export function byggEpost(type: EpostType, krav: Krav, appUrl: string, til: string): Epost | null {
-  const o = krav.order;
+  // Namnet går til ei adresse kven som helst kan ha skrive inn. Linjeskift i det
+  // ville blitt eigne linjer i tekstdelen av ei ekte e-post frå firmaet.
+  const o = krav.order ? { ...krav.order, customer_name: einLinje(krav.order.customer_name) } : undefined;
   const f = krav.company;
   if (!o || !f) return null;
   const app = appUrl.trim().replace(/\/+$/, "");

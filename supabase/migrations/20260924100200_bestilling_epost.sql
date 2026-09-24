@@ -71,6 +71,19 @@ begin
   perform pg_advisory_xact_lock(hashtext('pipe_email_claim'));
 
   foreach v_type in array v_due loop
+    /*
+     * EIN LÅS INGEN KJEM TIL Å SLEPPE.
+     *
+     * Ei rad utan sent_at som er eldre enn eit kvarter, høyrer til eit kall som
+     * aldri kom i mål: funksjonen døydde mellom kravet og sendinga, eller svaret
+     * på kravet kom aldri fram. Ingen kjem til å merkje eller sleppe henne, så ho
+     * blir fjerna her, og e-posten kan krevjast på nytt. Eit kvarter er langt
+     * over kor lenge ein kantfunksjon får leve.
+     */
+    delete from public.pipe_order_emails
+     where order_id = p_order_id and type = v_type
+       and sent_at is null and claimed_at < now() - interval '15 minutes';
+
     continue when exists (
       select 1 from public.pipe_order_emails where order_id = p_order_id and type = v_type
     );

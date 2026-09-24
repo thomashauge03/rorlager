@@ -755,6 +755,24 @@ await somTeneste(async () =>
 
 await somTeneste(async () => sjekk("et uttak gir aldri e-post herfra", typar((await en(KREV, [uttak])).r), []));
 
+// Ein lås ingen kjem til å sleppe: funksjonen døydde mellom kravet og sendinga.
+const hengId = await rawBestilling({ customer_email: "heng@kunde.no" });
+await somTeneste(async () => {
+  sjekk("kravet gir kvittering og varsel", typar((await en(KREV, [hengId])).r).length, 2);
+  sjekk("et krav som verken er sendt eller sluppet, holder e-posten", typar((await en(KREV, [hengId])).r), []);
+  await db.query(`select public.pipe_email_mark_sent($1, 'kvittering', 're_heng')`, [hengId]);
+});
+await db.query(`update public.pipe_order_emails set claimed_at = now() - interval '16 minutes' where order_id = $1`, [
+  hengId,
+]);
+await somTeneste(async () =>
+  sjekk(
+    "etter et kvarter kan en e-post som aldri ble sendt, kreves igjen – den sendte går ikke to ganger",
+    typar((await en(KREV, [hengId])).r),
+    [["kontor", "ordre@hauge.no"]],
+  ),
+);
+
 // Taket per mottakar: 10 i døgnet. Bestillingane blir lagde rett inn, forbi
 // taket på fem bestillingar per adresse, for å kome fram til dette.
 const taket = [];

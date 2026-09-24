@@ -22,7 +22,8 @@
  * fram òg når fana blir lukka.
  */
 
-import { byggEpost, type Krav } from "./epost.ts";
+import { type Krav } from "./epost.ts";
+import { sendKrav } from "./send.ts";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -66,46 +67,45 @@ Deno.serve(async (req: Request) => {
   const rpc = (namn: string, args: unknown) =>
     fetch(`${URL_}/rest/v1/rpc/${namn}`, { method: "POST", headers: hovud, body: JSON.stringify(args) });
 
-  const krav = await rpc("pipe_email_claim", { p_order_id: id });
-  if (!krav.ok) {
-    console.error("pipe_email_claim", krav.status, await krav.text().catch(() => ""));
+  let data: Krav;
+  try {
+    const krav = await rpc("pipe_email_claim", { p_order_id: id });
+    if (!krav.ok) {
+      console.error("pipe_email_claim", krav.status, await krav.text().catch(() => ""));
+      return svar({ feil: "Fikk ikke tak i bestillingen." }, 500);
+    }
+    data = (await krav.json()) as Krav;
+  } catch (err) {
+    console.error("pipe_email_claim", String(err));
     return svar({ feil: "Fikk ikke tak i bestillingen." }, 500);
   }
-  const data = (await krav.json()) as Krav;
-  const eposter = Array.isArray(data?.emails) ? data.emails : [];
 
-  const sendt: string[] = [];
-  const feilet: string[] = [];
-
-  for (const e of eposter) {
-    const melding = byggEpost(e.type, data, APP, e.to);
-    try {
-      if (!melding) throw new Error("mangler innhold");
+  const { sendt, feilet } = await sendKrav(data, APP, {
+    send: async (m) => {
       const ut = await fetch("https://api.resend.com/emails", {
         method: "POST",
         headers: { Authorization: `Bearer ${NOKKEL}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           from: FRA,
-          to: [melding.to],
-          subject: melding.subject,
-          html: melding.html,
-          text: melding.text,
-          ...(melding.replyTo ? { reply_to: melding.replyTo } : {}),
+          to: [m.to],
+          subject: m.subject,
+          html: m.html,
+          text: m.text,
+          ...(m.replyTo ? { reply_to: m.replyTo } : {}),
         }),
+        // Heng Resend, skal ikkje resten av kravet stå og vente til funksjonen
+        // blir drepen – då ville alt som er kravd, vore låst.
+        signal: AbortSignal.timeout(10_000),
       });
-      if (!ut.ok) throw new Error(`resend ${ut.status} ${await ut.text().catch(() => "")}`);
+      if (!ut.ok) return { ok: false, feil: `resend ${ut.status} ${await ut.text().catch(() => "")}` };
       const r = (await ut.json().catch(() => ({}))) as { id?: string };
-      await rpc("pipe_email_mark_sent", { p_order_id: id, p_type: e.type, p_provider_id: r.id ?? null });
-      sendt.push(e.type);
-    } catch (err) {
-      // Svaret frå Resend blir logga, men går ikkje ut: det seier mellom anna om
-      // domenet er verifisert, og funksjonen blir kalla frå ei heilt open side.
-      console.error("bestilling-epost", e.type, String(err));
-      // Angre-steget. Utan det ville e-posten vore låst ute for godt.
-      await rpc("pipe_email_release", { p_order_id: id, p_type: e.type });
-      feilet.push(e.type);
-    }
-  }
+      return { ok: true, id: r.id ?? null };
+    },
+    merk: async (type, providerId) =>
+      (await rpc("pipe_email_mark_sent", { p_order_id: id, p_type: type, p_provider_id: providerId })).ok,
+    slepp: async (type) => (await rpc("pipe_email_release", { p_order_id: id, p_type: type })).ok,
+    logg: (...deler) => console.error(...deler),
+  });
 
   return svar({ satt_opp: true, sendt, feilet });
 });

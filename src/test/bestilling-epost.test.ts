@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { byggEpost, esc, type Bestilling, type Krav } from "../../supabase/functions/bestilling-epost/epost.ts";
+import { sendKrav, type Utsending } from "../../supabase/functions/bestilling-epost/send.ts";
 
 const APP = "https://rorlager.no";
 const ID = "11111111-2222-3333-4444-555555555555";
@@ -155,5 +156,126 @@ describe("lenkjene", () => {
 
   it("gir null utan bestilling", () => {
     expect(byggEpost("kvittering", { emails: [] }, APP, "x@y.no")).toBeNull();
+  });
+});
+
+describe("fritekst frå kunden", () => {
+  it("namnet blir éi linje, også i tekstdelen", () => {
+    const e = byggEpost("kvittering", krav({ customer_name: "Ola\nKjøp billig på x.no" }), APP, "x@y.no")!;
+    expect(e.text).toContain("Hei Ola Kjøp billig på x.no.");
+    expect(e.text).not.toMatch(/Ola\r?\n/);
+  });
+
+  it("kommentaren står aldri i ei e-post til kunden", () => {
+    for (const type of ["kvittering", "klar", "avvist"] as const) {
+      const e = byggEpost(type, krav({ status: type === "avvist" ? "avvist" : "behandlet" }), APP, "x@y.no")!;
+      expect(e.html).not.toContain("Ring meg");
+      expect(e.text).not.toContain("Ring meg");
+    }
+  });
+
+  it("varselet til kontoret går fram sjølv om kunden skreiv adressa feil", () => {
+    const e = byggEpost("kontor", krav({ customer_email: "ola@privat.no." }), APP, "ordre@hauge.no")!;
+    expect(e.replyTo).toBeUndefined();
+    expect(e.html).not.toContain("mailto:");
+    expect(e.html).toContain("ola@privat.no.");
+  });
+});
+
+describe("sendinga", () => {
+  const TO: Krav["emails"] = [
+    { type: "kvittering", to: "ola@privat.no" },
+    { type: "kontor", to: "ordre@hauge.no" },
+  ];
+  const medEposter = (emails: Krav["emails"]): Krav => ({ ...krav(), emails });
+
+  function oppsett(over: Partial<Utsending> = {}) {
+    const merkt: string[] = [];
+    const sleppt: string[] = [];
+    const logg: string[] = [];
+    const u: Utsending = {
+      send: async () => ({ ok: true, id: "re_1" }),
+      merk: async (t) => {
+        merkt.push(t);
+        return true;
+      },
+      slepp: async (t) => {
+        sleppt.push(t);
+        return true;
+      },
+      logg: (...d) => {
+        logg.push(d.map(String).join(" "));
+      },
+      ...over,
+    };
+    return { u, merkt, sleppt, logg };
+  }
+
+  it("sender alle og merkjer kvar som sendt", async () => {
+    const { u, merkt, sleppt } = oppsett();
+    expect(await sendKrav(medEposter(TO), APP, u)).toEqual({ sendt: ["kvittering", "kontor"], feilet: [] });
+    expect(merkt).toEqual(["kvittering", "kontor"]);
+    expect(sleppt).toEqual([]);
+  });
+
+  it("ei som feilar, blir sleppt og stoppar ikkje den neste", async () => {
+    const { u, merkt, sleppt } = oppsett({
+      send: async (m) => (m.to === "ola@privat.no" ? { ok: false, feil: "resend 500" } : { ok: true, id: "re_2" }),
+    });
+    expect(await sendKrav(medEposter(TO), APP, u)).toEqual({ sendt: ["kontor"], feilet: ["kvittering"] });
+    expect(sleppt).toEqual(["kvittering"]);
+    expect(merkt).toEqual(["kontor"]);
+  });
+
+  it("eit kast i sendinga blir fanga", async () => {
+    let n = 0;
+    const { u, merkt, sleppt } = oppsett({
+      send: async () => {
+        if (n++ === 0) throw new Error("nettet er borte");
+        return { ok: true, id: "re_3" };
+      },
+    });
+    expect(await sendKrav(medEposter(TO), APP, u)).toEqual({ sendt: ["kontor"], feilet: ["kvittering"] });
+    expect(sleppt).toEqual(["kvittering"]);
+    expect(merkt).toEqual(["kontor"]);
+  });
+
+  it("går ikkje sleppinga, held løkka fram, og det blir logga", async () => {
+    const { u, logg } = oppsett({
+      send: async () => ({ ok: false, feil: "resend 500" }),
+      slepp: async () => {
+        throw new Error("basen svarar ikkje");
+      },
+    });
+    expect(await sendKrav(medEposter(TO), APP, u)).toEqual({ sendt: [], feilet: ["kvittering", "kontor"] });
+    expect(logg.filter((l) => l.includes("låsen")).length).toBe(2);
+  });
+
+  it("går e-posten, men ikkje merkinga, er ho sendt – og blir ikkje sleppt", async () => {
+    const { u, sleppt, logg } = oppsett({ merk: async () => false });
+    expect(await sendKrav(medEposter(TO), APP, u)).toEqual({ sendt: ["kvittering", "kontor"], feilet: [] });
+    expect(sleppt).toEqual([]);
+    expect(logg.filter((l) => l.includes("ikke merket")).length).toBe(2);
+  });
+
+  it("manglar kravet bestillinga, blir e-posten sleppt utan å sendast", async () => {
+    let sendte = 0;
+    const { u, sleppt } = oppsett({
+      send: async () => {
+        sendte++;
+        return { ok: true };
+      },
+    });
+    const r = await sendKrav({ emails: [{ type: "kvittering", to: "x@y.no" }] }, APP, u);
+    expect(r).toEqual({ sendt: [], feilet: ["kvittering"] });
+    expect(sendte).toBe(0);
+    expect(sleppt).toEqual(["kvittering"]);
+  });
+
+  it("svaret frå Resend går berre til loggen", async () => {
+    const { u, logg } = oppsett({ send: async () => ({ ok: false, feil: "resend 403 domain not verified" }) });
+    const r = await sendKrav(medEposter(TO), APP, u);
+    expect(JSON.stringify(r)).not.toContain("403");
+    expect(logg.some((l) => l.includes("403"))).toBe(true);
   });
 });
