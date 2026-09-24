@@ -11,6 +11,8 @@ export type {
   PipeInvoiceRow,
   PipeSettingsRow,
   PipePublicSettingsRow,
+  PipePublicOrderSettingsRow,
+  PipeOrderEmailRow,
   SystemUserRow,
   ProjectRow,
   ProjectMemberRow,
@@ -67,6 +69,36 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
   behandlet: "Behandlet",
   levert: "Levert",
   avvist: "Avvist",
+};
+
+export type OrderKind = "uttak" | "bestilling";
+export type CustomerType = "privat" | "bedrift";
+
+/** Same statusverdiar som uttaket, med namn som passar ei bestilling. */
+export const PICKUP_STATUS_LABEL: Record<OrderStatus, string> = {
+  ny: "Venter på godkjenning",
+  behandlet: "Klar til henting",
+  levert: "Hentet",
+  avvist: "Avvist",
+};
+
+export const statusLabel = (status: OrderStatus, kind?: OrderKind | null) =>
+  (kind === "bestilling" ? PICKUP_STATUS_LABEL : ORDER_STATUS_LABEL)[status] ?? status;
+
+/** Det kassen sender til pipe_submit_pickup_order. */
+export type PickupOrderInput = {
+  customer_type: CustomerType;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  company: string | null;
+  org_number: string | null;
+  billing_address: string | null;
+  pickup_now: boolean;
+  /** YYYY-MM-DD. Med «henter nå» set basen dagens dato uansett. */
+  pickup_date: string | null;
+  comment: string | null;
+  lines: { pipe_type_id: string; quantity: number }[];
 };
 
 /** Ei bestilling slik adminpanelet ser henne: hovudrada med linjene sine. */

@@ -51,6 +51,20 @@ export type PipeOrderRow = {
   handled_at: string | null;
   admin_note: string | null;
   invoice_id: string | null;
+  /**
+   * 'uttak' eller 'bestilling'. Valfrie felt fordi appen kan bli rulla ut før
+   * 20260924100000 er køyrd – då finst ikkje kolonnene, og alt er uttak.
+   */
+  kind?: "uttak" | "bestilling";
+  /** Når lageret blei trekt. Null for ei bestilling som ikkje er godkjend. */
+  stock_drawn_at?: string | null;
+  pickup_date?: string | null;
+  pickup_now?: boolean;
+  customer_type?: "privat" | "bedrift" | null;
+  org_number?: string | null;
+  billing_address?: string | null;
+  /** Kontorets melding til kunden. admin_note er intern og blir aldri vist. */
+  customer_message?: string | null;
 };
 
 export type PipeOrderLineRow = {
@@ -107,6 +121,12 @@ export type PipeSettingsRow = {
   vat_rate: number;
   /** Påslag i prosent frå cost_price til price. Brukt av prisjusteringa. */
   markup_percent: number;
+  /** Tek butikken på /bestill imot bestillingar */
+  accept_orders: boolean;
+  /** Varsel om nye bestillingar. Tom = firmaets e-post */
+  order_email: string | null;
+  /** Dagar frå faktura til forfall */
+  payment_terms_days: number;
   updated_at: string;
 };
 
@@ -235,7 +255,31 @@ export type ProjectReceiptLineRow = {
 export type PipeCatalogRow = Omit<PipeTypeRow, "cost_price">;
 
 /** Innstillingane kundeflyten treng. Utan markup_percent. */
-export type PipePublicSettingsRow = Omit<PipeSettingsRow, "markup_percent">;
+export type PipePublicSettingsRow = Omit<
+  PipeSettingsRow,
+  "markup_percent" | "accept_orders" | "order_email" | "payment_terms_days"
+>;
+
+/**
+ * Det bestillingsskjemaet treng å vite. Eiga visning og ikkje nye kolonner på
+ * pipe_public_settings – sjå 20260924100000_bestilling_grunnlag.sql.
+ */
+export type PipePublicOrderSettingsRow = {
+  id: number;
+  accept_orders: boolean;
+  payment_terms_days: number;
+};
+
+/** Éi rad per e-post om ei bestilling. Berre kontoret kan lese. */
+export type PipeOrderEmailRow = {
+  id: string;
+  order_id: string;
+  type: "kvittering" | "kontor" | "klar" | "avvist";
+  recipient: string;
+  claimed_at: string;
+  sent_at: string | null;
+  provider_id: string | null;
+};
 
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
@@ -268,10 +312,12 @@ export type Database = {
       project_receipts: Table<ProjectReceiptRow>;
       project_receipt_lines: Table<ProjectReceiptLineRow>;
       project_receipt_photos: Table<ProjectReceiptPhotoRow>;
+      pipe_order_emails: Table<PipeOrderEmailRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;
       pipe_public_settings: View<PipePublicSettingsRow>;
+      pipe_public_order_settings: View<PipePublicOrderSettingsRow>;
     };
     Functions: {
       pipe_submit_order: {
@@ -366,6 +412,25 @@ export type Database = {
         Returns: ProjectOrderRow;
       };
       project_recompute_status: { Args: { p_order_id: string }; Returns: string };
+      pipe_submit_pickup_order: {
+        Args: {
+          p_customer_type: string;
+          p_customer_name: string;
+          p_customer_email: string;
+          p_lines: Json;
+          p_customer_phone?: string | null;
+          p_company?: string | null;
+          p_org_number?: string | null;
+          p_billing_address?: string | null;
+          p_pickup_now?: boolean;
+          p_pickup_date?: string | null;
+          p_comment?: string | null;
+        };
+        Returns: Json;
+      };
+      pipe_get_pickup_order: { Args: { p_id: string }; Returns: Json };
+      pipe_approve_pickup_order: { Args: { p_id: string; p_message?: string | null }; Returns: Json };
+      pipe_reject_pickup_order: { Args: { p_id: string; p_message: string }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

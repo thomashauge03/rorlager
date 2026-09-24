@@ -4,7 +4,7 @@
 import { useQuery, type UseQueryResult } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { QK } from "@/lib/orders";
-import type { PipePublicSettingsRow, PipeSettingsRow } from "@/lib/types";
+import type { PipePublicOrderSettingsRow, PipePublicSettingsRow, PipeSettingsRow } from "@/lib/types";
 
 /** Same verdiar som kolonnedefaultane i databasen, slik at appen ser lik ut
  *  anten rada er lesen eller ikkje. */
@@ -22,12 +22,21 @@ export const DEFAULT_SETTINGS: PipeSettingsRow = {
   require_signature: false,
   vat_rate: 25,
   markup_percent: 25,
+  accept_orders: false,
+  order_email: null,
+  payment_terms_days: 14,
   updated_at: new Date(0).toISOString(),
 };
 
 // Plukkar påslaget ut av standardane framfor å skrive lista opp att – då kan
 // dei to ikkje kome i utakt når eit felt blir lagt til.
-const { markup_percent: _påslag, ...OFFENTLEGE_STANDARDAR } = DEFAULT_SETTINGS;
+const {
+  markup_percent: _påslag,
+  accept_orders: _open,
+  order_email: _varsel,
+  payment_terms_days: _frist,
+  ...OFFENTLEGE_STANDARDAR
+} = DEFAULT_SETTINGS;
 
 /** Standardane kundeflyten treng. Påslaget er ikkje mellom dei. */
 export const DEFAULT_PUBLIC_SETTINGS: PipePublicSettingsRow = OFFENTLEGE_STANDARDAR;
@@ -73,7 +82,18 @@ export async function saveSettings(patch: Partial<PipeSettingsRow>): Promise<voi
   const { error } = await supabase
     .from("pipe_settings")
     .upsert({ ...patch, id: 1 } as PipeSettingsRow, { onConflict: "id" });
-  if (error) throw new Error(`Klarte ikke å lagre innstillingene: ${error.message}`);
+  if (!error) return;
+  // Reglane i basen har engelske meldingar. Kontoret skal få vite kva som manglar.
+  if (/pipe_settings_accept_orders_check/.test(error.message)) {
+    throw new Error("Fyll ut firmanavn, organisasjonsnummer, adresse og e-post før bestilling på nett slås på.");
+  }
+  if (/pipe_settings_payment_terms_check/.test(error.message)) {
+    throw new Error("Betalingsfristen må være mellom 0 og 90 dager.");
+  }
+  if (/accept_orders|order_email|payment_terms_days/.test(error.message)) {
+    throw new Error("Databasen mangler oppdateringen for bestilling. Kjør supabase-setup.sql på nytt.");
+  }
+  throw new Error(`Klarte ikke å lagre innstillingene: ${error.message}`);
 }
 
 /**
@@ -100,5 +120,36 @@ export function useOfficeSettings(): UseQueryResult<PipeSettingsRow> {
     queryFn: fetchOfficeSettings,
     staleTime: 5 * 60 * 1000,
     placeholderData: DEFAULT_SETTINGS,
+  });
+}
+
+/** Butikken er stengd til nokon har slått henne på. */
+export const DEFAULT_ORDER_SETTINGS: PipePublicOrderSettingsRow = {
+  id: 1,
+  accept_orders: false,
+  payment_terms_days: 14,
+};
+
+/**
+ * Kastar aldri. Manglar visninga – migrasjonen er ikkje køyrd enno – er svaret
+ * «stengd». Då viser /bestill «ring oss» i staden for eit skjema som ville
+ * feila ved innsending.
+ */
+export async function fetchOrderSettings(): Promise<PipePublicOrderSettingsRow> {
+  try {
+    const { data, error } = await supabase.from("pipe_public_order_settings").select("*").eq("id", 1).maybeSingle();
+    if (error || !data) return DEFAULT_ORDER_SETTINGS;
+    return { ...DEFAULT_ORDER_SETTINGS, ...(data as PipePublicOrderSettingsRow) };
+  } catch {
+    return DEFAULT_ORDER_SETTINGS;
+  }
+}
+
+export function useOrderSettings(): UseQueryResult<PipePublicOrderSettingsRow> {
+  return useQuery({
+    queryKey: QK.orderSettings,
+    queryFn: fetchOrderSettings,
+    staleTime: 60 * 1000,
+    placeholderData: DEFAULT_ORDER_SETTINGS,
   });
 }

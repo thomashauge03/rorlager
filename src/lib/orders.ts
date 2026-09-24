@@ -47,6 +47,14 @@ export const QK = {
   projects: ["projects"],
   projectOrders: ["project_orders"],
   projectReceipts: ["project_receipts"],
+  /** Om butikken er open, og betalingsfristen. Under settings-prefikset. */
+  orderSettings: ["pipe_settings", "bestilling"],
+  /** Bestillingar som ventar på godkjenning. Under orders-prefikset, så ei
+   *  vanleg invalidering av bestillingane treffer stripa og talet på fana òg. */
+  waitingPickups: ["pipe_orders", "venter"],
+  /** Éi bestilling slik kunden ser henne. */
+  pickupOrder: (id: string) => ["pipe_orders", "bestilling", id],
+  orderEmails: (id: string) => ["pipe_order_emails", id],
 } as const;
 
 /** Postgres-feil er engelske og kryptiske. Vi set på norsk kontekst så brukaren
@@ -220,7 +228,7 @@ const endOfDayIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString
 function orderHaystack(order: PipeOrderRow): string {
   const phone = (order.customer_phone ?? "").replace(/\D/g, "");
   return searchKey(
-    [order.customer_name, order.company, order.project, order.customer_phone, phone, `#${order.order_number}`, order.order_number]
+    [order.customer_name, order.company, order.project, order.customer_phone, phone, order.org_number, `#${order.order_number}`, order.order_number]
       .filter(Boolean)
       .join(" "),
   );
