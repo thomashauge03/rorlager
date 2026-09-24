@@ -57,6 +57,19 @@ begin
     v_due := v_due || 'avvist'::text;
   end if;
 
+  /*
+   * LÅSEN MOT KAPPLØP MELLOM ULIKE BESTILLINGAR.
+   *
+   * Begge taka i løkka under er ei teljing følgt av ein insert, utan noko som
+   * bind dei saman. Rad-låsen øvst («for update») gjeld berre DENNE eine
+   * bestillinga – to samtidige kall for to ULIKE bestillingar kan begge telje
+   * under grensa før nokon av dei har sett inn rada si, og begge sleppe
+   * gjennom. Denne låsen gjer kalla serielle på tvers av bestillingar òg, og
+   * transaksjonsomfanget (xact) sleppar han automatisk når funksjonen er
+   * ferdig, anten ho lykkast eller feilar.
+   */
+  perform pg_advisory_xact_lock(hashtext('pipe_email_claim'));
+
   foreach v_type in array v_due loop
     continue when exists (
       select 1 from public.pipe_order_emails where order_id = p_order_id and type = v_type

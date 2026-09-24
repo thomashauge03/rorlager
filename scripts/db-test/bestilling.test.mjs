@@ -783,6 +783,20 @@ await somTeneste(async () =>
   sjekk("når 90 e-poster er brukt i døgnet, sendes ingenting mer", typar((await en(KREV, [siste])).r), []),
 );
 
+/*
+ * Same avgrensing som for innsendinga i «Takene»: PGlite køyrer «strictly in a
+ * single-process mode», så eit ekte kappløp mellom to ULIKE bestillingar kan
+ * ikkje setjast opp her heller. Det testbare er at låsen som gjer taka
+ * eksakte på tvers av bestillingar, faktisk står i funksjonskroppen.
+ */
+sjekk(
+  "kravet på e-post låser mot kappløp mellom bestillinger før det teller opp taka, så det ikke kan fjernes stille",
+  (
+    await en(`select prosrc like '%pg_advisory_xact_lock%' as har from pg_proc where proname = 'pipe_email_claim'`)
+  ).har,
+  true,
+);
+
 // ════════════════════════════════════════════════════════════════════════════
 console.log(tilstand.feil === 0 ? `\nAlt i orden. Bestillingene holder.\n` : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);
