@@ -28,6 +28,8 @@ export type InvoiceOrder = {
 export type InvoiceDoc = {
   invoice_number: number | string;
   customer_name: string;
+  /** Org.nr. eller fakturaadresse frå bestillingane, éi linje kvar under kunden */
+  customer_details?: string[];
   period_from: string;
   period_to: string;
   total: number;
@@ -115,7 +117,7 @@ export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9.5);
     setText(doc, GREY);
-    doc.text(label, MARGIN, y);
+    if (label) doc.text(label, MARGIN, y);
     doc.setFont("helvetica", "bold");
     setText(doc, BLACK);
     doc.text(value, MARGIN + 40, y);
@@ -123,6 +125,11 @@ export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
   };
 
   row("Kunde", inv.customer_name);
+  // Rader utan merke rett under namnet. Ei lang adresse brekk over fleire linjer
+  // i staden for å gå ut over kanten.
+  (inv.customer_details ?? []).forEach((d) =>
+    (doc.splitTextToSize(d, contentW - 40) as string[]).forEach((linje) => row("", linje)),
+  );
   row("Periode", `${longDate(inv.period_from)} – ${longDate(inv.period_to)}`);
   row("Antall uttak", String(orders.length));
   y += 6;

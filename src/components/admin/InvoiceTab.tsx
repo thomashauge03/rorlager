@@ -33,16 +33,13 @@ import {
 } from "@/components/ui/alert-dialog";
 
 import { useToast } from "@/hooks/use-toast";
+import { fakturadetaljar, fakturakunde } from "@/lib/fakturakunde";
 import { isoDate, kr, krShort, num, pipeLabel, shortDate } from "@/lib/format";
 import { QK, createInvoice, deleteInvoice, fetchInvoices, fetchOrders } from "@/lib/orders";
 import { buildInvoicePDF, downloadInvoicePDF, type InvoiceDoc } from "@/lib/invoice-pdf";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { useSettings } from "@/lib/settings";
 import type { OrderWithLines, PipeInvoiceRow, PipePublicSettingsRow } from "@/lib/types";
-
-/** Same kunde kan vere skriven "Ola  Nordmann" og "ola nordmann". Vi grupperer
- *  på ein normalisert nøkkel, men viser namnet slik det sist blei skrive. */
-const nameKey = (n: string | null | undefined) => (n ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
 /** Bestillingar er tidsstempla, men perioden er datoar – lokal dato, ikkje UTC. */
 const orderDay = (o: OrderWithLines) => isoDate(new Date(o.created_at));
@@ -77,6 +74,8 @@ const toPdfOrders = (orders: OrderWithLines[]) =>
 type CustomerGroup = {
   key: string;
   name: string;
+  /** Org.nr. eller fakturaadresse, så to kundar med same namn kan skiljast */
+  detaljar: string[];
   orders: number;
   from: string;
   to: string;
@@ -121,13 +120,14 @@ export function InvoiceTab() {
   const customers = useMemo<CustomerGroup[]>(() => {
     const seen = new Map<string, CustomerGroup>();
     orders.forEach((o) => {
-      const key = nameKey(o.customer_name);
+      const kunde = fakturakunde(o);
+      const key = kunde.key;
       if (!key) return;
       const day = orderDay(o);
       const prev = seen.get(key);
       const sum = (o.lines ?? []).reduce((acc, l) => acc + (l.line_total ?? 0), 0);
       if (!prev) {
-        seen.set(key, { key, name: o.customer_name, orders: 1, from: day, to: day, total: sum });
+        seen.set(key, { key, name: kunde.namn, detaljar: kunde.detaljar, orders: 1, from: day, to: day, total: sum });
         return;
       }
       prev.orders += 1;
@@ -160,7 +160,7 @@ export function InvoiceTab() {
   const candidates = useMemo(() => {
     if (!customerKey) return [];
     return orders
-      .filter((o) => nameKey(o.customer_name) === customerKey)
+      .filter((o) => fakturakunde(o).key === customerKey)
       .filter((o) => {
         const day = orderDay(o);
         return (!from || day >= from) && (!to || day <= to);
@@ -198,6 +198,7 @@ export function InvoiceTab() {
   const draftDoc = (): InvoiceDoc => ({
     invoice_number: "utkast",
     customer_name: customerName,
+    customer_details: fakturadetaljar(selected),
     period_from: from,
     period_to: to,
     total: summary.total,
@@ -248,6 +249,7 @@ export function InvoiceTab() {
       const doc: InvoiceDoc = {
         invoice_number: inv.invoice_number,
         customer_name: inv.customer_name,
+        customer_details: fakturadetaljar(selected),
         period_from: inv.period_from,
         period_to: inv.period_to,
         total: Number(inv.total ?? summary.total),
@@ -298,6 +300,7 @@ export function InvoiceTab() {
         {
           invoice_number: inv.invoice_number,
           customer_name: inv.customer_name,
+          customer_details: fakturadetaljar(rows),
           period_from: inv.period_from,
           period_to: inv.period_to,
           total: Number(inv.total ?? 0),
@@ -418,13 +421,18 @@ export function InvoiceTab() {
                       onClick={() => chooseCustomer(c)}
                       className="flex w-full items-center gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50"
                     >
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-foreground">{c.name}</p>
-                        <p className="text-xs text-muted-foreground tabular">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-semibold text-foreground">{c.name}</span>
+                        {c.detaljar.map((d) => (
+                          <span key={d} className="block truncate text-xs text-muted-foreground">
+                            {d}
+                          </span>
+                        ))}
+                        <span className="block text-xs text-muted-foreground tabular">
                           {c.orders} {c.orders === 1 ? "bestilling" : "bestillinger"} ·{" "}
                           {shortDate(c.from)}–{shortDate(c.to)}
-                        </p>
-                      </div>
+                        </span>
+                      </span>
                       <span className="shrink-0 text-sm font-semibold text-foreground tabular">
                         {krShort(c.total)} kr
                       </span>
