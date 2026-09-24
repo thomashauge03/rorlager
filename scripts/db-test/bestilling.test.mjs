@@ -303,6 +303,24 @@ await som(db, LEIF, async () => {
 });
 sjekk("sletting av en godkjent bestilling legger rørene tilbake", await lager(ROR), foerSletting + 7);
 
+/*
+ * Same avgrensing som for låsane i «Takene» og «E-postlåsen»: PGlite køyrer
+ * «strictly in a single-process mode», så ei sletting eller ein faktura som
+ * kappløper med ei godkjenning eller avvising, kan ikkje setjast opp her. Det
+ * testbare er at radlåsen står i funksjonskroppen, så han ikkje kan fjernast
+ * stille.
+ */
+sjekk(
+  "slettingen låser bestillingen før den ser om lageret er trukket",
+  (await en(`select prosrc like '%for update%' as har from pg_proc where proname = 'pipe_delete_order'`)).har,
+  true,
+);
+sjekk(
+  "fakturaen låser bestillingene før den sjekker dem",
+  (await en(`select prosrc like '%for update%' as har from pg_proc where proname = 'pipe_create_invoice'`)).har,
+  true,
+);
+
 // ════════════════════════════════════════════════════════════════════════════
 console.log("\n── Kunden sender inn en bestilling ──\n");
 

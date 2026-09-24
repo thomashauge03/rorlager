@@ -187,8 +187,12 @@ begin
     raise exception 'Ingen tilgang til admindelen' using errcode = '42501';
   end if;
 
+  -- Låsen: ei godkjenning eller avvising av same bestilling ventar til slettinga
+  -- er ferdig, og omvendt – elles kunne lageret bli lagt tilbake to gonger, eller
+  -- aldri.
   select order_number, stock_drawn_at into v_number, v_drawn
-    from public.pipe_orders where id = p_order_id;
+    from public.pipe_orders where id = p_order_id
+     for update;
   if not found then
     raise exception 'Fant ikke bestillingen';
   end if;
@@ -220,7 +224,7 @@ grant execute on function public.pipe_delete_order(uuid) to authenticated;
 -- ── 5. Fakturagrunnlaget tek berre det som har forlate lageret ──
 --
 -- Ei bestilling som ventar, eller som er avvist, har ingen rør på seg å
--- fakturere. Resten av kroppen er som i 20260903093000.
+-- fakturere. Resten av kroppen er som i 20260903093000, pluss radlåsen.
 
 create or replace function public.pipe_create_invoice(
   p_customer_name text,
@@ -251,6 +255,12 @@ begin
   if p_period_from is null or p_period_to is null then
     raise exception 'Både fra- og til-dato må fylles ut';
   end if;
+
+  -- Låsen: ei avvising av ei av bestillingane ventar til fakturaen er laga, og
+  -- omvendt. Utan han kunne ei bestilling bli avvist mellom sjekkane under og
+  -- oppdateringa nedst, og få faktura likevel. Sortert, så to fakturaer som
+  -- deler bestillingar, ikkje kan låse kvarandre fast.
+  perform 1 from public.pipe_orders where id = any(p_order_ids) order by id for update;
 
   select count(*) into v_finnes from public.pipe_orders where id = any(p_order_ids);
   if v_finnes <> array_length(p_order_ids, 1) then
