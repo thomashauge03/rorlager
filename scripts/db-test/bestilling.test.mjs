@@ -659,5 +659,130 @@ await db.exec(
 );
 
 // ════════════════════════════════════════════════════════════════════════════
+console.log("\n── E-postlåsen ──\n");
+// Funksjonen bestilling-epost kan kallast av kven som helst. Difor bestemmer
+// basen kva som skal sendast, og kvar e-post kan gå éin gong per bestilling.
+
+// Supabase gir service_role bruk av public. Testbasen gjer det ikkje av seg sjølv.
+await db.exec(`grant usage on schema public to service_role`);
+const somTeneste = async (fn) => {
+  await db.exec("set role service_role");
+  try {
+    return await fn();
+  } finally {
+    await db.exec("reset role");
+  }
+};
+const KREV = `select public.pipe_email_claim($1) as r`;
+const typar = (r) => (r?.emails ?? []).map((e) => [e.type, e.to]);
+
+for (const [namn, sql] of [
+  ["pipe_email_claim", KREV],
+  ["pipe_email_mark_sent", `select public.pipe_email_mark_sent($1, 'kvittering', null)`],
+  ["pipe_email_release", `select public.pipe_email_release($1, 'kvittering')`],
+]) {
+  await somAnon(db, () => avvist(`anon: ${namn} — ingen kjørerett`, sql, [bestId], /permission denied/i));
+  await som(db, LEIF, () => avvist(`kontoret: ${namn} — ingen kjørerett`, sql, [bestId], /permission denied/i));
+}
+
+let epostId;
+await somAnon(db, async () => {
+  epostId = (await en(SEND, privat({ epost: "epost@kunde.no" }))).r.id;
+});
+await db.exec(`update public.pipe_settings set order_email = 'Ordre@Hauge.no' where id = 1`);
+
+await somTeneste(async () => {
+  const r = (await en(KREV, [epostId])).r;
+  sjekk("en ny bestilling gir kvittering til kunden og varsel til kontoret", typar(r), [
+    ["kvittering", "epost@kunde.no"],
+    ["kontor", "ordre@hauge.no"],
+  ]);
+  sjekk("med bestillingen, linjene og firmaet", [r.order?.order_number > 0, r.lines?.length, r.company?.name], [
+    true,
+    2,
+    "Hauge Maskin AS",
+  ]);
+  sjekk("linjene har beholdningen, til kontorets e-post", typeof tal(r.lines?.[0]?.stock), "number");
+  sjekk("et nytt kall gir ingenting – hver e-post går én gang", typar((await en(KREV, [epostId])).r), []);
+
+  await db.query(`select public.pipe_email_release($1, 'kontor')`, [epostId]);
+  sjekk("feilet sendingen, kan den kreves på nytt", typar((await en(KREV, [epostId])).r), [["kontor", "ordre@hauge.no"]]);
+
+  await db.query(`select public.pipe_email_mark_sent($1, 'kvittering', 're_123')`, [epostId]);
+  await db.query(`select public.pipe_email_release($1, 'kvittering')`, [epostId]);
+  sjekk("en sendt e-post kan ikke frigjøres og sendes igjen", typar((await en(KREV, [epostId])).r), []);
+});
+const logg1 = await en(
+  `select sent_at is not null as sendt, provider_id from public.pipe_order_emails where order_id = $1 and type = 'kvittering'`,
+  [epostId],
+);
+sjekk("markert som sendt, med id-en fra Resend", [logg1.sendt, logg1.provider_id], [true, "re_123"]);
+
+await somAnon(db, async () => {
+  const r = (await en(`select public.pipe_get_pickup_order($1) as r`, [epostId])).r;
+  sjekk("kunden ser når kvitteringen ble sendt", typeof r.emails?.kvittering, "string");
+  sjekk("men ikke kontorets varsel", "kontor" in (r.emails ?? {}), false);
+});
+
+await somTeneste(async () =>
+  sjekk("«klar» kommer ikke før bestillingen er godkjent", typar((await en(KREV, [epostId])).r), []),
+);
+await som(db, LEIF, () => db.query(GODKJENN, [epostId, null]));
+await somTeneste(async () =>
+  sjekk("etter godkjenning: «klar» til kunden", typar((await en(KREV, [epostId])).r), [["klar", "epost@kunde.no"]]),
+);
+await som(db, LEIF, () => db.query(AVVIS, [epostId, "Beklager"]));
+await somTeneste(async () =>
+  sjekk("etter avvisning: «avvist» til kunden", typar((await en(KREV, [epostId])).r), [["avvist", "epost@kunde.no"]]),
+);
+
+let gamalId;
+await somAnon(db, async () => {
+  gamalId = (await en(SEND, privat({ epost: "gammel@kunde.no" }))).r.id;
+});
+await db.query(`update public.pipe_orders set created_at = now() - interval '2 days' where id = $1`, [gamalId]);
+await somTeneste(async () =>
+  sjekk("en to døgn gammel bestilling gir ingen e-post", typar((await en(KREV, [gamalId])).r), []),
+);
+await som(db, LEIF, () => db.query(GODKJENN, [gamalId, null]));
+await somTeneste(async () =>
+  sjekk(
+    "men godkjenner kontoret den i dag, får kunden «klar»",
+    typar((await en(KREV, [gamalId])).r).map(([t]) => t),
+    ["klar"],
+  ),
+);
+
+await somTeneste(async () => sjekk("et uttak gir aldri e-post herfra", typar((await en(KREV, [uttak])).r), []));
+
+// Taket per mottakar: 10 i døgnet. Bestillingane blir lagde rett inn, forbi
+// taket på fem bestillingar per adresse, for å kome fram til dette.
+const taket = [];
+for (let i = 0; i < 11; i++) taket.push(await rawBestilling({ customer_email: "tak@kunde.no" }));
+await somTeneste(async () => {
+  const kvitteringar = [];
+  for (const id of taket) {
+    kvitteringar.push(typar((await en(KREV, [id])).r).filter(([t]) => t === "kvittering").length);
+  }
+  sjekk("høyst 10 kvitteringer til samme adresse per døgn", kvitteringar, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]);
+});
+
+// Døgntaket: 90 e-postar totalt. Fyll opp med kontorvarsel, som ikkje tel per
+// mottakar, og sjå at ein ny bestilling ikkje får noko.
+const brukt = tal(
+  (await en(`select count(*) as n from public.pipe_order_emails where claimed_at > now() - interval '24 hours'`)).n,
+);
+for (let i = brukt; i < 90; i++) {
+  const id = await rawBestilling({ customer_email: `fyll${i}@x.no` });
+  await db.query(`insert into public.pipe_order_emails (order_id, type, recipient) values ($1, 'kontor', 'ordre@hauge.no')`, [
+    id,
+  ]);
+}
+const siste = await rawBestilling({ customer_email: "siste@kunde.no" });
+await somTeneste(async () =>
+  sjekk("når 90 e-poster er brukt i døgnet, sendes ingenting mer", typar((await en(KREV, [siste])).r), []),
+);
+
+// ════════════════════════════════════════════════════════════════════════════
 console.log(tilstand.feil === 0 ? `\nAlt i orden. Bestillingene holder.\n` : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);

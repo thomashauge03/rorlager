@@ -110,6 +110,13 @@ await db.exec(`
   values
     ((select id from public.pipe_categories where name = 'Egne varer'),
      'Spesialbend fra verkstedet', '110 mm', 'EGEN-001', 'spesialbend-verkstedet-110', 'stk', 100, 140, 7, 0, 1);
+
+  update public.pipe_settings
+     set company_name = 'Hauge Maskin AS', org_number = '974760673',
+         address = 'Industrivegen 1', email = 'post@hauge.no', accept_orders = true
+   where id = 1;
+  insert into public.pipe_orders (kind, customer_name, customer_type, customer_email, pickup_date, stock_drawn_at, status)
+    values ('bestilling', 'Ventende Kunde', 'privat', 'venter@kunde.no', current_date + 3, null, 'ny');
 `);
 
 const før = await en(TILSTAND);
@@ -129,6 +136,14 @@ sjekk("påslaget kontoret satte står", Number(etter.pasl), Number(før.pasl));
 sjekk("kontorets egen vare er der", etter.eiga, 1);
 sjekk("ingen varer forsvant", etter.varer, før.varer);
 sjekk("ingen varegrupper forsvant", etter.grupper, før.grupper);
+
+const best = await en(`select status, stock_drawn_at from public.pipe_orders where customer_name = 'Ventende Kunde'`);
+sjekk("en ventende bestilling venter fortsatt – tilbakefyllingen rørte den ikke", [best.status, best.stock_drawn_at], ["ny", null]);
+sjekk(
+  "bestilling på nett står fortsatt på",
+  (await en(`select accept_orders from public.pipe_settings where id = 1`)).accept_orders,
+  true,
+);
 
 /*
  * Og det som gjorde tapet stille: bestillingslinjer og lagerlogg peikar på

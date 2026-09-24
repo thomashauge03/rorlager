@@ -45,7 +45,7 @@ console.log(`\nSjekker ${url}\n`);
 // utan cost_price, og tabellen bak er stengd for anonyme.
 
 console.log("Åpent for kunden, som det skal:");
-for (const tabell of ["pipe_categories", "pipe_catalog", "pipe_public_settings"]) {
+for (const tabell of ["pipe_categories", "pipe_catalog", "pipe_public_settings", "pipe_public_order_settings"]) {
   const { error, count } = await supabase.from(tabell).select("*", { count: "exact", head: true });
   if (error) nei(`${tabell} (skal være lesbar for alle)`, error.message);
   else ok(`${tabell} — ${count} rader`);
@@ -76,6 +76,7 @@ const utanKolonne = async (visning, kolonne) => {
 
 await utanKolonne("pipe_catalog", "cost_price");
 await utanKolonne("pipe_public_settings", "markup_percent");
+await utanKolonne("pipe_public_order_settings", "order_email");
 
 /*
  * Den eine spørjinga i kundeflyten ingen annan test dekkjer.
@@ -106,6 +107,7 @@ const stengde = [
   ["pipe_order_lines", null],
   ["pipe_invoices", null],
   ["pipe_stock_log", null],
+  ["pipe_order_emails", "hvem som har fått e-post, og adressene"],
   ["projects", null],
   ["project_members", null],
   ["project_orders", null],
@@ -151,7 +153,7 @@ for (const [tabell, hvorfor] of stengde) {
 // hull som kommer tilbake.
 
 console.log("\nLesbart for kunden, men ikke skrivbart:");
-for (const tabell of ["pipe_categories", "pipe_catalog", "pipe_public_settings"]) {
+for (const tabell of ["pipe_categories", "pipe_catalog", "pipe_public_settings", "pipe_public_order_settings"]) {
   const { error, status } = await supabase.from(tabell).delete().neq("id", "00000000-0000-0000-0000-000000000000");
   // 204 uten feil betyr at rettigheten er der og bare RLS stanset radene.
   // Rettigheten skal ikke være der i det hele tatt.
@@ -198,6 +200,36 @@ await stengtForAnon("project_submit_receipt", {
   p_received_by_name: "test",
   p_lines: [],
 });
+
+// ── Bestillingane ──
+//
+// Innsendinga og oppslaget er opne for kunden. Godkjenning, avvisning og
+// e-postlåsen er det ikkje – dei tre siste berre for tenestenøkkelen.
+
+console.log("\nBestilling for henting:");
+{
+  const { error } = await supabase.rpc("pipe_submit_pickup_order", {
+    p_customer_type: "",
+    p_customer_name: "",
+    p_customer_email: "",
+    p_lines: [],
+  });
+  if (error && /tar ikke imot|privatperson eller bedrift/i.test(error.message)) ok("pipe_submit_pickup_order — svarer og validerer");
+  else if (error) nei("pipe_submit_pickup_order", error.message);
+  else nei("pipe_submit_pickup_order", "godtok en tom bestilling");
+}
+{
+  const { data, error } = await supabase.rpc("pipe_get_pickup_order", { p_id: "00000000-0000-0000-0000-000000000000" });
+  if (error) nei("pipe_get_pickup_order", error.message);
+  else if (data !== null) nei("pipe_get_pickup_order", "svarte med noe for en id som ikke finnes");
+  else ok("pipe_get_pickup_order — svarer null på en ukjent id");
+}
+const INGEN = "00000000-0000-0000-0000-000000000000";
+await stengtForAnon("pipe_approve_pickup_order", { p_id: INGEN, p_message: null });
+await stengtForAnon("pipe_reject_pickup_order", { p_id: INGEN, p_message: "x" });
+await stengtForAnon("pipe_email_claim", { p_order_id: INGEN });
+await stengtForAnon("pipe_email_mark_sent", { p_order_id: INGEN, p_type: "kvittering", p_provider_id: null });
+await stengtForAnon("pipe_email_release", { p_order_id: INGEN, p_type: "kvittering" });
 
 console.log(
   problemer === 0
