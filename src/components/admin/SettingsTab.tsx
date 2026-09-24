@@ -681,9 +681,9 @@ export function SettingsTab() {
                 Ta imot bestillinger på nett
               </Label>
               <p className="mt-1 max-w-prose pr-12 text-xs text-muted-foreground">
-                {mangler.length && !draft.accept_orders
-                  ? `Fyll ut ${manglerTekst} under Firmaopplysninger først. Vilkårene og angreskjemaet kunden får, må si hvem som selger og hvor en angremelding skal sendes.`
-                  : "Av: /bestill sier «ring oss», og ingen bestilling tas imot. Les vilkårene før du slår på."}
+                {mangler.length > 0
+                  ? `Fyll ut ${manglerTekst} under Firmaopplysninger${draft.accept_orders ? "" : " først"}. Vilkårene og angreskjemaet kunden får, må si hvem som selger og hvor en angremelding skal sendes.`
+                  : "På: /bestill tar imot bestillinger, og hver av dem venter på godkjenning under Bestillinger. Av: /bestill sier «ring oss», og ingen bestilling tas imot. Les vilkårene før du slår på."}
               </p>
             </div>
             <Switch
