@@ -2,9 +2,9 @@
 // nettlesaren, aldri på tenaren – to byggjarar av same dokument ville glidd frå
 // kvarandre.
 //
-// For privatpersonar kjem angreretten og angreskjemaet på ei eiga side. Ein
-// forbrukar skal ha dei på eit varig medium, og ein PDF kunden lastar ned er
-// det, sjølv før e-post er sett opp.
+// For privatpersonar kjem heile vilkåra og angreskjemaet på eigne sider. Ein
+// forbrukar skal ha dei på eit varig medium, og ein PDF kunden lastar ned eller
+// får utskriven ved henting, er det, sjølv før e-post er sett opp.
 
 import jsPDF from "jspdf";
 import {
@@ -25,7 +25,7 @@ import {
 import { dateTime, kr, longDate, num, pipeLabel } from "@/lib/format";
 import { prisInklMva, summer } from "@/lib/mva";
 import { visOrgnr } from "@/lib/orgnr";
-import { angreskjema, angrerettAvsnitt, type Selger } from "@/lib/vilkar";
+import { angreskjema, vilkarAvsnitt, type Selger } from "@/lib/vilkar";
 import { PICKUP_STATUS_LABEL } from "@/lib/types";
 import type { PickupOrder } from "@/lib/pickup-orders";
 
@@ -207,14 +207,18 @@ export function buildPickupPDF({ order, company, selger, vatRate }: PickupPdfDoc
       .join(" "),
   );
 
-  /* ---------- Angrerett og angreskjema, for privatpersonar ---------- */
+  /* ---------- Vilkåra og angreskjemaet, for privatpersonar ---------- */
   if (privat) {
     newPage();
-    const a = angrerettAvsnitt(selger);
-    sectionTitle(a.tittel);
-    a.tekst.forEach((t) => paragraph(t));
-    y += 4;
+    vilkarAvsnitt(selger).forEach((a) => {
+      sectionTitle(a.tittel);
+      a.tekst.forEach((t) => paragraph(t));
+      y += 4;
+    });
 
+    // Skjemaet på ei eiga side, så det ikkje brekk midt i og kan skrivast ut og
+    // sendast for seg.
+    newPage();
     const s = angreskjema(selger);
     sectionTitle(s.tittel);
     paragraph(s.ingress, 9);

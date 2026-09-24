@@ -102,10 +102,11 @@ er Vercels, og kan aldri verifiseres hos Resend.
 | Klar til henting | kontoret godkjenner | kunden |
 | Avvist | kontoret avviser | kunden |
 
-Privatpersoner får angreretten og angreskjemaet **i selve e-posten**, både i
-kvitteringen og i «klar til henting». En lenke til en nettside regnes ikke som
-varig medium. Fram til e-post er satt opp, ligger det samme i PDF-en kunden
-laster ned – skriv den gjerne ut til privatkunder ved henting.
+Privatpersoner får angreretten og angreskjemaet i kvitteringen, og hele
+vilkårene med angreskjemaet i «klar til henting», som er ordrebekreftelsen. En
+lenke til en nettside regnes ikke som varig medium. Fram til e-post er satt opp,
+**må** kontoret skrive ut PDF-en til privatkunder ved henting – den har de samme
+vilkårene og skjemaet.
 
 Kundens kommentar står bare i e-posten til kontoret, aldri i den til kunden.
 

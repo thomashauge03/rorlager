@@ -297,7 +297,7 @@ bekreftet av advokat.
 1. Lim `supabase-setup.sql` inn i SQL Editor og kjør den.
 2. `npm run check:db` – alt skal være grønt.
 3. Fyll ut firmaopplysningene under Innstillinger, og les `/vilkar`.
-4. Sett opp e-post etter `docs/bestilling-epost.md` (kan vente – alt annet virker uten).
+4. Sett opp e-post etter `docs/bestilling-epost.md`. Uten e-post virker alt annet, men da **må** kontoret skrive ut PDF-en til privatkunder ved henting: den er bekreftelsen, vilkårene og angreskjemaet loven krever at kunden får.
 5. Slå på «Ta imot bestillinger på nett».
 
 Frontend tåler å bli rullet ut før punkt 1: da er butikken stengt, og alt i

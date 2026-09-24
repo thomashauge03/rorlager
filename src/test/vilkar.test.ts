@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { ANGRERETT_KORT, angreskjema, angrerettAvsnitt, angrerettSomTekst, selgerFra, vilkarAvsnitt } from "@/lib/vilkar";
+import {
+  ANGRERETT_KORT,
+  angreskjema,
+  angrerettAvsnitt,
+  angrerettSomTekst,
+  selgerFra,
+  vilkarAvsnitt,
+  vilkarSomTekst,
+} from "@/lib/vilkar";
 
 const S = {
   navn: "Hauge Maskin AS",
@@ -47,7 +55,12 @@ describe("vilkåra", () => {
   });
 
   it("seier at avtalen er bindande først ved stadfesting", () => {
-    expect(tekst("Bestillingen")).toContain("«Klar til henting»");
+    expect(tekst("Bestillingen")).toContain("bekreftet den («Klar til henting»)");
+  });
+
+  it("lovar ikkje e-post – stadfestinga kan like gjerne kome på telefon eller papir", () => {
+    expect(tekst("Bestillingen")).not.toContain("e-post");
+    expect(tekst("Henting")).not.toContain("e-post");
   });
 
   it("gir fem års reklamasjon på rør i bakken", () => {
@@ -83,6 +96,33 @@ describe("angreskjemaet", () => {
     expect(t).toContain("ANGRESKJEMA");
     expect(t).toContain("Forbrukerens navn");
     expect(t).toContain("(*) Stryk det som ikke gjelder.");
+  });
+});
+
+describe("vilkåra som tekst", () => {
+  it("har alle avsnitta med tittel i store bokstavar, og angreskjemaet til slutt", () => {
+    const t = vilkarSomTekst(S);
+    for (const tittel of [
+      "SELGER",
+      "BESTILLINGEN",
+      "PRISER",
+      "BETALING",
+      "HENTING",
+      "ANGRERETT",
+      "REKLAMASJON",
+      "PERSONOPPLYSNINGER",
+      "TVISTER",
+    ]) {
+      expect(t, tittel).toMatch(new RegExp(`^${tittel}$`, "m"));
+    }
+    for (const avsnitt of vilkarAvsnitt(S)) for (const p of avsnitt.tekst) expect(t).toContain(p);
+    expect(t).toContain("ANGRESKJEMA");
+  });
+
+  it("skriv skjemaet nøyaktig som tekstversjonen av angreretten", () => {
+    const skjema = (t: string) => t.slice(t.indexOf("ANGRESKJEMA"));
+    expect(skjema(vilkarSomTekst(S))).toBe(skjema(angrerettSomTekst(S)));
+    expect(vilkarSomTekst(S).endsWith(skjema(angrerettSomTekst(S)))).toBe(true);
   });
 });
 

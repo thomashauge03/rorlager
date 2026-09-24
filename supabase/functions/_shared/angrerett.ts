@@ -68,7 +68,7 @@ export function vilkarAvsnitt(s: Selger): Avsnitt[] {
       tittel: "Bestillingen",
       tekst: [
         "Når du sender bestillingen, gir du oss et tilbud om å kjøpe varene til prisene som står i den.",
-        "Avtalen er bindende når vi har bekreftet den med e-posten «Klar til henting». Kan vi ikke levere, får du beskjed på e-post med begrunnelse, og da er det ingen avtale.",
+        "Avtalen er bindende når vi har bekreftet den («Klar til henting»). Kan vi ikke levere, gir vi deg beskjed med begrunnelse, og da er det ingen avtale.",
       ],
     },
     {
@@ -88,7 +88,7 @@ export function vilkarAvsnitt(s: Selger): Avsnitt[] {
     {
       tittel: "Henting",
       tekst: [
-        `Varene hentes på lageret${rein(s.adresse) ? `, ${rein(s.adresse)}` : ""}. Du velger hentedag i bestillingen, og vi gir beskjed på e-post når varene er klare.`,
+        `Varene hentes på lageret${rein(s.adresse) ? `, ${rein(s.adresse)}` : ""}. Du velger hentedag i bestillingen, og vi gir beskjed når varene er klare.`,
         ...(rein(s.henteinfo) ? [rein(s.henteinfo)] : []),
         "Risikoen for varene går over på deg når du har hentet dem.",
       ],
@@ -135,17 +135,21 @@ export function angreskjema(s: Selger): Skjema {
   };
 }
 
+/** Skjemaet som rein tekst, med ein strek å skrive på etter kvart felt. */
+function angreskjemaSomTekst(s: Selger): string[] {
+  const k = angreskjema(s);
+  return [k.tittel.toUpperCase(), k.ingress, ...k.felt.map((f) => `${f} ____________________`), k.fotnote];
+}
+
 /** Angreretten og skjemaet som rein tekst – til tekstversjonen av e-posten. */
 export function angrerettSomTekst(s: Selger): string {
   const a = angrerettAvsnitt(s);
-  const k = angreskjema(s);
-  return [
-    a.tittel.toUpperCase(),
-    ...a.tekst,
-    "",
-    k.tittel.toUpperCase(),
-    k.ingress,
-    ...k.felt.map((f) => `${f} ____________________`),
-    k.fotnote,
-  ].join("\n");
+  return [a.tittel.toUpperCase(), ...a.tekst, "", ...angreskjemaSomTekst(s)].join("\n");
+}
+
+/** Heile vilkåra og skjemaet som rein tekst – til tekstversjonen av ordrestadfestinga. */
+export function vilkarSomTekst(s: Selger): string {
+  return [...vilkarAvsnitt(s).flatMap((a) => [a.tittel.toUpperCase(), ...a.tekst, ""]), ...angreskjemaSomTekst(s)].join(
+    "\n",
+  );
 }

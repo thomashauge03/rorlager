@@ -9,7 +9,16 @@
  * tjue år bak nettlesarane, og Outlook teiknar med Word.
  */
 
-import { angreskjema, angrerettAvsnitt, angrerettSomTekst, type Selger } from "../_shared/angrerett.ts";
+import {
+  angreskjema,
+  angrerettAvsnitt,
+  angrerettSomTekst,
+  vilkarAvsnitt,
+  vilkarSomTekst,
+  type Avsnitt,
+  type Selger,
+  type Skjema,
+} from "../_shared/angrerett.ts";
 import { gyldigEpost } from "../_shared/epostadresse.ts";
 import { prisInklMva, summer } from "../_shared/mva.ts";
 import { visOrgnr } from "../_shared/orgnr.ts";
@@ -195,24 +204,42 @@ function varelinjerTekst(o: Bestilling, linjer: Linje[], f: Firma, visLager = fa
   ];
 }
 
+/** Eit avsnitt av vilkåra: tittel og tekst. Det første har ingen luft over seg. */
+const avsnittHtml = (a: Avsnitt, forst: boolean) =>
+  `<div style="font-weight:700;font-size:15px;margin:${forst ? "0" : "16px"} 0 6px">${esc(a.tittel)}</div>
+    ${a.tekst.map((t) => `<p style="margin:0 0 8px">${esc(t)}</p>`).join("")}`;
+
+/** Angreskjemaet med strek å skrive på. Står éin stad, så kvittering og «klar» har same skjema. */
+const skjemaHtml = (k: Skjema) =>
+  `<div style="font-weight:700;font-size:15px;margin:16px 0 6px">${esc(k.tittel)}</div>
+    <p style="margin:0 0 8px">${esc(k.ingress)}</p>
+    ${k.felt
+      .map((felt) => `<p style="margin:0 0 14px">${esc(felt)}<br><span style="color:#9ca3af">____________________________________</span></p>`)
+      .join("")}
+    <p style="margin:0;font-size:12px;color:#6b7280">${esc(k.fotnote)}</p>`;
+
+const vedlegg = (innhaldHtml: string) =>
+  `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#374151;line-height:1.5">
+    ${innhaldHtml}
+  </div>`;
+
 /**
  * Angreretten og skjemaet i sjølve e-posten. Ein forbrukar skal ha dei på eit
  * varig medium, og ei lenkje til ei nettside er ikkje det – sida kan endrast.
  */
 function angrerettHtml(f: Firma): string {
   const s = selger(f);
-  const a = angrerettAvsnitt(s);
-  const k = angreskjema(s);
-  return `<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:13px;color:#374151;line-height:1.5">
-    <div style="font-weight:700;font-size:15px;margin-bottom:6px">${esc(a.tittel)}</div>
-    ${a.tekst.map((t) => `<p style="margin:0 0 8px">${esc(t)}</p>`).join("")}
-    <div style="font-weight:700;font-size:15px;margin:16px 0 6px">${esc(k.tittel)}</div>
-    <p style="margin:0 0 8px">${esc(k.ingress)}</p>
-    ${k.felt
-      .map((felt) => `<p style="margin:0 0 14px">${esc(felt)}<br><span style="color:#9ca3af">____________________________________</span></p>`)
-      .join("")}
-    <p style="margin:0;font-size:12px;color:#6b7280">${esc(k.fotnote)}</p>
-  </div>`;
+  return vedlegg(avsnittHtml(angrerettAvsnitt(s), true) + skjemaHtml(angreskjema(s)));
+}
+
+/** Heile vilkåra og skjemaet i sjølve e-posten, i same stil som angreretten. */
+function vilkarHtml(f: Firma): string {
+  const s = selger(f);
+  return vedlegg(
+    vilkarAvsnitt(s)
+      .map((a, i) => avsnittHtml(a, i === 0))
+      .join("") + skjemaHtml(angreskjema(s)),
+  );
 }
 
 const henting = (f: Firma) =>
@@ -371,6 +398,9 @@ function klar(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: string
   const naar = o.pickup_now ? "nå" : dag(o.pickup_date);
   const stadfesting = `Dette er ordrebekreftelsen din. Du får faktura med ${f.payment_terms_days} dagers betalingsfrist.`;
 
+  // «Klar» er ordrestadfestinga, og ein forbrukar skal ha heile vilkåra og
+  // skjemaet på eit varig medium (angrerettloven § 10). Kvitteringa har berre
+  // angreretten: avtalen blir først bindande med stadfestinga.
   const innhald = `
     <p style="margin:0 0 16px;font-size:15px">Hei ${esc(o.customer_name)}. Varene i bestilling nr. ${esc(
       o.order_number,
@@ -380,7 +410,7 @@ function klar(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: string
     ${varetabell(o, linjer, f, false)}
     <div style="margin-top:20px">${knapp(url, "Se bestillingen og last ned PDF")}</div>
     <p style="margin:12px 0 0;font-size:13px;color:#6b7280">${esc(stadfesting)}</p>
-    ${privat ? angrerettHtml(f) : ""}`;
+    ${privat ? vilkarHtml(f) : ""}`;
 
   return {
     to: til,
@@ -398,7 +428,7 @@ function klar(o: Bestilling, linjer: Linje[], f: Firma, app: string, til: string
       "",
       `Se bestillingen og last ned PDF: ${url}`,
       stadfesting,
-      ...(privat ? ["", angrerettSomTekst(selger(f))] : []),
+      ...(privat ? ["", vilkarSomTekst(selger(f))] : []),
     ].join("\n"),
     replyTo: f.email ?? undefined,
   };

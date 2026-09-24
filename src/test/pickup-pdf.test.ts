@@ -50,6 +50,19 @@ describe("PDF-en for bestillinga", () => {
     expect(doc(bestilling()).getNumberOfPages()).toBeGreaterThan(doc(bedrift()).getNumberOfPages());
   });
 
+  it("har heile vilkåra og angreskjemaet for privatpersonar, og ingen av dei for bedrifter", () => {
+    // Teksten slik jsPDF har skrive han på sidene, før komprimeringa.
+    const tekst = (o: PickupOrder) =>
+      (doc(o).internal as unknown as { pages: (string[] | undefined)[] }).pages.flatMap((s) => s ?? []).join("\n");
+    const p = tekst(bestilling());
+    for (const tittel of ["SELGER", "BESTILLINGEN", "BETALING", "ANGRERETT", "REKLAMASJON", "TVISTER", "ANGRESKJEMA"]) {
+      expect(p, tittel).toContain(`(${tittel})`);
+    }
+    const b = tekst(bedrift());
+    expect(b).not.toContain("(REKLAMASJON)");
+    expect(b).not.toContain("(ANGRESKJEMA)");
+  });
+
   it("tåler mange linjer og brekk over fleire sider", () => {
     const mange = Array.from({ length: 60 }, (_, i) => ({
       name: `Rør nr. ${i}`,
