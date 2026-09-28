@@ -162,7 +162,7 @@ console.log("\n── Det funksjonen ikke godtar ──\n");
 // grensa. Kven som helst kan kalle RPC-en direkte med anon-nøkkelen.
 
 await somAnon(db, async () => {
-  const kall = `select public.pipe_submit_order($1, $2::jsonb)`;
+  const kall = `select public.pipe_submit_order($1, $2::jsonb, null, 'ola@kunde.no')`;
   const linje = JSON.stringify([{ pipe_type_id: ROR, quantity: 1 }]);
 
   await avvist("tomt kundenavn avvises", kall, ["", linje], /Navn må fylles ut/);
@@ -228,7 +228,7 @@ await somAnon(db, async () => {
   const nummerPaa = async (namn) =>
     Number(
       (
-        await en(`select (public.pipe_submit_order($1, $2::jsonb)) ->> 'order_number' as nr`, [
+        await en(`select (public.pipe_submit_order($1, $2::jsonb, null, 'kunde@test.no')) ->> 'order_number' as nr`, [
           namn,
           JSON.stringify([{ pipe_type_id: KOBLING, quantity: 1 }]),
         ])
@@ -237,7 +237,7 @@ await somAnon(db, async () => {
 
   const foer = await nummerPaa("Kunde før");
   await nekta(() =>
-    db.query(`select public.pipe_submit_order('Avvist Kunde', $1::jsonb)`, [
+    db.query(`select public.pipe_submit_order('Avvist Kunde', $1::jsonb, null, 'avvist@kunde.no')`, [
       JSON.stringify([{ pipe_type_id: "99999999-9999-9999-9999-999999999999", quantity: 1 }]),
     ]),
   );
@@ -252,7 +252,7 @@ console.log("\n── Beholdningen får gå i minus ──\n");
 // uttaket ikkje blei registrert, og då stemmer det endå mindre.
 
 await somAnon(db, async () => {
-  await db.query(`select public.pipe_submit_order('Grådig Kunde', $1::jsonb)`, [
+  await db.query(`select public.pipe_submit_order('Grådig Kunde', $1::jsonb, null, 'gradig@kunde.no')`, [
     JSON.stringify([{ pipe_type_id: UTAN_KOST, quantity: 8 }]),
   ]);
 });
@@ -281,7 +281,7 @@ sjekk(
 await somAnon(db, async () => {
   const s = await en(`select require_phone, require_signature from public.pipe_public_settings`);
   sjekk("innstillingene sier at telefon kreves", s.require_phone, true);
-  const r = await en(`select (public.pipe_submit_order('Uten Telefon', $1::jsonb)) ->> 'order_number' as nr`, [
+  const r = await en(`select (public.pipe_submit_order('Uten Telefon', $1::jsonb, null, 'utentelefon@kunde.no')) ->> 'order_number' as nr`, [
     JSON.stringify([{ pipe_type_id: KOBLING, quantity: 1 }]),
   ]);
   r?.nr ? ok("men basen tar imot en bestilling uten telefon likevel (funn)") : nei("uten telefon", "ble avvist");
@@ -553,7 +553,7 @@ let o1, o2, faktura;
 await somAnon(db, async () => {
   const lag = async (namn) =>
     (
-      await en(`select (public.pipe_submit_order($1, $2::jsonb)) ->> 'id' as id`, [
+      await en(`select (public.pipe_submit_order($1, $2::jsonb, null, 'ola@as.no')) ->> 'id' as id`, [
         namn,
         JSON.stringify([{ pipe_type_id: ROR, quantity: 2 }]),
       ])
@@ -775,6 +775,110 @@ await som(db, LEIF, async () => {
 });
 
 sjekk("og da er matriseordren slettet", (await alle(`select id from public.pipe_orders where id = $1`, [enOrdre])).length, 0);
+
+// ════════════════════════════════════════════════════════════════════════════
+console.log("\n── E-post, og hvem som tok ut ──\n");
+// Ein kunde utan innlogging må skrive noko i e-postfeltet – har han ingen
+// e-post, er «ingen» godt nok. Ein tilsett som er logga inn, blir registrert på
+// brukaren sin: namn og e-post kjem frå innlogginga, ikkje frå skjemaet, og han
+// skriv kva jobb varene skal til.
+
+const EI_LINJE = JSON.stringify([{ pipe_type_id: KOBLING, quantity: 1 }]);
+
+await somAnon(db, async () => {
+  await avvist(
+    "uten innlogging: tom e-post avvises",
+    `select public.pipe_submit_order('Uten E-post', $1::jsonb)`,
+    [EI_LINJE],
+    /E-post må fylles ut/,
+  );
+  await avvist(
+    "bare mellomrom teller som tom e-post",
+    `select public.pipe_submit_order('Uten E-post', $1::jsonb, null, '   ')`,
+    [EI_LINJE],
+    /E-post må fylles ut/,
+  );
+  // Sjekka kjem før linjene, så check:db kan prøve henne utan å lage eit uttak
+  await avvist(
+    "e-posten sjekkes før handlekurven",
+    `select public.pipe_submit_order('Uten E-post', '[]'::jsonb)`,
+    [],
+    /E-post må fylles ut/,
+  );
+  const r = await en(`select (public.pipe_submit_order('Uten E-post', $1::jsonb, null, 'ingen')) ->> 'id' as id`, [EI_LINJE]);
+  r?.id ? ok("«ingen» i e-postfeltet er godt nok") : nei("«ingen»", "ble avvist");
+});
+
+let ansattId;
+await som(db, LEIF, async () => {
+  await avvist(
+    "innlogget: jobb eller prosjekt må fylles ut",
+    `select public.pipe_submit_order('Hvem som helst', $1::jsonb)`,
+    [EI_LINJE],
+    /jobb eller hvilket prosjekt/,
+  );
+  ansattId = (
+    await en(
+      `select (public.pipe_submit_order('Hvem som helst', $1::jsonb, null, 'falsk@x.no', null, 'Byggefelt Vest, tomt 4')) ->> 'id' as id`,
+      [EI_LINJE],
+    )
+  ).id;
+});
+const ansatt = await en(
+  `select customer_name, customer_email, created_by::text as av, project from public.pipe_orders where id = $1`,
+  [ansattId],
+);
+sjekk(
+  "innlogget: uttaket står på brukeren, ikke på det skjemaet sa",
+  [ansatt?.customer_name, ansatt?.customer_email, ansatt?.av],
+  ["Leif Lager", "lager@hauge.no", LEIF.uid],
+);
+sjekk("og jobben blir med", ansatt?.project, "Byggefelt Vest, tomt 4");
+const ansattLogg = await en(
+  `select created_by::text as av, created_by_name as navn from public.pipe_stock_log where order_id = $1`,
+  [ansattId],
+);
+sjekk("lagerloggen for uttaket har brukeren", [ansattLogg?.av, ansattLogg?.navn], [LEIF.uid, "Leif Lager"]);
+
+const anonLogg = await en(
+  `select l.created_by_name as navn, o.created_by as av
+     from public.pipe_stock_log l join public.pipe_orders o on o.id = l.order_id
+    where o.customer_email = 'ingen'`,
+);
+sjekk("et uttak uten innlogging står ikke på noen bruker", [anonLogg?.navn, anonLogg?.av], [null, null]);
+
+// Den framande har logga inn, men står ikkje i system_users: då er e-posten namnet
+let framandId;
+await som(db, FREMMED, async () => {
+  framandId = (
+    await en(`select (public.pipe_submit_order('X', $1::jsonb, null, null, null, 'Egen jobb')) ->> 'id' as id`, [EI_LINJE])
+  ).id;
+});
+sjekk(
+  "uten navn i system_users blir e-posten navnet",
+  (await en(`select customer_name from public.pipe_orders where id = $1`, [framandId]))?.customer_name,
+  FREMMED.epost,
+);
+
+// Lagerendringar i adminpanelet har alltid lagra brukaren (created_by). No
+// står namnet der òg, så panelet kan vise kven som gjorde det.
+await som(db, LEIF, () => db.query(`select public.pipe_adjust_stock($1, 3, 'justering', 'Telt opp')`, [ROR]));
+sjekk(
+  "en lagerjustering står på brukeren med navn",
+  (
+    await en(
+      `select created_by_name as navn from public.pipe_stock_log where pipe_type_id = $1 and note = 'Telt opp'`,
+      [ROR],
+    )
+  )?.navn,
+  "Leif Lager",
+);
+
+await som(db, LEIF, async () => {
+  const meg = (await en(`select public.hm_meg() as m`)).m;
+  sjekk("hm_meg gir navnet og e-posten til den innloggede", [meg?.navn, meg?.epost], ["Leif Lager", "lager@hauge.no"]);
+});
+await somAnon(db, () => avvist("anon: hm_meg — ingen kjørerett", `select public.hm_meg()`, [], /permission denied/i));
 
 console.log(
   tilstand.feil === 0

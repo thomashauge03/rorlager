@@ -1270,6 +1270,13 @@ function StockLogSheet({ target, onClose }: { target: PipeType | "alle" | null; 
               <p className="text-xs text-muted-foreground">
                 {target === "alle" && rad.pipe_name ? `${rad.pipe_name} · ` : ""}
                 Ny beholdning: <span className="tabular">{num(rad.balance_after)}</span>
+                {/* Kven gjorde det. Tomt for ein kunde utan innlogging, og før 20260928100000 */}
+                {rad.created_by_name ? (
+                  <>
+                    {" · "}
+                    <span>av {rad.created_by_name}</span>
+                  </>
+                ) : null}
               </p>
               {rad.note && <p className="mt-1 text-sm text-muted-foreground">{rad.note}</p>}
             </div>

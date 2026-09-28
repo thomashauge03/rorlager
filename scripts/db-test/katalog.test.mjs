@@ -66,7 +66,7 @@ await somAnon(db, async () => {
     `select public.pipe_submit_order(
        'Ola Kunde',
        $1::jsonb,
-       '99887766', null, null, 'Storgata 4', 'Henta på formiddagen', null
+       '99887766', 'ola@kunde.no', null, 'Storgata 4', 'Henta på formiddagen', null
      ) as res`,
     [JSON.stringify([{ pipe_type_id: vare.id, quantity: 3 }])],
   );

@@ -74,6 +74,48 @@ beforeEach(() => {
   venter.data = [];
 });
 
+describe("uttak frå tilsette", () => {
+  // Ein tilsett som var logga inn, tok ut til ein jobb. Uttaket står på brukaren hans.
+  const ansattUttak = (over: Partial<OrderWithLines> = {}) =>
+    ordre({
+      kind: "uttak",
+      stock_drawn_at: new Date().toISOString(),
+      customer_type: null,
+      customer_name: "Leif Lager",
+      customer_email: "lager@hauge.no",
+      billing_address: null,
+      pickup_date: null,
+      project: "Byggefelt Vest, tomt 4",
+      created_by: "55555555-5555-5555-5555-555555555555",
+      ...over,
+    });
+
+  const vis = (o: OrderWithLines) => {
+    fetchOrders.mockResolvedValue([o]);
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OrdersTab />
+      </QueryClientProvider>,
+    );
+  };
+
+  it("er merkt «Ansatt» i lista, og panelet seier kven som tok ut og til kva jobb", async () => {
+    vis(ansattUttak());
+    expect(await screen.findByText("Ansatt")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText("Leif Lager"));
+    const panel = within(await screen.findByRole("dialog"));
+    expect(panel.getByText("Tatt ut av")).toBeInTheDocument();
+    expect(panel.getByText("Byggefelt Vest, tomt 4")).toBeInTheDocument();
+  });
+
+  it("eit uttak frå ein kunde er ikkje merkt", async () => {
+    vis(ansattUttak({ customer_name: "Ola Kunde", created_by: null }));
+    await screen.findByText("Ola Kunde");
+    expect(screen.queryByText("Ansatt")).toBeNull();
+  });
+});
+
 describe("sletting", () => {
   it("ei bestilling som ikkje er avvist, kan ikkje slettast – kontoret får vite kvifor", async () => {
     const panel = await opne(ordre({ status: "behandlet", stock_drawn_at: new Date().toISOString() }));

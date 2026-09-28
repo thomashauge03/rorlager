@@ -193,7 +193,18 @@ const stengtForAnon = async (navn, args = undefined) => {
   nei(navn, `uventet svar: ${error.message}`);
 };
 
-for (const fn of ["hm_er_kontor", "hm_rolle", "hm_har_tilgang"]) await stengtForAnon(fn);
+for (const fn of ["hm_er_kontor", "hm_rolle", "hm_har_tilgang", "hm_meg", "hm_mitt_namn"]) await stengtForAnon(fn);
+
+// Ein kunde utan innlogging må skrive noko i e-postfeltet. Sjekka står før
+// handlekurva i funksjonen, så ei tom kurv prøver regelen utan å lage eit uttak.
+{
+  const { error } = await supabase.rpc("pipe_submit_order", { p_customer_name: "Sjekk", p_lines: [] });
+  if (error && /E-post må fylles ut/i.test(error.message)) ok("pipe_submit_order — krever e-post uten innlogging");
+  else if (error && /Handlekurven er tom/i.test(error.message)) {
+    nei("pipe_submit_order", "godtar uttak uten e-post – kjør supabase-setup.sql på nytt (20260928100000)");
+  } else if (error) nei("pipe_submit_order", error.message);
+  else nei("pipe_submit_order", "godtok et uttak uten e-post og uten varer");
+}
 
 await stengtForAnon("project_submit_receipt", {
   p_order_id: "00000000-0000-0000-0000-000000000000",

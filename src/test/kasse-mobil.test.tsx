@@ -1,12 +1,34 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Checkout from "@/pages/Checkout";
 import PickupCheckout from "@/pages/PickupCheckout";
 
 // Kassane skal fungere på ein telefon: det valfrie ligg bak ei lenkje, og
-// summen står saman med knappen i den faste bunnen.
+// summen står saman med knappen i den faste bunnen. Ein kunde utan innlogging
+// må skrive noko i e-postfeltet; ein tilsett som er logga inn, tek ut på
+// brukaren sin og skriv berre kva jobb varene skal til.
+
+const innlogga = vi.hoisted(() => ({ epost: null as string | null, loggUt: vi.fn() }));
+const sendUttak = vi.hoisted(() =>
+  vi.fn(async () => ({ id: "o1", order_number: 1, created_at: "", customer_name: "", lines: [], total: 0 })),
+);
+
+vi.mock("@/lib/auth", () => ({
+  useAuth: () => ({
+    checking: false,
+    email: innlogga.epost,
+    role: innlogga.epost ? "lager" : null,
+    roleKnown: Boolean(innlogga.epost),
+    roleFailed: false,
+    prøvRolleIgjen: () => {},
+    isProsjekt: false,
+    isKontor: Boolean(innlogga.epost),
+  }),
+  useMeg: () => ({ data: innlogga.epost ? { epost: innlogga.epost, navn: "Leif Lager" } : null }),
+  loggUt: (...a: unknown[]) => innlogga.loggUt(...a),
+}));
 
 vi.mock("@/lib/settings", () => ({
   useSettings: () => ({
@@ -28,6 +50,7 @@ vi.mock("@/lib/settings", () => ({
 
 vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
+  submitOrder: (...a: unknown[]) => sendUttak(...(a as [])),
   fetchCatalog: async () => [
     {
       id: "t1",
@@ -63,6 +86,9 @@ const vis = (side: JSX.Element, sti: string) =>
 beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
+  innlogga.epost = null;
+  innlogga.loggUt.mockReset();
+  sendUttak.mockClear();
 });
 
 describe("uttakskassen", () => {
@@ -85,14 +111,26 @@ describe("uttakskassen", () => {
     return vis(<Checkout />, "/kasse");
   };
 
-  it("har e-post og kommentar bak ei lenkje", () => {
+  it("har e-posten synleg og påkravd, og kommentaren bak ei lenkje", () => {
     visUttak();
-    expect(screen.queryByLabelText(/E-post/)).toBeNull();
+    expect(screen.getByLabelText(/E-post/)).toBeInTheDocument();
+    expect(screen.getByText("E-post").parentElement).toHaveTextContent("*");
     expect(screen.queryByLabelText("Kommentar")).toBeNull();
 
-    fireEvent.click(screen.getByRole("button", { name: /Legg til e-post eller kommentar/ }));
-    expect(screen.getByLabelText(/E-post/)).toHaveFocus();
-    expect(screen.getByLabelText("Kommentar")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Legg til kommentar/ }));
+    expect(screen.getByLabelText("Kommentar")).toHaveFocus();
+  });
+
+  it("sender ikkje utan e-post – men «ingen» er godt nok", async () => {
+    visUttak();
+    fireEvent.change(screen.getByLabelText(/Navn/), { target: { value: "Ola Kunde" } });
+    fireEvent.change(screen.getByLabelText(/Telefon/), { target: { value: "900 00 000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    expect(sendUttak).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/E-post/), { target: { value: "ingen" } });
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    await waitFor(() => expect(sendUttak).toHaveBeenCalledWith(expect.objectContaining({ customer_email: "ingen" })));
   });
 
   it("viser ei lagra e-postadresse med ein gong", () => {
@@ -109,6 +147,49 @@ describe("uttakskassen", () => {
     const bunn = screen.getByRole("button", { name: /Send inn uttak/ }).closest("[data-fast-bunn]") as HTMLElement;
     expect(bunn).not.toBeNull();
     expect(within(bunn).getByText(/398,15/)).toBeInTheDocument();
+  });
+
+  it("innlogga: uttaket står på brukaren, og berre jobben blir spurd om", () => {
+    innlogga.epost = "lager@hauge.no";
+    visUttak();
+    expect(screen.getByText("Registreres på deg")).toBeInTheDocument();
+    expect(screen.getByText(/Leif Lager/)).toBeInTheDocument();
+    expect(screen.getByText(/lager@hauge\.no/)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Navn/)).toBeNull();
+    expect(screen.queryByLabelText(/Telefon/)).toBeNull();
+    expect(screen.queryByLabelText(/E-post/)).toBeNull();
+    expect(screen.getByLabelText(/Jobb eller prosjekt/)).toBeInTheDocument();
+  });
+
+  it("innlogga: krev jobben, og sender uttaket på brukaren", async () => {
+    innlogga.epost = "lager@hauge.no";
+    visUttak();
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    expect(sendUttak).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText(/Jobb eller prosjekt/), { target: { value: "Byggefelt Vest" } });
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    await waitFor(() =>
+      expect(sendUttak).toHaveBeenCalledWith(
+        expect.objectContaining({
+          customer_name: "Leif Lager",
+          customer_email: "lager@hauge.no",
+          customer_phone: null,
+          company: null,
+          project: "Byggefelt Vest",
+          signature: null,
+        }),
+      ),
+    );
+    // Eit delt nettbrett skal ikkje hugse den tilsette som neste kunde
+    expect(localStorage.getItem("rorlager.kunde.v1")).toBeNull();
+  });
+
+  it("innlogga: «Ikke deg?» loggar ut", () => {
+    innlogga.epost = "lager@hauge.no";
+    visUttak();
+    fireEvent.click(screen.getByRole("button", { name: /Ikke deg\? Logg ut/ }));
+    expect(innlogga.loggUt).toHaveBeenCalled();
   });
 });
 

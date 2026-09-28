@@ -65,6 +65,12 @@ export type PipeOrderRow = {
   billing_address?: string | null;
   /** Kontorets melding til kunden. admin_note er intern og blir aldri vist. */
   customer_message?: string | null;
+  /**
+   * Den innlogga brukaren som tok ut – eit uttak frå ein tilsett. Null for
+   * kundar utan innlogging. Valfri fordi appen kan bli rulla ut før
+   * 20260928100000 er køyrd.
+   */
+  created_by?: string | null;
 };
 
 export type PipeOrderLineRow = {
@@ -92,6 +98,8 @@ export type PipeStockLogRow = {
   order_id: string | null;
   note: string | null;
   created_by: string | null;
+  /** Namnet på den som gjorde endringa. Valfri: finst frå 20260928100000. */
+  created_by_name?: string | null;
 };
 
 export type PipeInvoiceRow = {
@@ -375,6 +383,8 @@ export type Database = {
       hm_har_tilgang: { Args: Record<string, never>; Returns: boolean };
       hm_er_kontor: { Args: Record<string, never>; Returns: boolean };
       hm_rolle: { Args: Record<string, never>; Returns: string | null };
+      /** Den innlogga, slik kassen viser han. Null utan innlogging. */
+      hm_meg: { Args: Record<string, never>; Returns: Json };
       hm_er_prosjektmedlem: { Args: { p_project_id: string }; Returns: boolean };
 
       project_mark_ordered: {

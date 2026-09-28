@@ -52,6 +52,25 @@ export async function loggUt(queryClient: QueryClient): Promise<void> {
   queryClient.clear();
 }
 
+/** Den innlogga, slik uttakskassen viser han: «Registreres på deg: Leif Lager». */
+export type Meg = { epost: string; navn: string | null };
+
+/**
+ * Kven er logga inn – namn frå system_users, som berre ein superadmin kan lese
+ * sjølv. Null utan innlogging, og før 20260928100000 er køyrd: då finst ikkje
+ * hm_meg, og kassen viser berre e-posten frå innlogginga.
+ */
+export async function fetchMeg(): Promise<Meg | null> {
+  const { data, error } = await supabase.rpc("hm_meg");
+  if (error || !data || typeof data !== "object" || Array.isArray(data)) return null;
+  const { epost, navn } = data as { epost?: unknown; navn?: unknown };
+  return typeof epost === "string" ? { epost, navn: typeof navn === "string" ? navn : null } : null;
+}
+
+export function useMeg(email: string | null) {
+  return useQuery({ queryKey: ["hm_meg", email], queryFn: fetchMeg, enabled: Boolean(email), staleTime: Infinity });
+}
+
 export type Auth = {
   /** Sant til første sesjonssjekk er ferdig. Hindrar at sida blinkar fram. */
   checking: boolean;

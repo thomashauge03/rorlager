@@ -180,6 +180,19 @@ om at noen har tatt mer enn lageret viste, og skjules ikke.
 **Slettes en bestilling, går rørene tilbake på lageret** (`pipe_delete_order`),
 og tilbakeføringen logges.
 
+**En kunde uten innlogging må fylle ut e-post.** Feltet har ingen formatsjekk med
+vilje: har kunden ingen e-post, skriver han «ingen». Databasen avviser et tomt felt.
+
+**En ansatt som er logget inn, tar ut på brukeren sin.** Kassen viser «Registreres
+på deg», og den ansatte skriver bare hvilken jobb eller hvilket prosjekt varene skal
+til. Navn og e-post henter `pipe_submit_order` fra innloggingen, ikke fra skjemaet,
+og lagrer brukeren i `pipe_orders.created_by`. Uttaket merkes «Ansatt» i panelet,
+og fakturagrunnlaget samler slike uttak under jobben. «Ikke deg? Logg ut» i kassen
+er for et delt nettbrett der noen har glemt å logge ut.
+
+**Lagerloggen viser hvem som gjorde endringen** (`pipe_stock_log.created_by_name`),
+både for justeringer i panelet og for uttak fra ansatte.
+
 **Fakturagrunnlaget peker begge veier:** bestillingene får `invoice_id`, så det er
 alltid mulig å se hvilket grunnlag en bestilling havnet på – og å angre.
 

@@ -36,6 +36,7 @@ import { downloadOrderPDF, downloadPickListPDF, type CompanyInfo } from "@/lib/o
 import { summer } from "@/lib/mva";
 import { downloadPickupPDF } from "@/lib/pickup-pdf";
 import { somBestilling, useWaitingPickupOrders } from "@/lib/pickup-orders";
+import { erAnsattUttak } from "@/lib/fakturakunde";
 import { useOrderSettings, useSettings } from "@/lib/settings";
 import { selgerFra } from "@/lib/vilkar";
 import { ORDER_STATUS_LABEL, type OrderKind, type OrderStatus, type OrderWithLines } from "@/lib/types";
@@ -65,6 +66,15 @@ function ProsjektEllerHenting({ o }: { o: OrderWithLines }) {
     <span className="font-semibold text-destructive">Henter nå</span>
   ) : (
     <span>Hentes {shortDate(o.pickup_date)}</span>
+  );
+}
+
+/** Eit uttak frå ein tilsett som var logga inn: det står på brukaren hans, og jobben blir fakturert. */
+function AnsattMerke() {
+  return (
+    <span className="ml-2 rounded bg-muted px-1.5 py-0.5 align-middle text-xs font-medium text-muted-foreground">
+      Ansatt
+    </span>
   );
 }
 
@@ -416,6 +426,7 @@ export function OrdersTab() {
                 </span>
                 <span className="block text-sm text-foreground mt-1 truncate">
                   {o.customer_name}
+                  {erAnsattUttak(o) ? <AnsattMerke /> : null}
                   {o.company ? <span className="text-muted-foreground"> · {o.company}</span> : null}
                 </span>
                 <span className="block text-xs text-muted-foreground truncate">
@@ -465,6 +476,7 @@ export function OrdersTab() {
                   <TableCell className="tabular whitespace-nowrap">{dateTime(o.created_at)}</TableCell>
                   <TableCell>
                     <span className="font-medium text-foreground">{o.customer_name}</span>
+                    {erAnsattUttak(o) ? <AnsattMerke /> : null}
                     {o.company ? <span className="block text-xs text-muted-foreground">{o.company}</span> : null}
                   </TableCell>
                   <TableCell className="text-muted-foreground">
@@ -499,7 +511,7 @@ export function OrdersTab() {
 
               <div className="mt-4 space-y-5">
                 <div>
-                  <DetailRow label="Kunde" value={open.customer_name} />
+                  <DetailRow label={erAnsattUttak(open) ? "Tatt ut av" : "Kunde"} value={open.customer_name} />
                   <DetailRow label="Firma" value={open.company} />
                   <DetailRow label="Prosjekt" value={open.project} />
                   <DetailRow

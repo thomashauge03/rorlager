@@ -11,9 +11,24 @@ export const nameKey = (n: string | null | undefined) => (n ?? "").trim().replac
 
 export type Fakturakunde = { key: string; namn: string; detaljar: string[] };
 
-type Ordre = Pick<PipeOrderRow, "kind" | "customer_type" | "customer_name" | "company" | "org_number" | "billing_address">;
+type Ordre = Pick<
+  PipeOrderRow,
+  "kind" | "customer_type" | "customer_name" | "company" | "org_number" | "billing_address" | "project" | "created_by"
+>;
+
+/** Eit uttak frå ein tilsett som var logga inn. Før migrasjonen finst ikkje created_by, og då er det ingen. */
+export const erAnsattUttak = (o: Pick<PipeOrderRow, "kind" | "created_by">): boolean =>
+  o.kind !== "bestilling" && Boolean(o.created_by);
 
 export function fakturakunde(o: Ordre): Fakturakunde {
+  // Ein tilsett tek ut til ein jobb, og det er jobben som blir fakturert – ikkje
+  // han. Fleire tilsette på same jobb havnar på same grunnlag, og «jobb:» i
+  // nøkkelen held jobben skild frå ein kiosk-kunde som tilfeldigvis heiter det same.
+  if (erAnsattUttak(o)) {
+    const jobb = o.project?.trim() || o.customer_name;
+    return { key: `jobb:${nameKey(jobb)}`, namn: jobb, detaljar: [`Tatt ut av ${o.customer_name}`] };
+  }
+
   // Før migrasjonen er kind undefined, og då er alt uttak.
   if (o.kind !== "bestilling") return { key: nameKey(o.customer_name), namn: o.customer_name, detaljar: [] };
 

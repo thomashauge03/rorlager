@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Send } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { FastBunn } from "@/components/FastBunn";
@@ -7,8 +8,10 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { loggUt, useAuth, useMeg } from "@/lib/auth";
 import { EMPTY_CUSTOMER, LAST_ORDER_KEY, clearCart, readCustomer, useCart, writeCustomer } from "@/lib/cart";
 import type { SavedCustomer } from "@/lib/cart";
 import { submitOrder } from "@/lib/orders";
@@ -52,11 +55,24 @@ export default function Checkout() {
   const [signature, setSignature] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const nesteFelt = useNesteFelt();
+  const queryClient = useQueryClient();
 
-  // E-post og kommentar er valfrie og ligg bak ei lenkje. Er e-posten alt
-  // hugsa frå sist, står dei opne – kunden skal sjå det som blir sendt.
-  const [visMer, setVisMer] = useState(() => form.customer_email.trim() !== "");
-  const [opnaMer, setOpnaMer] = useState(false);
+  /*
+   * EIN TILSETT TEK UT PÅ BRUKAREN SIN.
+   *
+   * Er nokon logga inn, er det ein tilsett, og uttaket blir registrert på han:
+   * namn og e-post kjem frå innlogginga (basen tek dei derifrå uansett), og han
+   * skriv berre kva jobb varene skal til. Ingen telefon og ingen signatur –
+   * innlogginga er dokumentasjonen.
+   */
+  const auth = useAuth();
+  const meg = useMeg(auth.email);
+  const ansatt = !auth.checking && Boolean(auth.email);
+  const ansattNavn = meg.data?.navn ?? auth.email ?? "";
+
+  // Kommentaren er valfri og ligg bak ei lenkje
+  const [visKommentar, setVisKommentar] = useState(false);
+  const [opnaKommentar, setOpnaKommentar] = useState(false);
 
   // Etter innsending er kurven tom med vilje – då skal vakta under ikkje slå til
   const submitted = useRef(false);
@@ -76,17 +92,31 @@ export default function Checkout() {
     if (sending) return;
 
     const name = form.customer_name.trim();
-    if (!name) {
-      toast({ title: "Skriv inn navnet ditt", variant: "destructive" });
-      return;
-    }
-    if (requirePhone && !form.customer_phone.trim()) {
-      toast({ title: "Telefonnummer mangler", description: "Vi trenger et nummer for å nå deg.", variant: "destructive" });
-      return;
-    }
-    if (requireSignature && !signature) {
-      toast({ title: "Signatur mangler", description: "Skriv signaturen din i ruta nederst.", variant: "destructive" });
-      return;
+    if (ansatt) {
+      if (!form.project.trim()) {
+        toast({ title: "Skriv hvilken jobb eller hvilket prosjekt varene skal til", variant: "destructive" });
+        document.getElementById("prosjekt")?.focus();
+        return;
+      }
+    } else {
+      if (!name) {
+        toast({ title: "Skriv inn navnet ditt", variant: "destructive" });
+        return;
+      }
+      if (requirePhone && !form.customer_phone.trim()) {
+        toast({ title: "Telefonnummer mangler", description: "Vi trenger et nummer for å nå deg.", variant: "destructive" });
+        return;
+      }
+      // Påkravd, men utan formatsjekk med vilje: har kunden ingen e-post, skriv han «ingen»
+      if (!form.customer_email.trim()) {
+        toast({ title: "Skriv inn e-post", description: "Har du ikke e-post, skriv «ingen».", variant: "destructive" });
+        document.getElementById("epost")?.focus();
+        return;
+      }
+      if (requireSignature && !signature) {
+        toast({ title: "Signatur mangler", description: "Skriv signaturen din i ruta nederst.", variant: "destructive" });
+        return;
+      }
     }
     if (cart.lines.length === 0) {
       toast({ title: "Handlekurven er tom", variant: "destructive" });
@@ -106,24 +136,42 @@ export default function Checkout() {
 
     setSending(true);
     try {
-      const order = await submitOrder({
-        customer_name: name,
-        customer_phone: form.customer_phone.trim() || null,
-        customer_email: form.customer_email.trim() || null,
-        company: form.company.trim() || null,
-        project: form.project.trim() || null,
-        comment: comment.trim() || null,
-        signature,
-        lines: cart.lines.map((l) => ({ pipe_type_id: l.pipe_type_id, quantity: l.quantity })),
-      });
+      const lines = cart.lines.map((l) => ({ pipe_type_id: l.pipe_type_id, quantity: l.quantity }));
+      const order = await submitOrder(
+        ansatt
+          ? {
+              customer_name: ansattNavn,
+              customer_phone: null,
+              customer_email: auth.email,
+              company: null,
+              project: form.project.trim(),
+              comment: comment.trim() || null,
+              signature: null,
+              lines,
+            }
+          : {
+              customer_name: name,
+              customer_phone: form.customer_phone.trim() || null,
+              customer_email: form.customer_email.trim(),
+              company: form.company.trim() || null,
+              project: form.project.trim() || null,
+              comment: comment.trim() || null,
+              signature,
+              lines,
+            },
+      );
 
-      writeCustomer({
-        customer_name: name,
-        customer_phone: form.customer_phone.trim(),
-        customer_email: form.customer_email.trim(),
-        company: form.company.trim(),
-        project: form.project.trim(),
-      });
+      // Den tilsette blir ikkje hugsa som kunde: på eit delt nettbrett ville
+      // neste kunde fått namnet hans ferdig utfylt.
+      if (!ansatt) {
+        writeCustomer({
+          customer_name: name,
+          customer_phone: form.customer_phone.trim(),
+          customer_email: form.customer_email.trim(),
+          company: form.company.trim(),
+          project: form.project.trim(),
+        });
+      }
 
       submitted.current = true;
       try {
@@ -144,6 +192,32 @@ export default function Checkout() {
       setSending(false);
     }
   };
+
+  const kommentarFelt = visKommentar ? (
+    <Field label="Kommentar" htmlFor="kommentar">
+      <Textarea
+        id="kommentar"
+        autoFocus={opnaKommentar}
+        value={comment}
+        onChange={(e) => setComment(e.target.value)}
+        placeholder="Noe lageret bør vite?"
+        rows={3}
+        className="text-base"
+      />
+    </Field>
+  ) : (
+    <button
+      type="button"
+      onClick={() => {
+        setVisKommentar(true);
+        setOpnaKommentar(true);
+      }}
+      className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      Legg til kommentar
+    </button>
+  );
 
   return (
     <div className="hm-page min-h-screen">
@@ -186,99 +260,115 @@ export default function Checkout() {
           className="mt-4 space-y-4"
           noValidate
         >
-          <section className="hm-card space-y-4 p-4">
-            <Field label="Navn" htmlFor="navn" required>
-              <Input
-                id="navn"
-                name="name"
-                autoComplete="name"
-                value={form.customer_name}
-                onChange={(e) => set("customer_name", e.target.value)}
-                placeholder="Ola Nordmann"
-                className="h-12 text-base"
-              />
-            </Field>
+          {auth.checking ? (
+            <Skeleton className="h-48 w-full rounded-lg" />
+          ) : ansatt ? (
+            <section className="hm-card space-y-4 p-4" aria-labelledby="registreres">
+              <div>
+                <h2 id="registreres" className="text-base font-semibold text-foreground">
+                  Registreres på deg
+                </h2>
+                <p className="mt-1 break-words text-sm text-foreground">
+                  {ansattNavn}
+                  {meg.data?.navn ? <span className="text-muted-foreground"> · {auth.email}</span> : null}
+                </p>
+                {/* Ein tilsett som gløymde å logge ut på eit delt nettbrett, skal
+                    ikkje få neste kunde sitt uttak på seg */}
+                <button
+                  type="button"
+                  onClick={() => void loggUt(queryClient)}
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline"
+                >
+                  Ikke deg? Logg ut
+                </button>
+              </div>
 
-            <Field label="Telefon" htmlFor="telefon" required={requirePhone}>
-              <Input
-                id="telefon"
-                name="tel"
-                type="tel"
-                inputMode="tel"
-                autoComplete="tel"
-                value={form.customer_phone}
-                onChange={(e) => set("customer_phone", e.target.value)}
-                placeholder="900 00 000"
-                className="h-12 text-base"
-              />
-            </Field>
+              <Field label="Jobb eller prosjekt" htmlFor="prosjekt" required hint="Hvor skal rørene brukes?">
+                <Input
+                  id="prosjekt"
+                  value={form.project}
+                  onChange={(e) => set("project", e.target.value)}
+                  placeholder="Byggefelt Vest, tomt 4"
+                  className="h-12 text-base"
+                />
+              </Field>
 
-            <Field label="Firma" htmlFor="firma">
-              <Input
-                id="firma"
-                name="organization"
-                autoComplete="organization"
-                value={form.company}
-                onChange={(e) => set("company", e.target.value)}
-                placeholder="Firmanavn"
-                className="h-12 text-base"
-              />
-            </Field>
+              {kommentarFelt}
+            </section>
+          ) : (
+            <section className="hm-card space-y-4 p-4">
+              <Field label="Navn" htmlFor="navn" required>
+                <Input
+                  id="navn"
+                  name="name"
+                  autoComplete="name"
+                  value={form.customer_name}
+                  onChange={(e) => set("customer_name", e.target.value)}
+                  placeholder="Ola Nordmann"
+                  className="h-12 text-base"
+                />
+              </Field>
 
-            <Field label="Prosjekt eller adresse" htmlFor="prosjekt" hint="Hvor skal rørene brukes?">
-              <Input
-                id="prosjekt"
-                value={form.project}
-                onChange={(e) => set("project", e.target.value)}
-                placeholder="Byggefelt Vest, tomt 4"
-                className="h-12 text-base"
-              />
-            </Field>
+              <Field label="Telefon" htmlFor="telefon" required={requirePhone}>
+                <Input
+                  id="telefon"
+                  name="tel"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={form.customer_phone}
+                  onChange={(e) => set("customer_phone", e.target.value)}
+                  placeholder="900 00 000"
+                  className="h-12 text-base"
+                />
+              </Field>
 
-            {visMer ? (
-              <>
-                <Field label="E-post" htmlFor="epost" hint="Valgfritt. Brukes hvis vi må sende deg dokumentasjon.">
-                  <Input
-                    id="epost"
-                    name="email"
-                    type="email"
-                    inputMode="email"
-                    autoComplete="email"
-                    autoFocus={opnaMer}
-                    value={form.customer_email}
-                    onChange={(e) => set("customer_email", e.target.value)}
-                    placeholder="ola@firma.no"
-                    className="h-12 text-base"
-                  />
-                </Field>
-
-                <Field label="Kommentar" htmlFor="kommentar">
-                  <Textarea
-                    id="kommentar"
-                    value={comment}
-                    onChange={(e) => setComment(e.target.value)}
-                    placeholder="Noe lageret bør vite?"
-                    rows={3}
-                    className="text-base"
-                  />
-                </Field>
-              </>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  setVisMer(true);
-                  setOpnaMer(true);
-                }}
-                className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              <Field
+                label="E-post"
+                htmlFor="epost"
+                required
+                hint="Brukes hvis vi må sende deg dokumentasjon. Har du ikke e-post, skriv «ingen»."
               >
-                <Plus className="h-4 w-4" aria-hidden="true" />
-                Legg til e-post eller kommentar
-              </button>
-            )}
-          </section>
+                <Input
+                  id="epost"
+                  name="email"
+                  type="email"
+                  inputMode="email"
+                  autoComplete="email"
+                  value={form.customer_email}
+                  onChange={(e) => set("customer_email", e.target.value)}
+                  placeholder="ola@firma.no"
+                  className="h-12 text-base"
+                />
+              </Field>
 
-          {requireSignature ? (
+              <Field label="Firma" htmlFor="firma">
+                <Input
+                  id="firma"
+                  name="organization"
+                  autoComplete="organization"
+                  value={form.company}
+                  onChange={(e) => set("company", e.target.value)}
+                  placeholder="Firmanavn"
+                  className="h-12 text-base"
+                />
+              </Field>
+
+              <Field label="Prosjekt eller adresse" htmlFor="prosjekt" hint="Hvor skal rørene brukes?">
+                <Input
+                  id="prosjekt"
+                  value={form.project}
+                  onChange={(e) => set("project", e.target.value)}
+                  placeholder="Byggefelt Vest, tomt 4"
+                  className="h-12 text-base"
+                />
+              </Field>
+
+              {kommentarFelt}
+            </section>
+          )}
+
+          {!ansatt && requireSignature ? (
             <section className="hm-card p-4">
               <SignaturePad value={signature} onChange={setSignature} label="Signatur (påkrevd)" />
             </section>

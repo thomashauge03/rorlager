@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fakturadetaljar, fakturakunde, nameKey } from "@/lib/fakturakunde";
+import { erAnsattUttak, fakturadetaljar, fakturakunde, nameKey } from "@/lib/fakturakunde";
 
 type Ordre = Parameters<typeof fakturakunde>[0];
 
@@ -10,6 +10,8 @@ const uttak = (over: Partial<Ordre> = {}): Ordre => ({
   company: null,
   org_number: null,
   billing_address: null,
+  project: null,
+  created_by: null,
   ...over,
 });
 
@@ -20,6 +22,8 @@ const bedrift = (over: Partial<Ordre> = {}): Ordre => ({
   company: "Firma AS",
   org_number: "974760673",
   billing_address: null,
+  project: null,
+  created_by: null,
   ...over,
 });
 
@@ -30,8 +34,19 @@ const privat = (over: Partial<Ordre> = {}): Ordre => ({
   company: null,
   org_number: null,
   billing_address: "Bakkevegen 3, 5700 Voss",
+  project: null,
+  created_by: null,
   ...over,
 });
+
+/** Eit uttak frå ein tilsett som er logga inn: registrert på brukaren, til ein jobb. */
+const ansatt = (over: Partial<Ordre> = {}): Ordre =>
+  uttak({
+    customer_name: "Leif Lager",
+    created_by: "55555555-5555-5555-5555-555555555555",
+    project: "Byggefelt Vest, tomt 4",
+    ...over,
+  });
 
 describe("fakturakunde", () => {
   it("eit uttak blir gruppert på namnet, som før", () => {
@@ -70,6 +85,37 @@ describe("fakturakunde", () => {
   it("ein privatperson deler ikkje kunde med eit uttak med same namn", () => {
     expect(fakturakunde(privat()).key).not.toBe(fakturakunde(uttak({ customer_name: "Ola Nordmann" })).key);
   });
+
+  it("eit uttak frå ein tilsett går på jobben, med kven som tok ut", () => {
+    expect(fakturakunde(ansatt())).toEqual({
+      key: "jobb:byggefelt vest, tomt 4",
+      namn: "Byggefelt Vest, tomt 4",
+      detaljar: ["Tatt ut av Leif Lager"],
+    });
+  });
+
+  it("to tilsette på same jobb havnar på same grunnlag", () => {
+    expect(fakturakunde(ansatt()).key).toBe(
+      fakturakunde(ansatt({ customer_name: "Kari Nordmann", project: "byggefelt  Vest, tomt 4" })).key,
+    );
+  });
+
+  it("ein jobb deler ikkje kunde med ein kiosk-kunde med same namn", () => {
+    expect(fakturakunde(ansatt()).key).not.toBe(fakturakunde(uttak({ customer_name: "Byggefelt Vest, tomt 4" })).key);
+  });
+
+  it("utan jobb står uttaket på den tilsette", () => {
+    expect(fakturakunde(ansatt({ project: null })).namn).toBe("Leif Lager");
+  });
+});
+
+describe("erAnsattUttak", () => {
+  it("kjenner att eit uttak frå ein innlogga tilsett", () => {
+    expect(erAnsattUttak(ansatt())).toBe(true);
+    expect(erAnsattUttak(uttak())).toBe(false);
+    expect(erAnsattUttak(uttak({ created_by: undefined }))).toBe(false);
+    expect(erAnsattUttak(bedrift({ created_by: "55555555-5555-5555-5555-555555555555" }))).toBe(false);
+  });
 });
 
 describe("fakturadetaljar", () => {
@@ -78,5 +124,12 @@ describe("fakturadetaljar", () => {
       "Org.nr. 974 760 673",
     ]);
     expect(fakturadetaljar([uttak()])).toEqual([]);
+  });
+
+  it("viser alle som tok ut til same jobb", () => {
+    expect(fakturadetaljar([ansatt(), ansatt({ customer_name: "Kari Nordmann" }), ansatt()])).toEqual([
+      "Tatt ut av Leif Lager",
+      "Tatt ut av Kari Nordmann",
+    ]);
   });
 });
