@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -33,6 +33,7 @@ export default function PipePage() {
   const cart = useCart();
 
   const [quantity, setQuantity] = useState<number | null>(null);
+  const mengdeSpørsmålId = useId();
 
   // Nøkkelen ligg under QK.types med vilje: då treffer invalideringane etter
   // lagerendring denne sida òg, og kunden ser same beholdning som framsida
@@ -187,10 +188,16 @@ export default function PipePage() {
 
           {/* Mengde */}
           <div className="hm-card p-4">
-            <h3 className="mb-3 text-base font-semibold text-foreground">
+            <h3 id={mengdeSpørsmålId} className="mb-3 text-base font-semibold text-foreground">
               Hvor mye tar du ut?
             </h3>
-            <QuantityInput value={quantity} onChange={setQuantity} unit={pipe.unit} autoFocus />
+            <QuantityInput
+              value={quantity}
+              onChange={setQuantity}
+              unit={pipe.unit}
+              autoFocus
+              labelledBy={mengdeSpørsmålId}
+            />
 
             {inCart ? (
               <p className="tabular mt-3 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">

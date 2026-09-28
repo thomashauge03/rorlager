@@ -11,6 +11,12 @@ type QuantityInputProps = {
   presets?: number[];
   autoFocus?: boolean;
   max?: number;
+  /**
+   * id-en til ein synleg tekst som seier kva feltet gjeld – spørsmålet over
+   * feltet eller namnet på vara. Skjermlesaren les han saman med «Antall
+   * <eining>», så namnet på feltet inneheld det som står på skjermen.
+   */
+  labelledBy?: string;
 };
 
 const METER_PRESETS = [1, 5, 10, 25, 50];
@@ -27,8 +33,10 @@ export function QuantityInput({
   presets,
   autoFocus,
   max,
+  labelledBy,
 }: QuantityInputProps) {
   const fieldId = useId();
+  const etikettId = `${fieldId}-etikett`;
   const isStk = unit === "stk";
   const stepValue = step ?? (isStk ? 1 : 0.5);
   const quickValues = presets ?? (isStk ? STK_PRESETS : METER_PRESETS);
@@ -89,11 +97,12 @@ export function QuantityInput({
         </button>
 
         <div className="relative flex-1 min-w-0">
-          <label htmlFor={fieldId} className="sr-only">
+          <label id={etikettId} htmlFor={fieldId} className="sr-only">
             Antall {unit}
           </label>
           <input
             id={fieldId}
+            aria-labelledby={labelledBy ? `${labelledBy} ${etikettId}` : undefined}
             type="text"
             inputMode="decimal"
             autoComplete="off"

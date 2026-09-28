@@ -56,7 +56,10 @@ export default function Cart() {
             <li key={line.pipe_type_id} className="hm-card animate-fade-in p-4">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-base font-bold leading-tight text-foreground break-words">
+                  <p
+                    id={`kurv-vare-${line.pipe_type_id}`}
+                    className="text-base font-bold leading-tight text-foreground break-words"
+                  >
                     {pipeLabel(line.name, line.dimension)}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
@@ -82,7 +85,9 @@ export default function Cart() {
               <div className="mt-3">
                 {/* Tom presets-liste gir den kompakte utgåva: berre +/– og tal.
                     Halvskrivne verdiar (tomt felt eller 0) blir ikkje lagra, så
-                    linja held på mengda si til kunden har tasta noko ferdig. */}
+                    linja held på mengda si til kunden har tasta noko ferdig.
+                    Namnet på vara er med i namnet på feltet: elles heitte alle
+                    felta i kurva berre «Antall m». */}
                 <QuantityInput
                   value={line.quantity}
                   onChange={(v) => {
@@ -90,6 +95,7 @@ export default function Cart() {
                   }}
                   unit={line.unit}
                   presets={[]}
+                  labelledBy={`kurv-vare-${line.pipe_type_id}`}
                 />
               </div>
 
