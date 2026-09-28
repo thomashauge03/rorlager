@@ -5,8 +5,9 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Building2, CalendarDays, Clock, Loader2, PackageSearch, Send, Trash2, User } from "lucide-react";
+import { Building2, CalendarDays, Clock, Loader2, PackageSearch, Plus, Send, Trash2, User } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { FastBunn } from "@/components/FastBunn";
 import { QuantityInput } from "@/components/QuantityInput";
 import { LegalFooter } from "@/components/LegalFooter";
 import { Button } from "@/components/ui/button";
@@ -40,6 +41,7 @@ import {
 import { requestEmailsInBackground, submitPickupOrder } from "@/lib/pickup-orders";
 import { linjesum, prisInklMva, summer } from "@/lib/mva";
 import { ANGRERETT_KORT } from "@/lib/vilkar";
+import { useNesteFelt } from "@/lib/neste-felt";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -76,21 +78,24 @@ function Felt({
   );
 }
 
-/** Ein stor knapp i eit par. aria-pressed, så skjermlesaren høyrer kva som er valt. */
+/**
+ * Éin knapp i eit par. aria-pressed, så skjermlesaren høyrer kva som er valt.
+ *
+ * Låg og utan undertekst: to og to står side om side òg på ein smal telefon,
+ * og forklaringa står under paret – berre for det kunden har valt.
+ */
 function Valg({
   id,
   valt,
   onClick,
   ikon,
   tittel,
-  tekst,
 }: {
   id?: string;
   valt: boolean;
   onClick: () => void;
   ikon: ReactNode;
   tittel: string;
-  tekst?: string;
 }) {
   return (
     <button
@@ -99,17 +104,14 @@ function Valg({
       aria-pressed={valt}
       onClick={onClick}
       className={cn(
-        "flex min-h-[4.5rem] flex-1 items-start gap-3 rounded-lg border-2 p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+        "flex min-h-12 flex-1 items-center justify-center gap-2 rounded-lg border-2 px-3 py-2 text-base font-semibold text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
         valt ? "border-primary bg-primary/10" : "border-border bg-card hover:bg-muted",
       )}
     >
-      <span className={cn("mt-0.5 [&_svg]:size-5", valt ? "text-primary" : "text-muted-foreground")} aria-hidden="true">
+      <span className={cn("[&_svg]:size-5", valt ? "text-primary" : "text-muted-foreground")} aria-hidden="true">
         {ikon}
       </span>
-      <span className="min-w-0">
-        <span className="block text-base font-semibold text-foreground">{tittel}</span>
-        {tekst ? <span className="block text-xs text-muted-foreground">{tekst}</span> : null}
-      </span>
+      {tittel}
     </button>
   );
 }
@@ -130,6 +132,12 @@ export default function PickupCheckout() {
   const [sender, setSender] = useState(false);
   // Etter innsending er kurva tom med vilje – då skal vakta under ikkje slå til
   const sendt = useRef(false);
+  const nesteFelt = useNesteFelt();
+
+  // Kommentaren er valfri og ligg bak ei lenkje. Står det alt noko i utkastet,
+  // er han open – kunden skal sjå det som blir sendt.
+  const [visKommentar, setVisKommentar] = useState(() => String(skjema.kommentar ?? "").trim() !== "");
+  const [opnaKommentar, setOpnaKommentar] = useState(false);
 
   const iDag = osloIDag();
   const vat = settings?.vat_rate ?? 25;
@@ -266,11 +274,12 @@ export default function PickupCheckout() {
   }
 
   return (
-    <div className="hm-page min-h-screen">
+    // Luft nedst på telefonen, under botnteksten òg: der står den faste bunnen
+    <div className="hm-page min-h-screen pb-36 sm:pb-0">
       <TopBar title="Bestilling" back="/bestill" />
 
       <main className="mx-auto max-w-2xl px-3 pt-4 pb-10 sm:px-4">
-        <form onSubmit={send} className="space-y-4" noValidate>
+        <form ref={nesteFelt.ref} onKeyDown={nesteFelt.onKeyDown} onSubmit={send} className="space-y-4" noValidate>
           {/* ------------------------------------------------------------ kurva */}
           <section className="hm-card p-4" aria-labelledby="kasse-varer">
             <h2 id="kasse-varer" className="text-base font-semibold text-foreground">
@@ -336,29 +345,35 @@ export default function PickupCheckout() {
             <h2 id="kasse-naar" className="text-base font-semibold text-foreground">
               Når henter du?
             </h2>
-            <div role="group" aria-labelledby="kasse-naar" className="flex flex-col gap-2 sm:flex-row">
+            <div role="group" aria-labelledby="kasse-naar" className="flex gap-2">
               <Valg
                 id="kasse-henterNaa"
                 valt={skjema.henterNaa === true}
                 onClick={() => set("henterNaa", true)}
                 ikon={<Clock />}
                 tittel="Henter nå"
-                tekst="I dag, så snart kontoret har godkjent"
               />
               <Valg
                 valt={skjema.henterNaa === false}
                 onClick={() => set("henterNaa", false)}
                 ikon={<CalendarDays />}
                 tittel="Velg dag"
-                tekst="Inntil 90 dager fram"
               />
             </div>
             {feilFor("henterNaa") ? <p className="text-xs font-medium text-destructive">{feilFor("henterNaa")}</p> : null}
-            {skjema.henterNaa === true && settings?.pickup_note ? (
-              <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">{settings.pickup_note}</p>
+            {skjema.henterNaa === true ? (
+              <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+                I dag, så snart kontoret har godkjent.{settings?.pickup_note ? ` ${settings.pickup_note}` : ""}
+              </p>
             ) : null}
             {skjema.henterNaa === false ? (
-              <Felt label="Hentedag" htmlFor="kasse-hentedag" required feil={feilFor("hentedag")}>
+              <Felt
+                label="Hentedag"
+                htmlFor="kasse-hentedag"
+                required
+                hint="Inntil 90 dager fram."
+                feil={feilFor("hentedag")}
+              >
                 <Input
                   id="kasse-hentedag"
                   type="date"
@@ -535,21 +550,34 @@ export default function PickupCheckout() {
                 </div>
               </>
             ) : null}
-          </section>
 
-          {/* ------------------------------------------------------- kommentar */}
-          <section className="hm-card p-4">
-            <Felt label="Kommentar" htmlFor="kasse-kommentar" hint="Valgfritt. Noe kontoret bør vite?" feil={feilFor("kommentar")}>
-              <Textarea
-                id="kasse-kommentar"
-                rows={3}
-                value={skjema.kommentar}
-                onChange={(e) => set("kommentar", e.target.value)}
-                aria-invalid={Boolean(feilFor("kommentar"))}
-                aria-describedby={feilId("kommentar")}
-                className="text-base"
-              />
-            </Felt>
+            {/* Ein kommentar som er for lang, må kunden sjå – då står feltet ope */}
+            {visKommentar || feilFor("kommentar") ? (
+              <Felt label="Kommentar" htmlFor="kasse-kommentar" hint="Valgfritt. Noe kontoret bør vite?" feil={feilFor("kommentar")}>
+                <Textarea
+                  id="kasse-kommentar"
+                  rows={3}
+                  autoFocus={opnaKommentar}
+                  value={skjema.kommentar}
+                  onChange={(e) => set("kommentar", e.target.value)}
+                  aria-invalid={Boolean(feilFor("kommentar"))}
+                  aria-describedby={feilId("kommentar")}
+                  className="text-base"
+                />
+              </Felt>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setVisKommentar(true);
+                  setOpnaKommentar(true);
+                }}
+                className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Legg til kommentar
+              </button>
+            )}
           </section>
 
           {/* ---------------------------------------------------- oppsummering */}
@@ -566,11 +594,8 @@ export default function PickupCheckout() {
                 <dt className="text-muted-foreground">Mva {num(vat)} %</dt>
                 <dd className="tabular text-foreground">{kr(sum.mva)} kr</dd>
               </div>
-              <div className="flex items-baseline justify-between gap-3 border-t border-border pt-2">
-                <dt className="text-base font-semibold text-foreground">Sum inkl. mva</dt>
-                <dd className="tabular text-2xl font-bold text-foreground">{kr(sum.inkl)} kr</dd>
-              </div>
             </dl>
+            {/* Summen inkl. mva står i den faste bunnen, rett ved knappen */}
             <p className="mt-3 text-sm text-muted-foreground">Betaling: faktura, {frist} dager.</p>
             {skjema.kundetype !== "bedrift" ? (
               <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
@@ -590,51 +615,59 @@ export default function PickupCheckout() {
             )}
           </section>
 
-          <Button
-            type="submit"
-            disabled={sender || harProblem || !katalog.data}
-            className="h-16 w-full text-lg font-semibold [&_svg]:size-6"
-          >
-            {sender ? (
-              <>
-                <Loader2 className="animate-spin" aria-hidden="true" />
-                Sender …
-              </>
-            ) : (
-              <>
-                <Send aria-hidden="true" />
-                Bestill med betalingsplikt
-              </>
-            )}
-          </Button>
-          {/* Knappen står sperra til dagens prisar er henta. Her står kvifor. */}
-          {!katalog.data ? (
-            <p role="status" className="text-center text-sm text-muted-foreground">
-              {katalog.isError ? (
-                <>
-                  Klarte ikke å hente dagens priser.{" "}
-                  <button
-                    type="button"
-                    onClick={() => void katalog.refetch()}
-                    className="inline-flex min-h-11 items-center px-1 font-medium text-foreground underline underline-offset-2"
-                  >
-                    Prøv igjen
-                  </button>
-                </>
-              ) : (
-                "Henter dagens priser …"
-              )}
-            </p>
-          ) : null}
-
           {/* Informasjonsplikta i GDPR artikkel 13 gjeld på innsamlingstidspunktet */}
-          <p className="pb-2 text-center text-xs text-muted-foreground">
+          <p className="text-center text-xs text-muted-foreground">
             Vi lagrer navn, kontaktopplysninger og bestillingen for å kunne gjennomføre og fakturere den.{" "}
             <Link to="/personvern" className="underline underline-offset-2">
               Slik behandler vi opplysningene
             </Link>
             .
           </p>
+
+          {/* Totalprisen står rett ved knappen – det er der kunden skal sjå han før
+              bestillinga blir bindande. */}
+          <FastBunn>
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm text-muted-foreground">Sum inkl. mva</span>
+              <span className="tabular text-lg font-bold text-foreground">{kr(sum.inkl)} kr</span>
+            </div>
+            <Button
+              type="submit"
+              disabled={sender || harProblem || !katalog.data}
+              className="h-14 w-full text-lg font-semibold sm:h-16 [&_svg]:size-6"
+            >
+              {sender ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Sender …
+                </>
+              ) : (
+                <>
+                  <Send aria-hidden="true" />
+                  Bestill med betalingsplikt
+                </>
+              )}
+            </Button>
+            {/* Knappen står sperra til dagens prisar er henta. Her står kvifor. */}
+            {!katalog.data ? (
+              <p role="status" className="text-center text-sm text-muted-foreground">
+                {katalog.isError ? (
+                  <>
+                    Klarte ikke å hente dagens priser.{" "}
+                    <button
+                      type="button"
+                      onClick={() => void katalog.refetch()}
+                      className="inline-flex min-h-11 items-center px-1 font-medium text-foreground underline underline-offset-2"
+                    >
+                      Prøv igjen
+                    </button>
+                  </>
+                ) : (
+                  "Henter dagens priser …"
+                )}
+              </p>
+            ) : null}
+          </FastBunn>
         </form>
       </main>
 

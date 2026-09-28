@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Loader2, Send } from "lucide-react";
+import { Loader2, Plus, Send } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
+import { FastBunn } from "@/components/FastBunn";
 import { SignaturePad } from "@/components/SignaturePad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,7 @@ import { EMPTY_CUSTOMER, LAST_ORDER_KEY, clearCart, readCustomer, useCart, write
 import type { SavedCustomer } from "@/lib/cart";
 import { submitOrder } from "@/lib/orders";
 import { useSettings } from "@/lib/settings";
+import { useNesteFelt } from "@/lib/neste-felt";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
 
@@ -49,6 +51,12 @@ export default function Checkout() {
   const [comment, setComment] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const nesteFelt = useNesteFelt();
+
+  // E-post og kommentar er valfrie og ligg bak ei lenkje. Er e-posten alt
+  // hugsa frå sist, står dei opne – kunden skal sjå det som blir sendt.
+  const [visMer, setVisMer] = useState(() => form.customer_email.trim() !== "");
+  const [opnaMer, setOpnaMer] = useState(false);
 
   // Etter innsending er kurven tom med vilje – då skal vakta under ikkje slå til
   const submitted = useRef(false);
@@ -141,7 +149,8 @@ export default function Checkout() {
     <div className="hm-page min-h-screen">
       <TopBar title="Send inn uttak" back="/kurv" />
 
-      <main className="mx-auto max-w-2xl px-3 pt-4 pb-10 sm:px-4">
+      {/* Luft nedst på telefonen: der står den faste bunnen med knappen */}
+      <main className="mx-auto max-w-2xl px-3 pt-4 pb-40 sm:px-4 sm:pb-10">
         {/* Oppsummering: det siste kunden ser før han signerer */}
         <section className="hm-card p-4" aria-labelledby="oppsummering">
           <h2 id="oppsummering" className="text-base font-semibold text-foreground">
@@ -170,7 +179,13 @@ export default function Checkout() {
           </Link>
         </section>
 
-        <form onSubmit={handleSubmit} className="mt-4 space-y-4" noValidate>
+        <form
+          ref={nesteFelt.ref}
+          onKeyDown={nesteFelt.onKeyDown}
+          onSubmit={handleSubmit}
+          className="mt-4 space-y-4"
+          noValidate
+        >
           <section className="hm-card space-y-4 p-4">
             <Field label="Navn" htmlFor="navn" required>
               <Input
@@ -198,20 +213,6 @@ export default function Checkout() {
               />
             </Field>
 
-            <Field label="E-post" htmlFor="epost" hint="Valgfritt. Brukes hvis vi må sende deg dokumentasjon.">
-              <Input
-                id="epost"
-                name="email"
-                type="email"
-                inputMode="email"
-                autoComplete="email"
-                value={form.customer_email}
-                onChange={(e) => set("customer_email", e.target.value)}
-                placeholder="ola@firma.no"
-                className="h-12 text-base"
-              />
-            </Field>
-
             <Field label="Firma" htmlFor="firma">
               <Input
                 id="firma"
@@ -234,16 +235,47 @@ export default function Checkout() {
               />
             </Field>
 
-            <Field label="Kommentar" htmlFor="kommentar">
-              <Textarea
-                id="kommentar"
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                placeholder="Noe lageret bør vite?"
-                rows={3}
-                className="text-base"
-              />
-            </Field>
+            {visMer ? (
+              <>
+                <Field label="E-post" htmlFor="epost" hint="Valgfritt. Brukes hvis vi må sende deg dokumentasjon.">
+                  <Input
+                    id="epost"
+                    name="email"
+                    type="email"
+                    inputMode="email"
+                    autoComplete="email"
+                    autoFocus={opnaMer}
+                    value={form.customer_email}
+                    onChange={(e) => set("customer_email", e.target.value)}
+                    placeholder="ola@firma.no"
+                    className="h-12 text-base"
+                  />
+                </Field>
+
+                <Field label="Kommentar" htmlFor="kommentar">
+                  <Textarea
+                    id="kommentar"
+                    value={comment}
+                    onChange={(e) => setComment(e.target.value)}
+                    placeholder="Noe lageret bør vite?"
+                    rows={3}
+                    className="text-base"
+                  />
+                </Field>
+              </>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setVisMer(true);
+                  setOpnaMer(true);
+                }}
+                className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary hover:underline"
+              >
+                <Plus className="h-4 w-4" aria-hidden="true" />
+                Legg til e-post eller kommentar
+              </button>
+            )}
           </section>
 
           {requireSignature ? (
@@ -252,30 +284,38 @@ export default function Checkout() {
             </section>
           ) : null}
 
-          <Button type="submit" disabled={sending} className="h-16 w-full text-lg font-semibold [&_svg]:size-6">
-            {sending ? (
-              <>
-                <Loader2 className="animate-spin" aria-hidden="true" />
-                Sender inn …
-              </>
-            ) : (
-              <>
-                <Send aria-hidden="true" />
-                Send inn uttak
-              </>
-            )}
-          </Button>
-
           {/* Informasjonsplikta i GDPR artikkel 13 gjeld på innsamlingstidspunktet,
               ikkje på førespurnad. Difor står lenka her, ved skjemaet, og ikkje
               berre i ein botntekst kunden aldri ser. */}
-          <p className="pb-2 text-center text-xs text-muted-foreground">
+          <p className="text-center text-xs text-muted-foreground">
             Vi lagrer navn og mobilnummer for å kunne fakturere uttaket.{" "}
             <Link to="/personvern" className="underline underline-offset-2">
               Slik behandler vi opplysningene
             </Link>
             .
           </p>
+
+          <FastBunn>
+            {showPrices && !cart.hasUnpriced ? (
+              <div className="flex items-baseline justify-between gap-3">
+                <span className="text-sm text-muted-foreground">Sum</span>
+                <span className="tabular text-lg font-bold text-foreground">{kr(cart.total)} kr</span>
+              </div>
+            ) : null}
+            <Button type="submit" disabled={sending} className="h-14 w-full text-lg font-semibold sm:h-16 [&_svg]:size-6">
+              {sending ? (
+                <>
+                  <Loader2 className="animate-spin" aria-hidden="true" />
+                  Sender inn …
+                </>
+              ) : (
+                <>
+                  <Send aria-hidden="true" />
+                  Send inn uttak
+                </>
+              )}
+            </Button>
+          </FastBunn>
         </form>
       </main>
     </div>
