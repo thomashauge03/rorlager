@@ -1,5 +1,6 @@
 import React, { useId } from "react";
-import { HylleskiltGruppe, SKILT, SKILT_QR, Vare } from "./Hylleskilt";
+import type { Vare } from "../data";
+import { HylleskiltGruppe, SKILT, SKILT_QR } from "./Hylleskilt";
 
 /**
  * Rørreolen på lageret, tegnet i HM-stil som vibroplaten i leiefilmen:

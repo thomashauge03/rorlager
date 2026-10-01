@@ -32,7 +32,7 @@ varene. Den er den tredje i serien etter Leveringsseddel-filmen
 | 5–12 s | Tegnet rørhylle med rødbrune avløpsrør og hylleskiltet. Telefonen kommer opp foran den med kameraet åpent, søkeren låser på koden, pip, «Åpne siden» trykkes, rørsiden glir opp | **01** STEG 1 AV 5 · **Skann koden på hylla** / Bruk kameraet på mobilen. Ingen app, ingen innlogging. |
 | 12–19 s | Rørsiden (AVLØPSRØR · Avløpsrør PVC · 110 mm · På lager). Fingeren trykker +10, +1, +1, og tallet ruller 0 → 10 → 11 → 12 m. «Legg i handlekurv» | **02** · **Hvor mye tar du ut?** / Tast inn meter, eller trykk på knappene. |
 | 19–25 s | Tilbake på forsiden med kurvlinja nederst («1 vare · 12 m»). «Skann QR-kode» åpner appens egen skanner, som låser på etiketten på hyllekanten. Bend grunnavløp 45°: +2, +2 → 4 stk. «Legg i handlekurv», kurvmerket teller til 2 | **03** · **Flere varer?** / Skann neste kode. Rør og deler havner i samme kurv. |
-| 25–34 s | Kurven med to varer → «Gå videre» → «Send inn uttak». Navn, telefon, e-post og prosjekt fylles med tastaturet. «Send inn uttak» setter seg ned i skyggen | **04** · **Send inn uttaket** / Navn, telefon og e-post. Prosjekt eller adresse hvis du vil. |
+| 25–34 s | Kurven med to varer → «Gå videre» → «Send inn uttak». Navn, telefon, e-post og prosjekt fylles med tastaturet. Knappen viser «Sender inn …» med spinner, som i appen | **04** · **Send inn uttaket** / Navn, telefon og e-post. Prosjekt eller adresse hvis du vil. |
 | 34–42 s | «Uttaket er registrert», uttak nr. 1042, pling. Telefonen glir til høyre og teksten bytter side; bak telefonen står hylla uskarp. Mot slutten går fokus fra telefonen til hylla (omvendt av steg 1), og to rør glir ut av hylla | **05** · **Ta med varene** / Kvitteringen ligger på mobilen. Uttaket faktureres i etterkant. |
 | 42–47 s | Platene, logoen | **Selvbetjent rørlager.** |
 
@@ -155,8 +155,10 @@ Samme kurver og regler som leiefilmen:
 - Stegbytte: nummeret ruller (01 → 02), tittelen avdekkes bak en skrå maske
   (−18°), streken tegnes ut.
 - Fingertrykk med ring og støt i telefonen. Tastatur med taster som lyser i
-  takt, og siden ruller så feltet står over tastaturet. «Send inn uttak»
-  setter seg ned i skyggen.
+  takt, og siden ruller så feltet står over tastaturet. Rørlagerets knapper
+  er flate (ingen hard skygge som i utleie-appen): de mørkner når fingeren
+  treffer, er gråtonet til det står en mengde i feltet, og «Send inn uttak»
+  viser «Sender inn …» med spinner.
 - Mengden ruller når knappene trykkes. Kurvmerket teller opp. Ingen sprett.
 - Steg 1 og 5 speiler hverandre: i steg 1 går fokus fra hylla til telefonen,
   i steg 5 fra telefonen tilbake til hylla.

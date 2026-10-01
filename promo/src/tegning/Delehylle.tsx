@@ -1,5 +1,6 @@
 import React, { useId } from "react";
-import { ETIKETT, ETIKETT_QR, EtikettGruppe, Vare } from "./Hylleskilt";
+import type { Vare } from "../data";
+import { ETIKETT, ETIKETT_QR, EtikettGruppe } from "./Hylleskilt";
 
 /**
  * Delehylla i steg 3, som kameraet i appens skanner ser den: en plukkasse
@@ -103,9 +104,9 @@ export const Delehylle: React.FC<{ bredde: number; vare: Vare; stil?: React.CSSP
       <Bend x={350} y={404} d={92} vinkel={14} gid={gid} />
 
       {/* Kassens front: lav vegg med grep, så innholdet ligger åpent oppå */}
-      <path d="M40 360 L560 360 L560 510 Q560 522 548 522 L52 522 Q40 522 40 510 Z" fill={K.kasse} stroke={K.kontur} strokeWidth={4.5} strokeLinejoin="round" />
-      <rect x={46} y={366} width={508} height={10} fill={K.kasseLys} />
-      <rect x={220} y={398} width={160} height={58} rx={6} fill={K.kasseMork} stroke={K.kontur} strokeWidth={3} />
+      <path d="M40 420 L560 420 L560 510 Q560 522 548 522 L52 522 Q40 522 40 510 Z" fill={K.kasse} stroke={K.kontur} strokeWidth={4.5} strokeLinejoin="round" />
+      <rect x={46} y={426} width={508} height={10} fill={K.kasseLys} />
+      <rect x={230} y={446} width={140} height={38} rx={6} fill={K.kasseMork} stroke={K.kontur} strokeWidth={3} />
       <rect x={46} y={500} width={508} height={14} fill={K.kasseMork} />
 
       {/* Hyllekanten med etiketten */}

@@ -1,4 +1,5 @@
 import React from "react";
+import type { Vare } from "../data";
 import { helvetica } from "../fonter";
 import { HmLogo, LOGO_FORHOLD } from "../merke/HmLogo";
 import { QrGruppe } from "../merke/Qr";
@@ -21,26 +22,6 @@ const PAPIR = "#ffffff";
 /** Punkt → millimeter, og linjehøyden jsPDF bruker (lh i qr-labels.ts). */
 const pt = (p: number) => p * 0.3528;
 const lh = (p: number, faktor = 1.2) => pt(p) * faktor;
-
-export type Vare = { kategori: string; navn: string; dimensjon: string; varenr: string; hylle: string; kode: string };
-
-export const AVLOPSROR: Vare = {
-  kategori: "Avløpsrør",
-  navn: "Avløpsrør PVC",
-  dimensjon: "110 mm",
-  varenr: "2251059",
-  hylle: "B3",
-  kode: "avlopsror-pvc-110-mm",
-};
-
-export const BEND: Vare = {
-  kategori: "Deler avløp",
-  navn: "Bend grunnavløp 45°",
-  dimensjon: "110 mm",
-  varenr: "2252269",
-  hylle: "C1",
-  kode: "bend-grunnavlop-45gr-110-mm",
-};
 
 /* ------------------------------------------------------------------ */
 /*  Hylleskiltet: A5 liggende (buildShelfSignPDF)                      */

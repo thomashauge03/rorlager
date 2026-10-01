@@ -21,10 +21,15 @@ export const Telefon: React.FC<{
   klokke?: string;
   /** Lys statuslinje (svart tekst) når innholdet øverst er lyst */
   lysStatus?: boolean;
+  /**
+   * Bakgrunnen bak statuslinja. Rørlagerets topplinje (#171717) går helt opp
+   * bak den, så skjøten ikke skal synes; kameraet er svart.
+   */
+  statusFarge?: string;
   children: React.ReactNode;
   /** Legges over skjerminnholdet: finger, tastatur, ark */
   over?: React.ReactNode;
-}> = ({ zoom = 1, klokke = "07:12", lysStatus = false, children, over }) => {
+}> = ({ zoom = 1, klokke = "07:12", lysStatus = false, statusFarge, children, over }) => {
   const tekst = lysStatus ? "#000" : "#fff";
   return (
     <div style={{ zoom, position: "relative", width: TELEFON_B, height: TELEFON_H }}>
@@ -91,7 +96,7 @@ export const Telefon: React.FC<{
                 fontSize: 15,
                 fontWeight: 600,
                 zIndex: 30,
-                background: lysStatus ? "#fff" : "#0b0b0c",
+                background: statusFarge ?? (lysStatus ? "#fff" : "#0b0b0c"),
               }}
             >
               <span style={{ letterSpacing: "0.01em", fontVariantNumeric: "tabular-nums" }}>{klokke}</span>
