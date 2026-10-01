@@ -12,7 +12,7 @@ import { Etikett, Felt, FELT_H, Hint, Ikon, INNHOLD_B, KANT_X, Knapp, Kort, Side
  * Siden ruller under topplinja (sticky), som i en nettleser.
  */
 
-export type Kassefelt = "navn" | "telefon" | "epost" | "prosjekt";
+export type Kassefelt = "navn" | "telefon" | "epost" | "firma" | "prosjekt";
 
 const OPPSUMMERING = TOPPLINJE_H + 16;
 // Kort: p-4, overskrift 24, mt-3, to rader à 36 med skillelinje, mt-3, lenka 20
@@ -45,7 +45,8 @@ export const BUNN_H = 1 + 12 + 56 + 12;
 export const SEND_KNAPP = { x: SKJERM.b / 2, y: SKJERM.h - 12 - 28 } as const;
 
 export type KasseTilstand = {
-  verdier: Record<Kassefelt, string>;
+  /** Firma står tomt i filmen: kunden hopper over det med «Neste» */
+  verdier: Record<Exclude<Kassefelt, "firma">, string>;
   fokus: Kassefelt | null;
   markor: boolean;
   /** Hvor langt siden er rullet */
@@ -128,7 +129,7 @@ export const Kasse: React.FC<{ s: KasseTilstand }> = ({ s }) => {
               hint="Brukes hvis vi må sende deg dokumentasjon. Har du ikke e-post, skriv «ingen»."
               hintHoyde={32}
             />
-            <Feltblokk etikett="Firma" verdi="" plassholder="Firmanavn" fokus={false} markor={false} />
+            <Feltblokk etikett="Firma" verdi="" plassholder="Firmanavn" fokus={f("firma")} markor={s.markor} />
             <Feltblokk
               etikett="Prosjekt eller adresse"
               verdi={v.prosjekt}

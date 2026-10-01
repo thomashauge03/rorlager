@@ -79,7 +79,12 @@ export const Tastatur: React.FC<{
   forslag?: { tekst: string; under?: string; trykk?: number };
   /** Hvor langt oppe tastaturet er: 0 = skjult under skjermen, 1 = helt oppe */
   oppe: number;
-}> = ({ modus, aktiv, forslag, oppe }) => {
+  /**
+   * Teksten på Enter-tasten: feltets enterkeyhint. Rørlageret setter «Neste»
+   * på alle felt unntatt det siste, som får «Ferdig» (neste-felt.ts).
+   */
+  enter?: "Neste" | "Ferdig";
+}> = ({ modus, aktiv, forslag, oppe, enter }) => {
   if (oppe <= 0) return null;
   const aktivTast = aktiv ? tastFor(modus, aktiv) : undefined;
   return (
@@ -132,6 +137,9 @@ export const Tastatur: React.FC<{
       </div>
       {TASTER[modus].map((k) => {
         const trykt = aktivTast === k;
+        const erEnter = k.t === "↵" && enter !== undefined;
+        // «Ferdig» står i blått, som på telefonen; «Neste» som de andre spesialtastene
+        const bla = erEnter && enter === "Ferdig";
         return (
           <div
             key={`${k.t}-${k.x}`}
@@ -142,16 +150,17 @@ export const Tastatur: React.FC<{
               width: k.b,
               height: k.h,
               borderRadius: 7,
-              background: trykt ? "#6b7078" : k.spesial ? "#2a2d31" : "#3b3f45",
+              background: trykt ? "#6b7078" : bla ? "#0a84ff" : k.spesial ? "#2a2d31" : "#3b3f45",
               color: "#fff",
-              fontSize: k.spesial ? 15 : modus === "tall" ? 24 : 21,
+              fontSize: erEnter ? 14 : k.spesial ? 15 : modus === "tall" ? 24 : 21,
+              fontWeight: erEnter ? 600 : undefined,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               boxShadow: "0 1px 0 rgba(0,0,0,0.5)",
             }}
           >
-            {k.vis ?? k.t}
+            {erEnter ? enter : (k.vis ?? k.t)}
           </div>
         );
       })}

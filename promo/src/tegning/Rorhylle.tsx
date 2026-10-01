@@ -213,9 +213,6 @@ export const Rorhylle: React.FC<{
         <filter id={`bakke-${id}`} x="-20%" y="-200%" width="140%" height="500%">
           <feGaussianBlur stdDeviation="8" />
         </filter>
-        <filter id={`uskarp-${id}`} x="-50%" y="-50%" width="200%" height="200%">
-          <feGaussianBlur stdDeviation={2 + tatt * 6} />
-        </filter>
         <linearGradient id={`dyp-${id}`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stopColor="#0c0d0f" />
           <stop offset="1" stopColor="#1b1e22" />
@@ -241,18 +238,22 @@ export const Rorhylle: React.FC<{
         ))}
       </g>
 
-      {/* Rørene som tas ut: de kommer mot oss og blir borte */}
+      {/* Rørene som tas ut: de dras ut mot oss, fortere og fortere, og er borte */}
       {ut.map((r, i) => {
-        const p = Math.max(0, Math.min(1, tatt * 1.6 - i * 0.6));
+        const p = Math.max(0, Math.min(1, (tatt - i * 0.35) / 0.55));
         if (p >= 1) return null;
-        const s = 1 + p * 0.5;
+        const pe = p * p;
+        const s = 1 + pe * 1.4;
         return (
           <g
             key={r.id}
-            transform={`translate(${r.x} ${r.y}) scale(${s}) translate(${-r.x} ${-r.y})`}
-            opacity={1 - p}
-            filter={p > 0 ? `url(#uskarp-${id})` : undefined}
+            transform={`translate(${r.x - pe * 30} ${r.y + pe * 70}) scale(${s}) translate(${-r.x} ${-r.y})`}
+            opacity={1 - pe}
+            filter={p > 0 ? `url(#uskarp-${id}-${i})` : undefined}
           >
+            <filter id={`uskarp-${id}-${i}`} x="-50%" y="-50%" width="200%" height="200%">
+              <feGaussianBlur stdDeviation={1 + pe * 8} />
+            </filter>
             <Rorende ror={r} gid={`${navnFor(r.f)}-${id}`} />
           </g>
         );

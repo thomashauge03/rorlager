@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 import type { Vare } from "../data";
 import { helvetica } from "../fonter";
 import { HmLogo, LOGO_FORHOLD } from "../merke/HmLogo";
@@ -33,6 +33,7 @@ export const SKILT_QR = { x: 14, y: 24, s: 70 } as const;
 
 /** Skiltet som gruppe i en annen SVG, i millimeter med (0, 0) øverst til venstre. */
 export const HylleskiltGruppe: React.FC<{ v: Vare; refleks?: number }> = ({ v, refleks }) => {
+  const id = useId().replace(/:/g, "");
   const tx = SKILT_QR.x + SKILT_QR.s + 10;
   // Plassene står regnet ut som i buildShelfSignPDF: ty starter på qrY − 2
   let ty = SKILT_QR.y - 2;
@@ -81,17 +82,24 @@ export const HylleskiltGruppe: React.FC<{ v: Vare; refleks?: number }> = ({ v, r
       <g transform={`translate(${SKILT.b - 12 - logoB} ${SKILT.h - 10 - logoH})`}>
         <HmLogo hoyde={logoH} />
       </g>
-      {/* Lamineringen: en svak glans som kan gli over */}
+      {/* Lamineringen: en svak glans som glir over, klippet til skiltet */}
       {refleks !== undefined && refleks > 0 && refleks < 1 && (
-        <rect
-          x={-SKILT.b * 0.6 + refleks * SKILT.b * 2}
-          y={-20}
-          width={SKILT.b * 0.18}
-          height={SKILT.h + 40}
-          fill="#fff"
-          opacity={0.28}
-          transform="skewX(-18)"
-        />
+        <>
+          <clipPath id={`skilt-${id}`}>
+            <rect x={0} y={0} width={SKILT.b} height={SKILT.h} />
+          </clipPath>
+          <g clipPath={`url(#skilt-${id})`}>
+            <rect
+              x={-SKILT.b * 0.3 + refleks * SKILT.b * 1.6}
+              y={-20}
+              width={SKILT.b * 0.18}
+              height={SKILT.h + 40}
+              fill="#fff"
+              opacity={0.28}
+              transform={`skewX(-18) translate(${SKILT.h * 0.325} 0)`}
+            />
+          </g>
+        </>
       )}
     </g>
   );
