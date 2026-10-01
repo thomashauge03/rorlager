@@ -91,3 +91,8 @@ src/
 - [ ] **7. Leveranse.** `render.mjs` → filene i specen, plakat og miniatyr,
   README. *Ferdig når:* filene finnes og spiller, og ffprobe viser riktige
   mål og lengder. Appen bygger.
+- [ ] **8. Nettsiden.** Thomas 01.10: filmen skal på haugemaskin.vercel.app som
+  de to andre, på rørsiden. I hm-web-craft: `public/film/rorlager.mp4` (uten
+  musikk, som de andre) og plakat i webp, en `Rorlagerfilm` med `Filmband`
+  som `Utleiefilm`, øverst på `/ror`. *Ferdig når:* siden viser filmen lokalt,
+  hm-web-craft bygger, og endringen er publisert.

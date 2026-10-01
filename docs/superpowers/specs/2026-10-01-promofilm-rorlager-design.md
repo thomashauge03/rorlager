@@ -199,10 +199,15 @@ som mellomledd, så H.264 (`-tune grain`, CRF 15, BT.709-merket).
   `npm run build`, `npm run lint` og `npm test` skal gå som før.
 - Musikkfila ligger ikke i git (lisensen tillater ikke å spre fila alene).
 
+## Nettsiden
+
+Thomas 01.10: filmen skal på haugemaskin.vercel.app som de to andre, på
+rørsiden. Samme presentasjon som `Utleiefilm` i hm-web-craft: `Filmband` med
+merke, tittel og tekst som går gjennom de samme fem stegene, filen uten musikk
+(sida skal ikke ha lyd) og en plakat i webp, øverst på `/ror`.
+
 ## Utenfor
 
-- Innbygging på nettsiden (`/ror` og «Rør og deler» på forsida i
-  hm-web-craft). Egen oppgave når filmen er godkjent.
 - 3D-teaser i kinofilmens stil.
 - Bestilling til henting, uttak for ansatte og prosjektkjeden.
 - Speakerstemme og undertekster.
