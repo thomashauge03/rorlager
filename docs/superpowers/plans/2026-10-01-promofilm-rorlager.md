@@ -65,22 +65,22 @@ src/
 
 ## Oppgaver
 
-- [ ] **1. Grunnmur.** `promo/` med pakker (uten 3D), konfig, felles,
+- [x] **1. Grunnmur.** `promo/` med pakker (uten 3D), konfig, felles,
   merke, lyd, skript og musikk. `Root.tsx` med de fire komposisjonene og en
   midlertidig scene. `promo` i appens ESLint-ignores og i ny `.vercelignore`.
   *Ferdig når:* `npx remotion still` gir et bilde med bakgrunn, logo og
   stegtekst, `npm run sjekk` er grønn i `promo/`, og appens build, lint og test
   er grønne.
-- [ ] **2. Tegningene.** Rørhylla, hylleskiltet (fra `buildShelfSignPDF`),
+- [x] **2. Tegningene.** Rørhylla, hylleskiltet (fra `buildShelfSignPDF`),
   delehylla med etiketten (fra `buildLabelSheetPDF`). *Ferdig når:*
   stillbildet «Tegninger» viser en hylle som leses som en rørhylle, et skilt
   likt PDF-en appen lager, og en etikett som sitter troverdig på hyllekanten.
-- [ ] **3. Skjermene.** Rørlagerets byggeklosser (topplinje, kort, knapper,
+- [x] **3. Skjermene.** Rørlagerets byggeklosser (topplinje, kort, knapper,
   felt, kurvlinje) og sidene: forside, rørside med mengdefeltet, appens
   skanner, kurv, kasse og kvittering, med «Vis priser» av. Kameraet og
   motivene (skiltet, etiketten). *Ferdig når:* stillbildet «Skjermer» ved
   siden av appen kjørt lokalt viser samme tekster, farger, kanter og skygger.
-- [ ] **4. Scenene.** Åpning, de fem stegene og slutt, med bevegelsen i
+- [x] **4. Scenene.** Åpning, de fem stegene og slutt, med bevegelsen i
   specen. *Ferdig når:* et kontaktark av hovedfilmen (ett bilde per sekund)
   viser hele fortellingen, og ingen tekst er kuttet.
 - [ ] **5. Lyd.** Effektene på tidene i scenene, musikken etter planen.

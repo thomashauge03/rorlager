@@ -19,9 +19,6 @@ const VINDU_H = (VINDU_B * 4) / 3;
 const DIALOG_H = 1 + PADDING + 44 + 16 + VINDU_H + 16 + 20 + 16 + 48 + PADDING + 1;
 const DIALOG_TOPP = (SKJERM.h - DIALOG_H) / 2;
 
-/** Kameravinduet, i skjermens punkter (innholdsflaten under statuslinja). */
-export const SKANNER_VINDU = { x: PADDING, y: DIALOG_TOPP + 1 + PADDING + 44 + 16, b: VINDU_B, h: VINDU_H } as const;
-
 export const Skanner: React.FC<{
   /** 0–1: dialogen kommer fram (fade, zoom fra 95 %, litt nedenfra) */
   apne: number;

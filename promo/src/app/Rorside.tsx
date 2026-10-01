@@ -48,9 +48,6 @@ export const hurtigPunkt = (v: Vare, verdi: number) => {
 /** Midten av «Legg i handlekurv», i sidens punkter. */
 export const leggIKurvPunkt = (v: Vare) => ({ x: SKJERM.b / 2, y: knappTopp(v) + 32 });
 
-/** Tallet i mengdefeltet, i sidens punkter (for å la det rulle). */
-export const MENGDEFELT = { y: FELTRAD } as const;
-
 const Fakta: React.FC<{ etikett: string; verdi: string; forste?: boolean }> = ({ etikett, verdi, forste }) => (
   // flex items-baseline justify-between gap-4 py-2, divide-y
   <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 16, padding: "8px 0", borderTop: forste ? undefined : `1px solid ${app.kant}` }}>

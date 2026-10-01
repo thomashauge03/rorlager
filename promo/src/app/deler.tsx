@@ -90,9 +90,6 @@ export const Side: React.FC<{ hoyde?: number; children: React.ReactNode }> = ({ 
 /** Topplinja: py-2.5 rundt 44 punkter høye knapper, og border-b-4 i rødt. */
 export const TOPPLINJE_H = 68;
 
-/** Midten av handlekurvknappen i topplinja (skjermens punkter). */
-export const KURVKNAPP = { x: SKJERM.b - 12 - 22, y: 32 } as const;
-
 export const Topplinje: React.FC<{
   tittel: string;
   undertittel?: string;
