@@ -15,7 +15,20 @@ export const Bakgrunn: React.FC<{ lys: number; drift: number; staaende?: boolean
   const skala = 1.02 + drift * 0.06;
   return (
     <AbsoluteFill style={{ background: "#0a0c0d", overflow: "hidden" }}>
-      <AbsoluteFill style={{ inset: "-14%", transform: `scale(${skala}) translateX(${(drift - 0.5) * -1.5}%)` }}>
+      {/* 14 % større enn bildet på alle kanter. AbsoluteFill har width og
+          height 100 %, så de må av: med bare inset flyttes flaten 14 % mot
+          venstre i stedet for å bli større, og høyre kant står uten bilde. */}
+      <AbsoluteFill
+        style={{
+          top: "-14%",
+          left: "-14%",
+          right: "-14%",
+          bottom: "-14%",
+          width: "auto",
+          height: "auto",
+          transform: `scale(${skala}) translateX(${(drift - 0.5) * -1.5}%)`,
+        }}
+      >
         <Img
           src={staticFile("bakgrunn/brudd.jpg")}
           style={{
