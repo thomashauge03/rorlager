@@ -1,0 +1,31 @@
+{
+  "name": "hm-rorlager-promo",
+  "private": true,
+  "description": "Forklaringsfilmen «Ta ut rør» for rørlageret til Hauge Maskin, laget med Remotion",
+  "type": "module",
+  "scripts": {
+    "studio": "remotion studio",
+    "typecheck": "tsc --noEmit",
+    "sjekk": "tsc --noEmit && node scripts/sjekk-tider.mjs",
+    "takt": "node scripts/takt.mjs",
+    "lyd": "node scripts/lydeffekter.mjs",
+    "qr": "node scripts/lag-qr.mjs",
+    "render": "node scripts/render.mjs"
+  },
+  "dependencies": {
+    "@remotion/cli": "4.0.527",
+    "@remotion/google-fonts": "4.0.527",
+    "@remotion/media": "4.0.527",
+    "@remotion/noise": "4.0.527",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "remotion": "4.0.527"
+  },
+  "devDependencies": {
+    "@types/qrcode": "^1.5.5",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "qrcode": "^1.5.4",
+    "typescript": "^5.8.3"
+  }
+}

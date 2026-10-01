@@ -1,0 +1,5 @@
+node_modules/
+out/
+# Musikken kan ikke spres videre som egen fil (Pixabay-lisensen).
+# Se public/musikk/KILDE.md for hvor den lastes ned.
+public/musikk/*.mp3

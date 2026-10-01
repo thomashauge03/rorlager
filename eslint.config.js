@@ -5,7 +5,8 @@ import reactRefresh from "eslint-plugin-react-refresh";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
-  { ignores: ["dist"] },
+  // promo/ er filmen om rørlageret: eget Remotion-prosjekt med eigne pakkar
+  { ignores: ["dist", "promo"] },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
     files: ["**/*.{ts,tsx}"],
