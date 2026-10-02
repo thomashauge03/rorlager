@@ -83,12 +83,12 @@ src/
 - [x] **4. Scenene.** Åpning, de fem stegene og slutt, med bevegelsen i
   specen. *Ferdig når:* et kontaktark av hovedfilmen (ett bilde per sekund)
   viser hele fortellingen, og ingen tekst er kuttet.
-- [ ] **5. Lyd.** Effektene på tidene i scenene, musikken etter planen.
+- [x] **5. Lyd.** Effektene på tidene i scenene, musikken etter planen.
   *Ferdig når:* en 1080p-gjennomkjøring har lyd på riktige steder, `npm run
   sjekk` er grønn, og nivået måler −14 LUFS.
-- [ ] **6. Formatene.** 9:16 og 4:5 fra de samme scenene. *Ferdig når:*
+- [x] **6. Formatene.** 9:16 og 4:5 fra de samme scenene. *Ferdig når:*
   kontaktark av begge viser teksten innenfor trygg sone.
-- [ ] **7. Leveranse.** `render.mjs` → filene i specen, plakat og miniatyr,
+- [x] **7. Leveranse.** `render.mjs` → filene i specen, plakat og miniatyr,
   README. *Ferdig når:* filene finnes og spiller, og ffprobe viser riktige
   mål og lengder. Appen bygger.
 - [ ] **8. Nettsiden.** Thomas 01.10: filmen skal på haugemaskin.vercel.app som
