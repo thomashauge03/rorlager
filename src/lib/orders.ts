@@ -86,9 +86,30 @@ function sorterKatalog<T extends { sort_order: number; name: string; dimension: 
  * pipe_types er stengd for anon og gir null rader til ein prosjektbrukar. Skal
  * du vise katalogen til nokon utanfor kontoret, bruk fetchCatalog.
  */
+/*
+ * PostgREST kappar svaret på 1000 rader. Katalogen er mindre enn det i dag,
+ * men ein prisimport kan fort leggje til fleire hundre – og då ville resten av
+ * rørtypane forsvunne frå lista, frå QR-eksporten og frå butikken utan at noko
+ * sa frå. Sidene blir henta til ei kjem tilbake ufull.
+ */
+const SIDE = 1000;
+async function hentAlle<T>(side: (fra: number, til: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>, kontekst: string): Promise<T[]> {
+  const alle: T[] = [];
+  for (let fra = 0; ; fra += SIDE) {
+    const { data, error } = await side(fra, fra + SIDE - 1);
+    if (error) fail(kontekst, error);
+    const bolk = (data ?? []) as T[];
+    alle.push(...bolk);
+    if (bolk.length < SIDE) return alle;
+  }
+}
+
 export async function fetchPipeTypes(): Promise<PipeType[]> {
-  const { data, error } = await supabase.from("pipe_types").select("*, pipe_categories(name)");
-  if (error) fail("Klarte ikke å hente rørtypene", error);
+  // Fast rekkjefølgje på id, elles kan ei rad hamne på to sider eller ingen
+  const data = await hentAlle<unknown>(
+    (fra, til) => supabase.from("pipe_types").select("*, pipe_categories(name)").order("id").range(fra, til),
+    "Klarte ikke å hente rørtypene",
+  );
 
   const rows = (data ?? []) as unknown as (PipeTypeRow & { pipe_categories?: { name: string } | null })[];
 
@@ -103,8 +124,10 @@ export async function fetchPipeTypes(): Promise<PipeType[]> {
  * direkte, og då låg innkjøpsprisen open for kven som helst på nettet.
  */
 export async function fetchCatalog(): Promise<CatalogItem[]> {
-  const { data, error } = await supabase.from("pipe_catalog").select("*, pipe_categories(name)");
-  if (error) fail("Klarte ikke å hente rørtypene", error);
+  const data = await hentAlle<unknown>(
+    (fra, til) => supabase.from("pipe_catalog").select("*, pipe_categories(name)").order("id").range(fra, til),
+    "Klarte ikke å hente rørtypene",
+  );
 
   const rows = (data ?? []) as unknown as (PipeCatalogRow & { pipe_categories?: { name: string } | null })[];
 
