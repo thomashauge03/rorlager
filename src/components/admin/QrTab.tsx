@@ -28,6 +28,7 @@ import {
   qrDataUrl,
   type LabelPipe,
 } from "@/lib/qr-labels";
+import { byggQrAdminRader, qrAdminJson } from "@/lib/qr-admin-eksport";
 import { cn } from "@/lib/utils";
 import type { PipeType } from "@/lib/types";
 
@@ -49,6 +50,17 @@ const toLabelPipe = (t: PipeType, medPris: boolean): LabelPipe => ({
 
 /** Nettlesaren blokkerer fleire nedlastingar som kjem i same augeblink. */
 const pause = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** Den einaste adressa QR Admin godtek lenkjer til frå rørlageret. */
+const QR_ADMIN_VERT = "rorlager.vercel.app";
+
+const vertFor = (url: string) => {
+  try {
+    return new URL(url.trim()).hostname;
+  } catch {
+    return "";
+  }
+};
 
 /** Ein adresse på denne maskina er verdilaus på ei hylle – då må admin varslast. */
 const isLocalAddress = (url: string) => /^(https?:\/\/)?(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)([:/]|$)/i.test(url.trim());
@@ -297,6 +309,59 @@ export function QrTab() {
       setBusy(null);
     }
   };
+
+  /* ------------------------------------------------------------ QR Admin */
+
+  const qrAdminData = () => {
+    const { rader, utanKode } = byggQrAdminRader(valgte, baseUrl);
+    return { json: qrAdminJson(rader), antall: rader.length, utanKode };
+  };
+
+  const meldQrAdmin = (tittel: string, antall: number, utanKode: number) =>
+    toast({
+      title: tittel,
+      description:
+        `${num(antall)} rør. Lim inn i QR Admin under «Importer fra Lagersystem».` +
+        (utanKode > 0 ? ` ${num(utanKode)} uten QR-kode ble hoppet over.` : ""),
+    });
+
+  const kopierTilQrAdmin = async () => {
+    const { json, antall, utanKode } = qrAdminData();
+    if (antall === 0) {
+      toast({ variant: "destructive", title: "Ingenting å eksportere", description: "Ingen av de valgte rørene har QR-kode." });
+      return;
+    }
+    try {
+      if (!navigator.clipboard?.writeText) throw new Error("mangler utklippstavle");
+      await navigator.clipboard.writeText(json);
+    } catch {
+      if (!kopierViaMarkering(json)) {
+        toast({ variant: "destructive", title: "Kunne ikke kopiere", description: "Last ned fila i stedet." });
+        return;
+      }
+    }
+    meldQrAdmin("Kopiert til utklippstavlen", antall, utanKode);
+  };
+
+  const lastNedTilQrAdmin = () => {
+    const { json, antall, utanKode } = qrAdminData();
+    if (antall === 0) {
+      toast({ variant: "destructive", title: "Ingenting å eksportere", description: "Ingen av de valgte rørene har QR-kode." });
+      return;
+    }
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json;charset=utf-8" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `rorlager-til-qr-admin.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    // Utan revoke lever fila i minnet til fana blir lukka
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    meldQrAdmin("Fila er lastet ned", antall, utanKode);
+  };
+
+  const qrAdminGodtek = vertFor(baseUrl) === QR_ADMIN_VERT;
 
   const ark = Math.ceil(valgte.length / PER_PAGE[perRow]) || 0;
   const lokalAdresse = isLocalAddress(baseUrl);
@@ -673,6 +738,46 @@ export function QrTab() {
                     nettleseren kan spørre om lov til å laste ned flere filer.
                   </p>
                 </>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Til QR Admin, som har etikettdesigna og dynamiske kodar. Eige
+                Supabase-prosjekt der, så det går som tekst å lime inn. */}
+            <div className="space-y-2">
+              <h4 className="text-sm font-semibold">Til QR Admin</h4>
+              <div className="grid grid-cols-2 gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={kopierTilQrAdmin}
+                  disabled={busy !== null || valgte.length === 0 || !qrAdminGodtek}
+                >
+                  <Copy className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Kopier
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={lastNedTilQrAdmin}
+                  disabled={busy !== null || valgte.length === 0 || !qrAdminGodtek}
+                >
+                  <FileDown className="mr-2 h-4 w-4" aria-hidden="true" />
+                  Last ned
+                </Button>
+              </div>
+              {qrAdminGodtek ? (
+                <p className="text-xs text-muted-foreground">
+                  {valgte.length === 0
+                    ? "Velg rørene først – «Velg alle synlige» tar med hele listen."
+                    : `${num(valgte.length)} rør. Lim inn i QR Admin under menyen → «Importer fra Lagersystem».`}
+                </p>
+              ) : (
+                <p className="flex items-start gap-1.5 text-xs text-destructive">
+                  <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  QR Admin godtar bare lenker til https://{QR_ADMIN_VERT}. Sett «Adresse appen ligger på» til den.
+                </p>
               )}
             </div>
           </div>

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { kodeFraSkann } from "@/lib/scanner";
+import { kodeFraSkannMedOppslag, type Skannsvar } from "@/lib/scanner";
 
 type Detektor = { detect: (kjelde: HTMLVideoElement) => Promise<{ rawValue?: string }[]> };
 
@@ -165,15 +165,30 @@ export function Scanner({
       }
       setStarting(false);
 
+      // Same etikett ligg i biletet i fleire sekund. Utan minnet ville ein QR
+      // Admin-kode blitt slått opp på nytt for kvart einaste bilete.
+      const oppslag = new Map<string, Promise<Skannsvar>>();
+      const tolk = (verdi: string) => {
+        let svar = oppslag.get(verdi);
+        if (!svar) {
+          svar = kodeFraSkannMedOppslag(verdi);
+          oppslag.set(verdi, svar);
+          // Eit mislukka oppslag skal kunne prøvast att når dekninga kjem tilbake
+          void svar.then((s) => s.grunn && setTimeout(() => oppslag.delete(verdi), 2000));
+        }
+        return svar;
+      };
+
       const tick = async () => {
         if (stopped) return;
         try {
           const funn = await detektor.detect(video);
           const verdi = funn?.[0]?.rawValue;
           if (verdi) {
-            const kode = kodeFraSkann(verdi);
+            const { kode, grunn } = await tolk(verdi);
+            if (stopped) return;
             if (!kode) {
-              setHint("Denne koden hører ikke til rørlageret. Prøv en annen.");
+              setHint(grunn ?? "Denne koden hører ikke til rørlageret. Prøv en annen.");
             } else if (kode !== sisteAvviste) {
               const svar = onCodeRef.current(kode);
               if (svar === null) {
