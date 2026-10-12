@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import hmLogo from "@/assets/hm-logo.png";
+import { tryggNeste } from "@/lib/dyplenke";
 
 /** Supabase svarar på engelsk – her set vi om dei feila kunden faktisk kan møte. */
 function norwegianAuthError(message: string): string {
@@ -57,6 +58,16 @@ async function heimeside(): Promise<string> {
 export default function AdminLogin() {
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  /*
+   * Stien brukeren var på før innloggingen, typisk en dyplenke fra Innboks.
+   * Bare kontoret skal dit: heimeside() avgjør fortsatt rollen, og next brukes
+   * bare når svaret er /admin. tryggNeste slipper bare lokale /admin-stier
+   * gjennom, så lenken kan ikke sende noen ut av appen.
+   */
+  const [params] = useSearchParams();
+  const neste = tryggNeste(params.get("next"));
+  const mål = (heim: string) => (heim === "/admin" && neste ? neste : heim);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -78,12 +89,14 @@ export default function AdminLogin() {
       heimeside().then((v) => {
         if (!alive) return;
         setChecking(false);
-        navigate(v, { replace: true });
+        navigate(mål(v), { replace: true });
       });
     });
     return () => {
       alive = false;
     };
+    // Sjekken skal gå én gang når siden åpnes, ikke på nytt for hver render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -122,7 +135,7 @@ export default function AdminLogin() {
      *
      * Knappen blir stående deaktivert til vi navigerer bort.
      */
-    navigate(await heimeside(), { replace: true });
+    navigate(mål(await heimeside()), { replace: true });
   };
 
   if (checking) {

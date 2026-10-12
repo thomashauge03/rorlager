@@ -4,7 +4,7 @@
 // dagen: kva skal eg tinge no, kva står ute hos leverandøren, og kva gjekk
 // gale i det som kom.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -48,6 +48,7 @@ import {
   setOrderStatus,
 } from "@/lib/projects";
 import { useSettings } from "@/lib/settings";
+import { markerOgRull } from "@/lib/dyplenke";
 import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
 import { dateTime, num, parseNum, pipeLabel, shortDate } from "@/lib/format";
 import type { ProjectOrderWithLines } from "@/lib/types";
@@ -61,7 +62,19 @@ const UTSNITT: { verdi: Utsnitt; navn: string }[] = [
   { verdi: "avvik", navn: "Avvik" },
 ];
 
-export function ToOrderTab() {
+/** Hvilket utsnitt et prosjektbehov står i, eller null når det ikke står i noen av dem. */
+function utsnittFor(status: ProjectOrderWithLines["status"]): Utsnitt | null {
+  if (status === "meldt") return "bestille";
+  if (status === "bestilt" || status === "delvis") return "underveis";
+  return null;
+}
+
+/**
+ * behov: order_number i project_orders, mottak: receipt_number i
+ * project_receipts. Begge fra en dyplenke, allerede validert i
+ * AdminDashboard, og null når lenken ikke peker hit.
+ */
+export function ToOrderTab({ behov = null, mottak: mottakNr = null }: { behov?: number | null; mottak?: number | null } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("bestille");
@@ -70,6 +83,72 @@ export function ToOrderTab() {
   const orders = useQuery({ queryKey: QK.projectOrders, queryFn: fetchAllProjectOrders });
   const projects = useQuery({ queryKey: QK.projects, queryFn: fetchProjects });
   const { data: settings } = useSettings();
+
+  /*
+   * Dyplenke fra Innboks.
+   *
+   * Hele lista er allerede hentet, så her finnes ingen dato eller søk å
+   * nullstille. Det som skjuler en sak, er utsnittet, så det byttes til det
+   * saken står i. Et behov som er mottatt, står bare som mottak, så da vises
+   * det siste mottaket på det. Et avvist behov står ingen steder, og det sies.
+   *
+   * Første effekt velger utsnitt og mål, andre ruller når utsnittet er tegnet.
+   */
+  const [dypMål, setDypMål] = useState<{ sel: string; åpne: ProjectOrderWithLines | null } | null>(null);
+  const dypTatt = useRef<string | null>(null);
+  const dypÅpne = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(dypÅpne.current), []);
+
+  useEffect(() => {
+    const nøkkel = behov !== null ? `behov:${behov}` : mottakNr !== null ? `mottak:${mottakNr}` : null;
+    if (!nøkkel || dypTatt.current === nøkkel || !orders.data) return;
+    dypTatt.current = nøkkel;
+
+    if (behov !== null) {
+      const o = orders.data.find((x) => x.order_number === behov);
+      if (!o) {
+        toast({ title: `Fant ikke behov ${behov}.`, description: "Det kan være trukket tilbake." });
+        return;
+      }
+      const u = utsnittFor(o.status);
+      if (u) {
+        setUtsnitt(u);
+        setDypMål({ sel: `behov-${o.id}`, åpne: o });
+        return;
+      }
+      const siste = [...o.receipts].sort((a, b) => b.received_at.localeCompare(a.received_at))[0];
+      if (o.status === "mottatt" && siste) {
+        setUtsnitt("mottak");
+        setDypMål({ sel: `mottak-${siste.id}`, åpne: null });
+        return;
+      }
+      toast({
+        title: `Behov ${behov} er ${o.status === "avvist" ? "avvist" : "ferdig"}.`,
+        description: "Det står ikke lenger i lista.",
+      });
+      return;
+    }
+
+    const r = orders.data.flatMap((o) => o.receipts).find((x) => x.receipt_number === mottakNr);
+    if (!r) {
+      toast({ title: `Fant ikke mottak ${mottakNr}.`, description: "Det kan være slettet." });
+      return;
+    }
+    setUtsnitt("mottak");
+    setDypMål({ sel: `mottak-${r.id}`, åpne: null });
+  }, [behov, mottakNr, orders.data, toast]);
+
+  useEffect(() => {
+    if (!dypMål) return;
+    setDypMål(null);
+    const el = document.querySelector<HTMLElement>(`[data-dyplenke="${dypMål.sel}"]`);
+    if (!el) return;
+    markerOgRull(el);
+    // Panelet dekker lista, så det åpnes etter et øyeblikk. Mottak har ikke
+    // noe eget panel: kortet viser alt.
+    const o = dypMål.åpne;
+    if (o) dypÅpne.current = window.setTimeout(() => setÅpen(o), 700);
+  }, [dypMål]);
 
   // Eitt kart, brukt av begge utsnitta. Låg tidlegare som eit memoisert kart
   // for namnet og eit lineært `find` for rada – to måtar å gjere same oppslaget.
@@ -215,7 +294,7 @@ export function ToOrderTab() {
               const avvikPaa = receipt.lines.filter((l) => l.deviation !== "ingen").length;
               const p = prosjektRad(order.project_id);
               return (
-                <li key={receipt.id} className="hm-card p-4">
+                <li key={receipt.id} data-dyplenke={`mottak-${receipt.id}`} className="hm-card p-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-foreground">{p?.name ?? "Ukjent prosjekt"}</p>
@@ -411,7 +490,7 @@ export function ToOrderTab() {
           {vist.map((o) => {
             const forsinka = isOverdue(o);
             return (
-              <li key={o.id} className="hm-card p-4">
+              <li key={o.id} data-dyplenke={`behov-${o.id}`} className="hm-card p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <p className="truncate font-semibold text-foreground">{prosjektNavn(o.project_id)}</p>

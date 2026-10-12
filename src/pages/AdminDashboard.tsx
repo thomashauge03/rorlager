@@ -32,6 +32,7 @@ import { SettingsTab } from "@/components/admin/SettingsTab";
 import { ProjectsTab } from "@/components/admin/ProjectsTab";
 import { ToOrderTab } from "@/components/admin/ToOrderTab";
 import { useWaitingPickupOrders } from "@/lib/pickup-orders";
+import { faneFor, lesDyplenke, type Dyplenke } from "@/lib/dyplenke";
 
 const TABS = [
   { value: "bestillinger", label: "Bestillinger", Icon: ShoppingCart },
@@ -57,9 +58,21 @@ export default function AdminDashboard() {
    * is_super_admin-kallet trengst ikkje lenger.
    */
   const queryClient = useQueryClient();
-  const { checking, email, role, roleKnown, roleFailed, prøvRolleIgjen } = useAuth(() =>
-    navigate("/login", { replace: true }),
-  );
+  /*
+   * Hele stien med query følger med til innloggingen, så en dyplenke fra
+   * Innboks (/admin?fane=bestillinger&ordre=1042) havner på saken etterpå og
+   * ikke bare på /admin. window.location og ikke useLocation: useAuth tar vare
+   * på denne funksjonen fra første render.
+   *
+   * Uten økt kalles den to ganger ved oppstart (lytteren og getSession). Den
+   * andre gangen står vi allerede på /login, og da ville next blitt pakket inn
+   * i seg selv.
+   */
+  const { checking, email, role, roleKnown, roleFailed, prøvRolleIgjen } = useAuth(() => {
+    const her = window.location.pathname + window.location.search;
+    if (!her.startsWith("/admin")) return;
+    navigate(`/login?next=${encodeURIComponent(her)}`, { replace: true });
+  });
   const isSuperAdmin = role === "super_admin";
 
   // Talet på fana Bestillinger. Berre for kontoret: ein prosjektbrukar blir
@@ -83,11 +96,19 @@ export default function AdminDashboard() {
     navigate("/login", { replace: true });
   };
 
+  // En dyplenke fra Innboks bestemmer fanen selv, se faneFor.
+  const dyplenke = lesDyplenke(params);
   const requested = params.get("fane");
-  const tab = TABS.some((t) => t.value === requested) ? (requested as string) : DEFAULT_TAB;
+  const tab = dyplenke
+    ? faneFor(dyplenke)
+    : TABS.some((t) => t.value === requested)
+      ? (requested as string)
+      : DEFAULT_TAB;
+  const nr = (type: Dyplenke["type"]) => (dyplenke?.type === type ? dyplenke.nummer : null);
 
   // Fana ligg i URL-en så ei oppdatering av sida hamnar same stad. replace,
   // elles ville tilbakeknappen gå fane for fane gjennom heile økta.
+  // Et fanebytte tar også bort dyplenken, ellers ville den holdt brukeren fast.
   const setTab = (value: string) => setParams({ fane: value }, { replace: true });
 
   if (checking) {
@@ -248,10 +269,10 @@ export default function AdminDashboard() {
           </div>
 
           <TabsContent value="bestillinger" className="animate-fade-in">
-            <OrdersTab />
+            <OrdersTab ordre={nr("ordre")} />
           </TabsContent>
           <TabsContent value="abestille" className="animate-fade-in">
-            <ToOrderTab />
+            <ToOrderTab behov={nr("behov")} mottak={nr("mottak")} />
           </TabsContent>
           <TabsContent value="prosjekt" className="animate-fade-in">
             <ProjectsTab />

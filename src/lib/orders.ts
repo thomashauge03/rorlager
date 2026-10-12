@@ -289,6 +289,23 @@ export async function fetchOrders(
   });
 }
 
+/**
+ * Slår opp ei ordre på nummeret, for dyplenkene fra Innboks.
+ *
+ * Henter bare id og tidspunkt: det er nok til å sette datofilteret slik at
+ * ordren kommer med i lista, og lista henter resten selv.
+ */
+export async function findOrderByNumber(orderNumber: number): Promise<{ id: string; created_at: string } | null> {
+  const { data, error } = await supabase
+    .from("pipe_orders")
+    .select("id, created_at")
+    .eq("order_number", orderNumber)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error) fail("Klarte ikke å slå opp ordren", error);
+  return data?.[0] ?? null;
+}
+
 export async function updateOrder(id: string, patch: Partial<PipeOrderRow>): Promise<void> {
   const { error } = await supabase.from("pipe_orders").update(patch).eq("id", id);
   if (error) fail("Klarte ikke å oppdatere bestillingen", error);
