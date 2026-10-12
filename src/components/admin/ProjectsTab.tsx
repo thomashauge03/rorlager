@@ -1,12 +1,16 @@
-// Kontorets prosjektregister: opprett prosjekt og sett folk på dei.
+// Kontorets prosjektregister: se prosjektene fra SmartDok og sett folk på dem.
 //
-// Tilgangen til eit prosjekt blir styrt HER, ikkje i brukarregisteret. Ein
-// person må ha ei rad i system_users for å kome inn i det heile, og ei rad i
-// project_members for kvart prosjekt han skal sjå.
+// Prosjektene opprettes, endres og avsluttes i SmartDok (eller under Prosjekter
+// i adminbordet), og synken skriver dem hit hvert kvarter. Her styres bare hvem
+// som er på hvert prosjekt, pluss et internt notat.
+//
+// Tilgangen til et prosjekt styres HER, ikke i brukerregisteret. En person må
+// ha en rad i system_users for å komme inn i det hele tatt, og en rad i
+// project_members for hvert prosjekt han skal se.
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { FolderOpen, Loader2, MapPin, Pencil, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import { ExternalLink, FolderOpen, Info, Loader2, MapPin, NotebookPen, Search, Trash2, UserPlus, Users } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,37 +25,31 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Stat } from "@/components/Stat";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import {
   addProjectMember,
-  deleteProject,
   fetchProjectMembers,
   fetchProjects,
+  filtrerProsjekter,
   removeProjectMember,
-  saveProject,
+  saveProjectNote,
 } from "@/lib/projects";
 import type { ProjectMemberRow, ProjectRow } from "@/lib/types";
 
-/** Same enkle sjekken som brukarregisteret gjer. */
+/** Samme enkle sjekken som brukerregisteret gjør. */
 const isEmail = (v: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
 
-type Utkast = { name: string; client: string; address: string; status: ProjectRow["status"]; note: string };
+const ADMINBORDET_PROSJEKTER = "https://hauge-maskin-adminbord.vercel.app/prosjekter";
 
-const TOMT: Utkast = { name: "", client: "", address: "", status: "aktiv", note: "" };
-
-const fraRad = (p: ProjectRow): Utkast => ({
-  name: p.name,
-  client: p.client ?? "",
-  address: p.address ?? "",
-  status: p.status,
-  note: p.note ?? "",
-});
+// Hundrevis av kort med knapper gjør fanen treg når avsluttede er slått på.
+// Søket er veien videre, så resten skjules bak en beskjed om å søke.
+const MAKS_VISTE = 100;
 
 export function ProjectsTab() {
   const { toast } = useToast();
@@ -59,62 +57,90 @@ export function ProjectsTab() {
 
   const projects = useQuery({ queryKey: QK.projects, queryFn: fetchProjects });
 
-  const [redigerer, setRedigerer] = useState<ProjectRow | "ny" | null>(null);
-  const [utkast, setUtkast] = useState<Utkast>(TOMT);
+  const [søk, setSøk] = useState("");
+  const [visAvsluttede, setVisAvsluttede] = useState(false);
+  const [notatFor, setNotatFor] = useState<ProjectRow | null>(null);
+  const [notat, setNotat] = useState("");
   const [medlemmerFor, setMedlemmerFor] = useState<ProjectRow | null>(null);
-  const [skalSlette, setSkalSlette] = useState<ProjectRow | null>(null);
 
-  const åpne = (p: ProjectRow | "ny") => {
-    setRedigerer(p);
-    setUtkast(p === "ny" ? TOMT : fraRad(p));
+  const åpneNotat = (p: ProjectRow) => {
+    setNotatFor(p);
+    setNotat(p.note ?? "");
   };
 
-  const lagre = useMutation({
+  const lagreNotat = useMutation({
     mutationFn: async () => {
-      if (!utkast.name.trim()) throw new Error("Prosjektet må ha et navn.");
-      return saveProject({
-        id: redigerer && redigerer !== "ny" ? redigerer.id : undefined,
-        name: utkast.name.trim(),
-        client: utkast.client.trim() || null,
-        address: utkast.address.trim() || null,
-        status: utkast.status,
-        note: utkast.note.trim() || null,
-      });
+      if (!notatFor) return;
+      await saveProjectNote(notatFor.id, notat.trim() || null);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: QK.projects });
-      toast({ title: "Prosjektet er lagret" });
-      setRedigerer(null);
+      toast({ title: "Notatet er lagret" });
+      setNotatFor(null);
     },
     onError: (error: Error) =>
-      toast({ variant: "destructive", title: "Prosjektet ble ikke lagret", description: error.message }),
+      toast({ variant: "destructive", title: "Notatet ble ikke lagret", description: error.message }),
   });
 
-  const slett = useMutation({
-    mutationFn: async (p: ProjectRow) => deleteProject(p.id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: QK.projects });
-      queryClient.invalidateQueries({ queryKey: QK.projectOrders });
-      toast({ title: "Prosjektet er slettet" });
-      setSkalSlette(null);
-    },
-    onError: (error: Error) =>
-      toast({ variant: "destructive", title: "Prosjektet ble ikke slettet", description: error.message }),
-  });
+  const alle = projects.data ?? [];
+  const antallAktive = alle.filter((p) => p.status === "aktiv").length;
+  const antallAvsluttet = alle.length - antallAktive;
 
-  const liste = projects.data ?? [];
+  const treff = useMemo(
+    () => filtrerProsjekter(projects.data ?? [], { søk, visAvsluttede }),
+    [projects.data, søk, visAvsluttede],
+  );
+  const viste = treff.slice(0, MAKS_VISTE);
 
   return (
     <div className="animate-fade-in space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex flex-wrap gap-2">
-          <Stat label="Aktive" value={String(liste.filter((p) => p.status === "aktiv").length)} />
-          <Stat label="Avsluttet" value={String(liste.filter((p) => p.status === "avsluttet").length)} />
+      <div className="flex gap-3 rounded-lg border border-border bg-muted/40 p-4">
+        <Info className="mt-0.5 h-5 w-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="space-y-2 text-sm text-foreground">
+          <p>
+            Prosjektene hentes fra SmartDok gjennom adminbordet. Nye prosjekter opprettes i SmartDok eller under
+            Prosjekter i adminbordet, og dukker opp her innen et kvarter.
+          </p>
+          <a
+            href={ADMINBORDET_PROSJEKTER}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex min-h-11 items-center gap-1.5 font-medium text-primary underline-offset-4 hover:underline"
+          >
+            Åpne Prosjekter i adminbordet
+            <ExternalLink className="h-4 w-4" aria-hidden="true" />
+          </a>
         </div>
-        <Button className="h-11" onClick={() => åpne("ny")}>
-          <Plus className="mr-2 h-4 w-4" aria-hidden="true" />
-          Nytt prosjekt
-        </Button>
+      </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Stat label="Aktive" value={String(antallAktive)} />
+        <Stat label="Avsluttet" value={String(antallAvsluttet)} />
+      </div>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="relative flex-1">
+          <Label htmlFor="prosjekt-sok" className="sr-only">
+            Søk i prosjektene
+          </Label>
+          <Search
+            className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+            aria-hidden="true"
+          />
+          <Input
+            id="prosjekt-sok"
+            className="h-11 pl-9"
+            placeholder="Nummer, navn, oppdragsgiver eller adresse"
+            value={søk}
+            onChange={(e) => setSøk(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center gap-2.5">
+          <Switch id="prosjekt-avsluttede" checked={visAvsluttede} onCheckedChange={setVisAvsluttede} />
+          <Label htmlFor="prosjekt-avsluttede" className="cursor-pointer">
+            Vis avsluttede
+          </Label>
+        </div>
       </div>
 
       {projects.isLoading ? (
@@ -132,139 +158,88 @@ export function ProjectsTab() {
             Prøv igjen
           </Button>
         </div>
-      ) : liste.length === 0 ? (
+      ) : treff.length === 0 ? (
         <div className="hm-card flex flex-col items-center justify-center gap-2 py-14 text-center">
           <div className="rounded-full bg-primary/10 p-4 ring-8 ring-primary/5">
             <FolderOpen className="h-7 w-7 text-primary" aria-hidden="true" />
           </div>
-          <p className="mt-1 font-semibold text-foreground">Ingen prosjekter ennå</p>
+          <p className="mt-1 font-semibold text-foreground">
+            {alle.length === 0 ? "Ingen prosjekter ennå" : "Ingen prosjekter passer"}
+          </p>
           <p className="max-w-xs text-sm text-muted-foreground">
-            Opprett et prosjekt, og sett folkene på plassen på det.
+            {alle.length === 0
+              ? "Prosjektene dukker opp her når synken fra SmartDok har kjørt."
+              : visAvsluttede
+                ? "Prøv et annet søk."
+                : "Prøv et annet søk, eller slå på «Vis avsluttede»."}
           </p>
         </div>
       ) : (
-        <ul className="space-y-2">
-          {liste.map((p) => (
-            <li key={p.id} className="hm-card p-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-foreground">
-                    <span className="tabular text-muted-foreground">#{p.project_number}</span> {p.name}
-                  </p>
-                  {p.client ? <p className="truncate text-sm text-muted-foreground">{p.client}</p> : null}
-                  {p.address ? (
-                    <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{p.address}</span>
+        <>
+          <ul className="space-y-2">
+            {viste.map((p) => (
+              <li key={p.id} className="hm-card p-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-foreground">
+                      <span className="tabular text-muted-foreground">#{p.project_number}</span> {p.name}
                     </p>
+                    {p.client ? <p className="truncate text-sm text-muted-foreground">{p.client}</p> : null}
+                    {p.address ? (
+                      <p className="mt-1 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{p.address}</span>
+                      </p>
+                    ) : null}
+                    {p.note ? <p className="mt-1 text-sm text-foreground">{p.note}</p> : null}
+                  </div>
+                  {p.status === "avsluttet" ? (
+                    <span className="hm-chip border border-border bg-muted text-muted-foreground">Avsluttet</span>
                   ) : null}
                 </div>
-                {p.status === "avsluttet" ? (
-                  <span className="hm-chip border border-border bg-muted text-muted-foreground">Avsluttet</span>
-                ) : null}
-              </div>
 
-              <div className="mt-3 flex flex-wrap gap-2">
-                <Button size="sm" variant="outline" className="h-11" onClick={() => setMedlemmerFor(p)}>
-                  <Users className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Hvem er på
-                </Button>
-                <Button size="sm" variant="outline" className="h-11" onClick={() => åpne(p)}>
-                  <Pencil className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Endre
-                </Button>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  className="h-11 text-muted-foreground hover:text-destructive"
-                  onClick={() => setSkalSlette(p)}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" aria-hidden="true" />
-                  Slett
-                </Button>
-              </div>
-            </li>
-          ))}
-        </ul>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button size="sm" variant="outline" className="h-11" onClick={() => setMedlemmerFor(p)}>
+                    <Users className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Hvem er på
+                  </Button>
+                  <Button size="sm" variant="outline" className="h-11" onClick={() => åpneNotat(p)}>
+                    <NotebookPen className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Notat
+                  </Button>
+                </div>
+              </li>
+            ))}
+          </ul>
+          {treff.length > viste.length ? (
+            <p className="py-2 text-center text-sm text-muted-foreground">
+              Viser {viste.length} av {treff.length}. Søk for å finne resten.
+            </p>
+          ) : null}
+        </>
       )}
 
-      {/* ---------- Opprett og endre ---------- */}
-      {redigerer ? (
-        <Dialog open onOpenChange={(o) => !o && setRedigerer(null)}>
+      {notatFor ? (
+        <Dialog open onOpenChange={(o) => !o && setNotatFor(null)}>
           <DialogContent className="max-h-[90dvh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{redigerer === "ny" ? "Nytt prosjekt" : "Endre prosjekt"}</DialogTitle>
+              <DialogTitle>Notat for {notatFor.name}</DialogTitle>
               <DialogDescription>
-                Adressen er den varene skal kjøres til, og den kontoret oppgir hos leverandøren.
+                Bare for rørlageret. Navn, oppdragsgiver, adresse og status kommer fra SmartDok og endres der.
               </DialogDescription>
             </DialogHeader>
 
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="prosjekt-navn">
-                  Navn <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="prosjekt-navn"
-                  value={utkast.name}
-                  onChange={(e) => setUtkast((f) => ({ ...f, name: e.target.value }))}
-                  className="h-12"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="prosjekt-kunde">Oppdragsgiver</Label>
-                <Input
-                  id="prosjekt-kunde"
-                  value={utkast.client}
-                  onChange={(e) => setUtkast((f) => ({ ...f, client: e.target.value }))}
-                  className="h-12"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="prosjekt-adresse">Leveringsadresse</Label>
-                <Input
-                  id="prosjekt-adresse"
-                  value={utkast.address}
-                  onChange={(e) => setUtkast((f) => ({ ...f, address: e.target.value }))}
-                  className="h-12"
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="prosjekt-status">Status</Label>
-                <Select
-                  value={utkast.status}
-                  onValueChange={(v) => setUtkast((f) => ({ ...f, status: v as ProjectRow["status"] }))}
-                >
-                  <SelectTrigger id="prosjekt-status" className="h-12">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="aktiv">Aktiv</SelectItem>
-                    <SelectItem value="avsluttet">Avsluttet</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label htmlFor="prosjekt-notat">Notat</Label>
-                <Textarea
-                  id="prosjekt-notat"
-                  value={utkast.note}
-                  onChange={(e) => setUtkast((f) => ({ ...f, note: e.target.value }))}
-                  rows={2}
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="prosjekt-notat">Notat</Label>
+              <Textarea id="prosjekt-notat" value={notat} onChange={(e) => setNotat(e.target.value)} rows={3} />
             </div>
 
             <DialogFooter>
-              <Button variant="outline" className="h-12" onClick={() => setRedigerer(null)}>
+              <Button variant="outline" className="h-12" onClick={() => setNotatFor(null)}>
                 Avbryt
               </Button>
-              <Button className="h-12" disabled={lagre.isPending} onClick={() => lagre.mutate()}>
-                {lagre.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : "Lagre"}
+              <Button className="h-12" disabled={lagreNotat.isPending} onClick={() => lagreNotat.mutate()}>
+                {lagreNotat.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : "Lagre"}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -272,26 +247,6 @@ export function ProjectsTab() {
       ) : null}
 
       {medlemmerFor ? <MedlemsPanel project={medlemmerFor} onClose={() => setMedlemmerFor(null)} /> : null}
-
-      <AlertDialog open={!!skalSlette} onOpenChange={(o) => !o && setSkalSlette(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Slette «{skalSlette?.name}»?</AlertDialogTitle>
-            <AlertDialogDescription>
-              Alle bestillinger og mottak på prosjektet blir slettet med det. Dette kan ikke angres.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Avbryt</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => skalSlette && slett.mutate(skalSlette)}
-            >
-              Slett
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }
@@ -416,8 +371,8 @@ function MedlemsPanel({ project, onClose }: { project: ProjectRow; onClose: () =
           )}
         </div>
 
-        {/* Eitt trykk tok tidlegare frå ein person tilgangen til prosjektet.
-            Same vekt som å slette eit prosjekt, og difor same bekreftelse. */}
+        {/* Ett trykk tok tidligere fra en person tilgangen til prosjektet,
+            og det er for tungt til å skje uten en bekreftelse. */}
         <AlertDialog open={!!skalFjerne} onOpenChange={(o) => !o && setSkalFjerne(null)}>
           <AlertDialogContent>
             <AlertDialogHeader>
