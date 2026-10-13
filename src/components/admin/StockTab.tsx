@@ -862,11 +862,11 @@ export function PipeDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div className="space-y-1.5 sm:col-span-2">
             <Label htmlFor="vare-kategori">Kategori</Label>
             <Select value={form.category_id} onValueChange={(v) => set({ category_id: v })}>
-              <SelectTrigger id="vare-kategori" className="h-11">
+              <SelectTrigger id="vare-kategori" className="h-11" aria-describedby="vare-kategori-hjelp">
                 <SelectValue placeholder="Uten kategori" />
               </SelectTrigger>
               <SelectContent>
@@ -878,6 +878,14 @@ export function PipeDialog({
                 ))}
               </SelectContent>
             </Select>
+            {/* Ei vare frå eit forslag skal finnast att neste gong. Utan
+                kategori står ho berre under «Alle», og då er det lett å
+                leite forbi henne og leggje inn same forslag på nytt. */}
+            {!pipe && form.category_id === INGEN ? (
+              <p id="vare-kategori-hjelp" className="text-xs text-muted-foreground">
+                Velg kategori, så havner varen under riktig knapp på forsiden og blir funnet neste gang.
+              </p>
+            ) : null}
           </div>
 
           <div className="space-y-1.5">

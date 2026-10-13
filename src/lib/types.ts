@@ -108,7 +108,11 @@ export type PickupOrderInput = {
 };
 
 /** Ei bestilling slik adminpanelet ser henne: hovudrada med linjene sine. */
-export type OrderWithLines = PipeOrderRow & { lines: PipeOrderLineRow[] };
+export type OrderWithLines = PipeOrderRow & {
+  lines: PipeOrderLineRow[];
+  /** Prosjektet varene kom frå (Lagervarer Rør). Berre i adminpanelet. */
+  lagerprosjekt?: { project_number: number; name: string } | null;
+};
 
 /** Svaret frå pipe_submit_order – kvitteringa kunden får med seg. */
 export type SubmittedOrder = {

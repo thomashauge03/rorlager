@@ -78,6 +78,22 @@ export async function endreAnnet(lineId: string, name: string, dimension: string
   if (error) throw new Error(error.message || "Klarte ikke å endre navnet");
 }
 
+/**
+ * Nytt namn på eit forslag, før vara blir oppretta.
+ *
+ * Står ordren og er ikkje fakturert, går det gjennom linja, så uttaket og
+ * forslaget seier det same. Er ordren sletta eller fakturert, blir berre
+ * forslaget endra: eit sendt fakturagrunnlag skal ikkje skifte innhald.
+ */
+export async function endreForslag(s: Suggestion, name: string, dimension: string | null) {
+  if (s.order_line_id && s.order && !s.order.invoice_id) {
+    await endreAnnet(s.order_line_id, name, dimension);
+    return;
+  }
+  const { error } = await supabase.from("pipe_suggestions").update({ name, dimension }).eq("id", s.id);
+  if (error) throw new Error(`Klarte ikke å endre navnet: ${error.message}`);
+}
+
 /** Anna vare på linja. Lageret følgjer med når ordren har trekt det. */
 export async function byttVare(lineId: string, pipeTypeId: string) {
   const { error } = await supabase.rpc("pipe_bytt_vare", { p_line_id: lineId, p_pipe_type_id: pipeTypeId });

@@ -615,6 +615,15 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                   ) : (
                     <DetailRow label="Prosjekt" value={open.project} />
                   )}
+                  {/* Internt: kunden ser aldri dette nummeret */}
+                  <DetailRow
+                    label="Tas fra"
+                    value={
+                      open.lagerprosjekt
+                        ? `${open.lagerprosjekt.project_number} · ${open.lagerprosjekt.name}`
+                        : null
+                    }
+                  />
                   <DetailRow
                     label="Telefon"
                     value={

@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Inbox, PackagePlus, RotateCcw, Tag } from "lucide-react";
+import { Ban, Inbox, PackagePlus, Pencil, RotateCcw, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -15,6 +15,7 @@ import { QK, fetchCategories, fetchPipeTypes } from "@/lib/orders";
 import {
   SUGGESTION_STATUS_LABEL,
   closeSuggestion,
+  endreForslag,
   fetchSuggestions,
   kanPrisast,
   priceLine,
@@ -24,6 +25,7 @@ import {
 import type { PipeTypeRow } from "@/lib/types";
 import { PipeDialog } from "@/components/admin/StockTab";
 import { PriceLineDialog, type PrisLinje } from "@/components/admin/PriceLineDialog";
+import { EndreAnnetDialog } from "@/components/admin/RettUttak";
 
 type Utsnitt = "nye" | "behandlet";
 
@@ -33,6 +35,7 @@ export function SuggestionsTab() {
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("nye");
   const [opprett, setOpprett] = useState<Suggestion | null>(null);
   const [prisFor, setPrisFor] = useState<Suggestion | null>(null);
+  const [namnFor, setNamnFor] = useState<Suggestion | null>(null);
 
   const forslag = useQuery({ queryKey: QK.suggestions, queryFn: fetchSuggestions });
   // Vare-dialogen sjekkar at QR-kode og varenummer er ledige, og treng difor heile katalogen
@@ -173,6 +176,7 @@ export function SuggestionsTab() {
               key={s.id}
               s={s}
               onOpprett={() => setOpprett(s)}
+              onNamn={() => setNamnFor(s)}
               onPris={() => setPrisFor(s)}
               onAvvis={() => avvis.mutate(s)}
               onOpne={() => opne.mutate(s)}
@@ -193,6 +197,16 @@ export function SuggestionsTab() {
         />
       ) : null}
 
+      {/* Rett namnet først, så blir «Opprett vare» fylt ut med det kontoret
+          faktisk meiner og ikkje med det som blei tasta på lageret */}
+      <EndreAnnetDialog
+        line={namnFor}
+        onClose={() => setNamnFor(null)}
+        lagreMed={async (name, dimension) => {
+          if (namnFor) await endreForslag(namnFor, name, dimension);
+        }}
+      />
+
       <PriceLineDialog
         line={prisLinje}
         onClose={() => setPrisFor(null)}
@@ -207,6 +221,7 @@ export function SuggestionsTab() {
 function ForslagKort({
   s,
   onOpprett,
+  onNamn,
   onPris,
   onAvvis,
   onOpne,
@@ -214,6 +229,7 @@ function ForslagKort({
 }: {
   s: Suggestion;
   onOpprett: () => void;
+  onNamn: () => void;
   onPris: () => void;
   onAvvis: () => void;
   onOpne: () => void;
@@ -290,6 +306,10 @@ function ForslagKort({
             <Button size="sm" onClick={onOpprett} className="h-10 [&_svg]:size-4">
               <PackagePlus aria-hidden="true" />
               Opprett vare
+            </Button>
+            <Button size="sm" variant="outline" onClick={onNamn} className="h-10 [&_svg]:size-4">
+              <Pencil aria-hidden="true" />
+              Endre navn
             </Button>
             <Button
               size="sm"

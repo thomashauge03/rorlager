@@ -45,6 +45,8 @@ export type PipeOrderRow = {
   project: string | null;
   /** Prosjektet frå lista i kassen. Null for kundar og fritekst; manglar før 20261014100000. */
   project_id?: string | null;
+  /** Lagerprosjektet varene kom frå. Set av basen; manglar før 20261014120000. */
+  stock_project_id?: string | null;
   comment: string | null;
   signature: string | null;
   status: "ny" | "behandlet" | "levert" | "avvist";

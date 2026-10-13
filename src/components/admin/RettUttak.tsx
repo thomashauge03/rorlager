@@ -139,7 +139,16 @@ export function ByttProsjektDialog({
 /*  Namnet på ei annet-linje                                           */
 /* ------------------------------------------------------------------ */
 
-export function EndreAnnetDialog({ line, onClose }: { line: RettLinje | null; onClose: () => void }) {
+export function EndreAnnetDialog({
+  line,
+  onClose,
+  lagreMed,
+}: {
+  line: Pick<RettLinje, "id" | "name" | "dimension"> | null;
+  onClose: () => void;
+  /** Overstyrer lagringa. Forslagsfana bruker det når ordren er sletta eller fakturert. */
+  lagreMed?: (name: string, dimension: string | null) => Promise<void>;
+}) {
   const { toast } = useToast();
   const etter = useEtterRetting();
   const [namn, setNamn] = useState("");
@@ -152,7 +161,9 @@ export function EndreAnnetDialog({ line, onClose }: { line: RettLinje | null; on
 
   const lagre = useMutation({
     mutationFn: async () => {
-      if (line) await endreAnnet(line.id, namn.trim(), dim.trim() || null);
+      if (!line) return;
+      if (lagreMed) await lagreMed(namn.trim(), dim.trim() || null);
+      else await endreAnnet(line.id, namn.trim(), dim.trim() || null);
     },
     onSuccess: () => {
       etter();

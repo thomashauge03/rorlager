@@ -291,7 +291,13 @@ function orderHaystack(order: PipeOrderRow): string {
 export async function fetchOrders(
   opts: { from?: string; to?: string; status?: OrderStatus | "alle"; search?: string; onlyUninvoiced?: boolean } = {},
 ): Promise<OrderWithLines[]> {
-  let query = supabase.from("pipe_orders").select("*, pipe_order_lines(*)").order("created_at", { ascending: false });
+  // Lagerprosjektet med namn, ved namnet på framandnøkkelen: pipe_orders har
+  // to nøklar til projects (project_id og stock_project_id), og utan namnet
+  // veit ikkje PostgREST kva for ein som er meint.
+  let query = supabase
+    .from("pipe_orders")
+    .select("*, pipe_order_lines(*), lagerprosjekt:projects!pipe_orders_stock_project_id_fkey(project_number, name)")
+    .order("created_at", { ascending: false });
 
   if (opts.from) query = query.gte("created_at", startOfDayIso(opts.from));
   if (opts.to) query = query.lte("created_at", endOfDayIso(opts.to));
