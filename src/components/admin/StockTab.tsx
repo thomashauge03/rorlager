@@ -20,8 +20,10 @@ import {
   Pencil,
   Plus,
   Search,
+  ShoppingBasket,
   Trash2,
 } from "lucide-react";
+import { InnkjopPanel } from "@/components/admin/InnkjopPanel";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -125,6 +127,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
   const [adjust, setAdjust] = useState<{ pipe: PipeType; mode: "add" | "remove" | "count" } | null>(null);
   const [toDelete, setToDelete] = useState<PipeType | null>(null);
   const [logFor, setLogFor] = useState<PipeType | "alle" | null>(null);
+  const [innkjop, setInnkjop] = useState(false);
 
   // Ny tom array kvar render ville gjort alle useMemo-ane under verdilause
   const rows = useMemo(() => types.data ?? [], [types.data]);
@@ -309,6 +312,10 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" className="h-11" onClick={() => setInnkjop(true)}>
+              <ShoppingBasket className="h-4 w-4" aria-hidden="true" />
+              Innkjøpsforslag
+            </Button>
             <Button variant="outline" className="h-11" onClick={() => setLogFor("alle")}>
               <History className="h-4 w-4" aria-hidden="true" />
               Lagerlogg
@@ -492,6 +499,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
       )}
 
       {adjust && <AdjustDialog pipe={adjust.pipe} mode={adjust.mode} onClose={() => setAdjust(null)} />}
+      {innkjop ? <InnkjopPanel varer={rows} visKostpris={visKostpris} onClose={() => setInnkjop(false)} /> : null}
 
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
