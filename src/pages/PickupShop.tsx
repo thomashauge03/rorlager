@@ -23,7 +23,7 @@ import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { finnVare } from "@/lib/scanner";
 import { pickupLineFromAnnet, pickupLineFromItem, usePickupCart } from "@/lib/pickup-cart";
 import { ANNET_GRENSER, ANNET_TEKST, talAnnet } from "@/lib/annet";
-import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
+import { AnnetBrikke, AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
 import { linjesum, prisInklMva, summer } from "@/lib/mva";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -287,8 +287,9 @@ export default function PickupShop() {
               </div>
             </div>
 
-            {chips.length > 0 && (
-              <div className="mt-3 flex flex-wrap gap-2">
+            <div className="mt-3 flex flex-wrap gap-2">
+              {chips.length > 0 && (
+                <>
                 <button
                   type="button"
                   onClick={() => setKategori(null)}
@@ -318,8 +319,10 @@ export default function PickupShop() {
                     {c.name}
                   </button>
                 ))}
-              </div>
-            )}
+                </>
+              )}
+              <AnnetBrikke onClick={() => setAnnetOpen(true)} />
+            </div>
 
             <div className="mt-4">
               {katalog.isLoading ? (

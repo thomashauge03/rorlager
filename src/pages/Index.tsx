@@ -15,7 +15,7 @@ import { useOrderSettings, useSettings } from "@/lib/settings";
 import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
 import { cartLineFromAnnet, useCart } from "@/lib/cart";
-import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
+import { AnnetBrikke, AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CatalogItem } from "@/lib/types";
@@ -218,8 +218,9 @@ export default function Index() {
           ) : null}
         </div>
 
-        {categories.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap gap-2">
+          {categories.length > 0 && (
+            <>
             <button
               type="button"
               onClick={() => setCategoryId(null)}
@@ -258,8 +259,10 @@ export default function Index() {
                 {c.name}
               </button>
             ))}
-          </div>
-        )}
+            </>
+          )}
+          <AnnetBrikke onClick={() => setAnnetOpen(true)} />
+        </div>
 
         <div className="mt-4">
           {typesQuery.isLoading ? (

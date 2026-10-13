@@ -390,7 +390,11 @@ export function QrTab() {
         </div>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
+      {/* grid-cols-1 på mobil er ikkje pynt. Utan han får rutenettet ein
+          implisitt «auto»-kolonne, som veks til den naturlege breidda til
+          tabellen under – og overflow-x-auto rundt tabellen slår aldri inn.
+          Fanen blei 429 px brei på ein 375 px-telefon og kunne zoomast ut. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_22rem]">
         {/* -------------------------------------------------- liste og utval */}
         <div className="hm-card p-4 sm:p-5 space-y-4">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
@@ -475,7 +479,7 @@ export function QrTab() {
                   <TableHead>Vare</TableHead>
                   <TableHead className="hidden md:table-cell">Varenr.</TableHead>
                   <TableHead className="hidden md:table-cell">Hylle</TableHead>
-                  <TableHead>Kode</TableHead>
+                  <TableHead className="hidden md:table-cell">Kode</TableHead>
                   <TableHead className="w-12 text-right">Lenke</TableHead>
                 </TableRow>
               </TableHeader>
@@ -527,6 +531,16 @@ export function QrTab() {
                         {t.category_name ?? "Uten kategori"}
                         {!t.active ? " · avslått" : ""}
                       </div>
+                      {/* På telefonen har ikkje kodekolonnen plass ved sida av namnet */}
+                      <div className="mt-1 md:hidden">
+                        {t.qr_slug ? (
+                          <code className="break-all rounded bg-muted px-1.5 py-0.5 text-xs">{t.qr_slug}</code>
+                        ) : (
+                          <Badge variant="destructive" className="text-xs">
+                            Mangler kode
+                          </Badge>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground tabular">
                       {t.sku || "–"}
@@ -534,7 +548,7 @@ export function QrTab() {
                     <TableCell className="hidden md:table-cell text-sm text-muted-foreground">
                       {t.location || "–"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="hidden md:table-cell">
                       {t.qr_slug ? (
                         <code className="rounded bg-muted px-1.5 py-0.5 text-xs">{t.qr_slug}</code>
                       ) : (
@@ -548,7 +562,7 @@ export function QrTab() {
                         type="button"
                         variant="ghost"
                         size="icon"
-                        className="h-8 w-8"
+                        className="h-10 w-10"
                         aria-label={`Kopier lenke til ${t.name}`}
                         title="Kopier lenke"
                         onClick={() => kopierLenke(t)}
@@ -605,7 +619,8 @@ export function QrTab() {
                 readOnly
                 value={markertUrl}
                 onFocus={(e) => e.currentTarget.select()}
-                className="text-xs"
+                // 16 px på telefonen: under det zoomar iPhone inn når feltet får fokus
+                className="text-base sm:text-xs"
               />
             </div>
 

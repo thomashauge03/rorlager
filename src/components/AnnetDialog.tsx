@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from "react";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -15,6 +15,30 @@ export function AnnetMerke() {
     <span className="mr-1.5 inline-block rounded bg-muted px-1.5 py-0.5 align-middle text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
       {ANNET_TEKST.merke}
     </span>
+  );
+}
+
+/**
+ * Brikka øvst, sist i rekkja med kategoriar.
+ *
+ * Knappen under lista var for godt gøymd: med 150 rør står han tjue skjermar
+ * ned, og den som ikkje finn det han leitar etter, gir opp lenge før det. Her
+ * står han på første skjerm – men i same form som kategoriane, med stipla kant
+ * og dempa farge, så han ikkje konkurrerer med «Skann QR-kode» og søket.
+ */
+export function AnnetBrikke({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Legg til annet: noe som ikke står i lista"
+      className="inline-flex h-11 items-center gap-1.5 rounded-full border border-dashed border-muted-foreground/50 px-4 text-sm font-medium text-muted-foreground transition-colors hover:border-primary hover:text-foreground"
+    >
+      <Plus className="h-4 w-4" aria-hidden="true" />
+      {/* «Legg til», ikkje berre «Annet»: midt mellom kategoriane ville
+          «Annet» blitt lese som ein kategori som heiter det. */}
+      Legg til annet
+    </button>
   );
 }
 
