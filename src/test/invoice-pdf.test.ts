@@ -24,6 +24,7 @@ const grunnlag = (over: Partial<InvoiceDoc> = {}): InvoiceDoc => ({
           unit_price: 100,
           line_total: 1250,
           sort_order: 0,
+          is_annet: false,
         },
       ],
     },

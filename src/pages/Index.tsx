@@ -12,7 +12,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { QK, fetchCatalog, fetchCategories } from "@/lib/orders";
 import { useOrderSettings, useSettings } from "@/lib/settings";
 import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
-import { kr, num, pipeLabel } from "@/lib/format";
+import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
+import { cartLineFromAnnet, useCart } from "@/lib/cart";
+import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CatalogItem } from "@/lib/types";
 
@@ -77,6 +80,8 @@ export default function Index() {
   const [search, setSearch] = useState("");
   const [categoryId, setCategoryId] = useState<string | null>(null);
   const [scanOpen, setScanOpen] = useState(false);
+  const [annetOpen, setAnnetOpen] = useState(false);
+  const cart = useCart();
 
   // Katalogvisninga, ikkje pipe_types. Framsida blir opna av kundar utan
   // innlogging, og tabellen er stengd for dei – i tillegg til at ho ber på
@@ -219,15 +224,34 @@ export default function Index() {
               <PackageSearch className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
               <p className="font-semibold text-foreground">Ingen rør passer søket</p>
               <p className="text-sm text-muted-foreground">Prøv et annet ord, eller skann koden på hylla.</p>
+              <AnnetKnapp className="mt-3" onClick={() => setAnnetOpen(true)} />
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {visible.map((pipe) => (
-                <PipeCard key={pipe.id} pipe={pipe} showPrice={showPrices} />
-              ))}
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {visible.map((pipe) => (
+                  <PipeCard key={pipe.id} pipe={pipe} showPrice={showPrices} />
+                ))}
+              </div>
+              <AnnetKnapp className="mt-4" onClick={() => setAnnetOpen(true)} />
+            </>
           )}
         </div>
+
+        {/* Det katalogen manglar. Søkjeteksten blir eit forslag til namn: den
+            som søkte etter «pe 40» og ikkje fann noko, har alt sagt kva det er. */}
+        <AnnetDialog
+          open={annetOpen}
+          onOpenChange={setAnnetOpen}
+          slag="uttak"
+          forslag={visible.length === 0 ? { name: search.trim() } : undefined}
+          onAdd={(s) => {
+            const linje = cartLineFromAnnet(s);
+            cart.add(linje);
+            setAnnetOpen(false);
+            toast.success(`${qtyLabel(linje.quantity, linje.unit)} ${pipeLabel(linje.name, linje.dimension)} lagt i kurven`);
+          }}
+        />
 
         <div className="mt-10 text-center">
           <Link

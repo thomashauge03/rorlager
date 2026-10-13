@@ -764,21 +764,32 @@ const formFrom = (pipe: PipeType | null): PipeForm => ({
   active: pipe?.active ?? true,
 });
 
-function PipeDialog({
+/**
+ * Ny eller rediger vare. Forslagsfana opnar han òg, med namn, dimensjon og
+ * eining frå forslaget fylt inn (`initial`), og får vara tilbake i `onSaved`.
+ */
+export function PipeDialog({
   pipe,
   allPipes,
   categories,
   onClose,
+  initial,
+  onSaved,
 }: {
   pipe: PipeType | null;
   allPipes: PipeType[];
   categories: PipeCategoryRow[];
   onClose: () => void;
+  initial?: Partial<Pick<PipeForm, "name" | "dimension" | "unit">>;
+  onSaved?: (row: PipeTypeRow) => void | Promise<void>;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const [form, setForm] = useState<PipeForm>(() => formFrom(pipe));
+  const [form, setForm] = useState<PipeForm>(() => {
+    const f = { ...formFrom(pipe), ...initial };
+    return initial && !pipe ? { ...f, qr_slug: slugify(`${f.name} ${f.dimension}`) } : f;
+  });
   // Så lenge admin ikkje har rørt QR-koden sjølv, følgjer ho namnet. Er ho først
   // endra manuelt – eller står på ein etikett som alt heng i hylla – lèt vi ho vere.
   const [slugLocked, setSlugLocked] = useState(!!pipe);
@@ -829,10 +840,11 @@ function PipeDialog({
 
       return savePipeType(patch);
     },
-    onSuccess: (row) => {
+    onSuccess: async (row) => {
       queryClient.invalidateQueries({ queryKey: QK.types });
       queryClient.invalidateQueries({ queryKey: QK.stockLog });
       toast({ title: pipe ? "Varen er lagret" : "Varen er lagt inn", description: pipeLabel(row.name, row.dimension) });
+      await onSaved?.(row);
       onClose();
     },
     onError: (error: Error) => toast({ title: "Varen ble ikke lagret", description: error.message, variant: "destructive" }),

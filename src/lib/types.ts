@@ -23,7 +23,11 @@ export type {
   ProjectReceiptLineRow,
   ProjectReceiptPhotoRow,
   Deviation,
+  PipeSuggestionRow,
+  SuggestionStatus,
 } from "@/integrations/supabase/types";
+
+import type { AnnetData, InnsendingsLinje } from "@/lib/annet";
 
 import type {
   ProjectReceiptPhotoRow,
@@ -60,6 +64,8 @@ export type CartLine = {
   /** Meter eller stykk, avhengig av unit */
   quantity: number;
   location: string | null;
+  /** Sett på ei annet-linje: ingen vare bak, og pris set av kontoret. */
+  annet?: AnnetData;
 };
 
 export type OrderStatus = "ny" | "behandlet" | "levert" | "avvist";
@@ -98,7 +104,7 @@ export type PickupOrderInput = {
   /** YYYY-MM-DD. Med «henter nå» set basen dagens dato uansett. */
   pickup_date: string | null;
   comment: string | null;
-  lines: { pipe_type_id: string; quantity: number }[];
+  lines: InnsendingsLinje[];
 };
 
 /** Ei bestilling slik adminpanelet ser henne: hovudrada med linjene sine. */
@@ -122,6 +128,8 @@ export type SubmittedOrder = {
     quantity: number;
     unit_price: number | null;
     line_total: number | null;
+    /** Fråverande frå basar som ikkje har fått 20261013110000 enno. */
+    annet?: boolean;
   }[];
 };
 

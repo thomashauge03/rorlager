@@ -4,6 +4,7 @@
 import { supabase } from "@/integrations/supabase/client";
 import type { Json } from "@/integrations/supabase/types";
 import { searchKey } from "@/lib/stock";
+import { tilInnsendingslinje } from "@/lib/annet";
 import type {
   CatalogItem,
   OrderStatus,
@@ -55,6 +56,8 @@ export const QK = {
   /** Éi bestilling slik kunden ser henne. */
   pickupOrder: (id: string) => ["pipe_orders", "bestilling", id],
   orderEmails: (id: string) => ["pipe_order_emails", id],
+  /** Forslaga frå «Annet». Talet på fana les same nøkkel. */
+  suggestions: ["pipe_suggestions"],
 } as const;
 
 /** Postgres-feil er engelske og kryptiske. Vi set på norsk kontekst så brukaren
@@ -222,11 +225,11 @@ export async function submitOrder(input: {
   project?: string | null;
   comment?: string | null;
   signature?: string | null;
-  lines: { pipe_type_id: string; quantity: number }[];
+  lines: Parameters<typeof tilInnsendingslinje>[0][];
 }): Promise<SubmittedOrder> {
   const { data, error } = await supabase.rpc("pipe_submit_order", {
     p_customer_name: input.customer_name,
-    p_lines: input.lines.map((l) => ({ pipe_type_id: l.pipe_type_id, quantity: l.quantity })),
+    p_lines: input.lines.map(tilInnsendingslinje),
     p_customer_phone: input.customer_phone ?? null,
     p_customer_email: input.customer_email ?? null,
     p_company: input.company ?? null,

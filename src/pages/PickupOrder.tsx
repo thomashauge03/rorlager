@@ -19,6 +19,8 @@ import { prisInklMva, summer } from "@/lib/mva";
 import { visOrgnr } from "@/lib/orgnr";
 import { ANGRERETT_KORT, selgerFra } from "@/lib/vilkar";
 import { dateTime, kr, longDate, num, pipeLabel } from "@/lib/format";
+import { ANNET_TEKST } from "@/lib/annet";
+import { AnnetMerke } from "@/components/AnnetDialog";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { cn } from "@/lib/utils";
 
@@ -207,7 +209,10 @@ export default function PickupOrder() {
             {o.lines.map((l, i) => (
               <li key={`${l.sku ?? l.name}-${i}`} className="py-2.5">
                 <div className="flex items-baseline justify-between gap-3">
-                  <span className="min-w-0 break-words text-sm font-medium text-foreground">{pipeLabel(l.name, l.dimension)}</span>
+                  <span className="min-w-0 break-words text-sm font-medium text-foreground">
+                    {l.annet ? <AnnetMerke /> : null}
+                    {pipeLabel(l.name, l.dimension)}
+                  </span>
                   <span className="tabular shrink-0 text-sm font-semibold text-foreground">
                     {num(l.quantity)} {l.unit}
                   </span>
@@ -217,7 +222,9 @@ export default function PickupOrder() {
                     {kr(privat ? prisInklMva(l.unit_price, vat) : l.unit_price)} kr/{l.unit} ·{" "}
                     {kr(privat ? summer([l.line_total], vat).inkl : l.line_total)} kr
                   </p>
-                ) : null}
+                ) : (
+                  <p className="mt-0.5 text-right text-xs text-muted-foreground">{ANNET_TEKST.bestilling}</p>
+                )}
               </li>
             ))}
           </ul>

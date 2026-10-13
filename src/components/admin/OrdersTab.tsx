@@ -40,7 +40,15 @@ import { somBestilling, useWaitingPickupOrders } from "@/lib/pickup-orders";
 import { erAnsattUttak } from "@/lib/fakturakunde";
 import { useOrderSettings, useSettings } from "@/lib/settings";
 import { selgerFra } from "@/lib/vilkar";
-import { ORDER_STATUS_LABEL, type OrderKind, type OrderStatus, type OrderWithLines } from "@/lib/types";
+import {
+  ORDER_STATUS_LABEL,
+  type OrderKind,
+  type OrderStatus,
+  type OrderWithLines,
+  type PipeOrderLineRow,
+} from "@/lib/types";
+import { AnnetMerke } from "@/components/AnnetDialog";
+import { PriceLineDialog } from "@/components/admin/PriceLineDialog";
 
 const STATUS_OPTIONS: (OrderStatus | "alle")[] = ["alle", "ny", "behandlet", "levert", "avvist"];
 
@@ -116,6 +124,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
 
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [prisFor, setPrisFor] = useState<PipeOrderLineRow | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -611,16 +620,30 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                     {open.lines.map((line) => (
                       <div key={line.id} className="flex items-start justify-between gap-3 px-3 py-2">
                         <div className="min-w-0">
-                          <p className="text-sm font-medium text-foreground">{pipeLabel(line.name, line.dimension)}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {line.is_annet ? <AnnetMerke /> : null}
+                            {pipeLabel(line.name, line.dimension)}
+                          </p>
                           {line.sku ? <p className="text-xs text-muted-foreground">{line.sku}</p> : null}
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-semibold text-foreground tabular">{qtyLabel(line.quantity, line.unit)}</p>
-                          <p className="text-xs text-muted-foreground tabular">
-                            {line.line_total === null || line.line_total === undefined
-                              ? "Pris mangler"
-                              : `${kr(line.line_total)} kr`}
-                          </p>
+                          {/* Ein fakturert ordre er låst i basen, så knappen blir ikkje vist der */}
+                          {(line.line_total === null || line.line_total === undefined) && !open.invoice_id ? (
+                            <button
+                              type="button"
+                              onClick={() => setPrisFor(line)}
+                              className="text-xs font-medium text-primary underline-offset-2 hover:underline"
+                            >
+                              Pris mangler – sett pris
+                            </button>
+                          ) : (
+                            <p className="text-xs text-muted-foreground tabular">
+                              {line.line_total === null || line.line_total === undefined
+                                ? "Pris mangler"
+                                : `${kr(line.line_total)} kr`}
+                            </p>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -725,6 +748,8 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
           )}
         </SheetContent>
       </Sheet>
+
+      <PriceLineDialog line={prisFor} onClose={() => setPrisFor(null)} />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

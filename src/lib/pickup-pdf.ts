@@ -24,6 +24,7 @@ import {
 } from "@/lib/order-pdf";
 import { dateTime, kr, longDate, num, pipeLabel } from "@/lib/format";
 import { prisInklMva, summer } from "@/lib/mva";
+import { ANNET_TEKST } from "@/lib/annet";
 import { visOrgnr } from "@/lib/orgnr";
 import { angreskjema, vilkarAvsnitt, type Selger } from "@/lib/vilkar";
 import { PICKUP_STATUS_LABEL } from "@/lib/types";
@@ -162,7 +163,8 @@ export function buildPickupPDF({ order, company, selger, vatRate }: PickupPdfDoc
     doc.text(pris === null ? "–" : kr(pris), colPris, y, { align: "right" });
     doc.setFont("helvetica", "bold");
     setText(doc, BLACK);
-    doc.text(belop === null ? "–" : kr(belop), colBelop, y, { align: "right" });
+    // Ei bestilling kan berre ha ei linje utan pris om ho er ein annet-førespurnad
+    doc.text(belop === null ? ANNET_TEKST.prisKjem : kr(belop), colBelop, y, { align: "right" });
     y += rowH;
   });
 

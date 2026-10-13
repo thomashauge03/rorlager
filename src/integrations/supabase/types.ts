@@ -85,6 +85,8 @@ export type PipeOrderLineRow = {
   unit_price: number | null;
   line_total: number | null;
   sort_order: number;
+  /** Lagt inn med eigne ord frå «Annet» – ikkje ei sletta katalogvare. */
+  is_annet: boolean;
 };
 
 export type PipeStockLogRow = {
@@ -291,6 +293,27 @@ export type PipeOrderEmailRow = {
   provider_id: string | null;
 };
 
+export type SuggestionStatus = "ny" | "opprettet" | "engangs" | "avvist";
+
+/** Éi rad per annet-linje. Berre kontoret kan lese og endre. */
+export type PipeSuggestionRow = {
+  id: string;
+  created_at: string;
+  order_id: string | null;
+  order_line_id: string | null;
+  name: string;
+  dimension: string | null;
+  unit: "m" | "stk";
+  quantity: number;
+  note: string | null;
+  from_employee: boolean;
+  submitted_by: string | null;
+  status: SuggestionStatus;
+  pipe_type_id: string | null;
+  handled_at: string | null;
+  handled_by: string | null;
+};
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -323,6 +346,7 @@ export type Database = {
       project_receipt_lines: Table<ProjectReceiptLineRow>;
       project_receipt_photos: Table<ProjectReceiptPhotoRow>;
       pipe_order_emails: Table<PipeOrderEmailRow>;
+      pipe_suggestions: Table<PipeSuggestionRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;
@@ -446,6 +470,7 @@ export type Database = {
       pipe_get_pickup_order: { Args: { p_id: string }; Returns: Json };
       pipe_approve_pickup_order: { Args: { p_id: string; p_message?: string | null }; Returns: Json };
       pipe_reject_pickup_order: { Args: { p_id: string; p_message: string }; Returns: Json };
+      pipe_price_line: { Args: { p_line_id: string; p_unit_price: number }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

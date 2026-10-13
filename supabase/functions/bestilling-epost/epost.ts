@@ -111,6 +111,15 @@ const selger = (f: Firma): Selger => ({
   henteinfo: f.pickup_note,
 });
 
+/*
+ * Ei linje utan pris i ei bestilling er alltid ein «annet»-førespurnad: ei
+ * katalogvare utan pris kan ikkje bestillast. Same ord som ANNET_TEKST i
+ * src/lib/annet.ts – serverfunksjonen kan ikkje lese frå src/.
+ */
+const PRIS_KJEM = "Pris kommer";
+const IKKJE_BINDANDE =
+  "Forespørsler uten pris er ikke bindende. Prisen står i e-posten når bestillingen er klar – vil du ikke ha varen, sier du fra når du henter.";
+
 const namnPaVare = (l: Linje) => (l.dimension ? `${l.name} ${l.dimension}` : l.name);
 const hentes = (o: Bestilling) => (o.pickup_now ? `Henter nå – ${dag(o.pickup_date)}` : dag(o.pickup_date));
 
@@ -157,11 +166,14 @@ function varetabell(o: Bestilling, linjer: Linje[], f: Firma, visLager: boolean)
           tal(l.quantity),
         )} ${esc(l.unit)}</td>
         <td style="padding:10px 0 10px 12px;border-bottom:1px solid #e5e7eb;text-align:right;white-space:nowrap;vertical-align:top">${
-          belop === null ? "–" : `${esc(kr(belop))} kr`
+          belop === null ? esc(PRIS_KJEM) : `${esc(kr(belop))} kr`
         }</td>
       </tr>`;
     })
     .join("");
+  const forespurnad = linjer.some((l) => l.line_total === null)
+    ? `<p style="margin:8px 0 0;font-size:13px;color:#6b7280">${esc(IKKJE_BINDANDE)}</p>`
+    : "";
 
   const s = summer([o.total], f.vat_rate);
   const sumRad = (merke: string, verdi: number, sterk = false) =>
@@ -184,7 +196,7 @@ function varetabell(o: Bestilling, linjer: Linje[], f: Firma, visLager: boolean)
     ${sumRad("Sum eks. mva", s.eks)}
     ${sumRad(`Mva ${tal(f.vat_rate)} %`, s.mva)}
     ${sumRad("Sum inkl. mva", s.inkl, true)}
-  </table>`;
+  </table>${forespurnad}`;
 }
 
 function varelinjerTekst(o: Bestilling, linjer: Linje[], f: Firma, visLager = false): string[] {
@@ -195,12 +207,13 @@ function varelinjerTekst(o: Bestilling, linjer: Linje[], f: Firma, visLager = fa
     ...linjer.map((l) => {
       const belop = l.line_total === null ? null : medMva ? summer([l.line_total], f.vat_rate).inkl : l.line_total;
       const lager = visLager && l.stock !== null ? ` (på lager: ${tal(l.stock)} ${l.unit})` : "";
-      return `- ${namnPaVare(l)}: ${tal(l.quantity)} ${l.unit}${belop === null ? "" : ` – ${kr(belop)} kr`}${lager}`;
+      return `- ${namnPaVare(l)}: ${tal(l.quantity)} ${l.unit} – ${belop === null ? PRIS_KJEM : `${kr(belop)} kr`}${lager}`;
     }),
     "",
     `Sum eks. mva: ${kr(s.eks)} kr`,
     `Mva ${tal(f.vat_rate)} %: ${kr(s.mva)} kr`,
     `Sum inkl. mva: ${kr(s.inkl)} kr`,
+    ...(linjer.some((l) => l.line_total === null) ? ["", IKKJE_BINDANDE] : []),
   ];
 }
 

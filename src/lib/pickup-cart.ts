@@ -2,6 +2,7 @@
 // hylla og ei bestilling heimanfrå aldri blir blanda.
 
 import { useCallback, useEffect, useState } from "react";
+import { annetLinjeFelt, type AnnetData, type AnnetSkjema } from "@/lib/annet";
 import { linjesum } from "@/lib/mva";
 import type { KasseSkjema } from "@/lib/pickup-form";
 import type { CatalogItem } from "@/lib/types";
@@ -17,9 +18,13 @@ export type PickupCartLine = {
   dimension: string | null;
   sku: string | null;
   unit: string;
-  /** Prisen då vara blei lagd i kurva. Kassen hentar dagens pris på nytt. */
-  price: number;
+  /**
+   * Prisen då vara blei lagd i kurva. Kassen hentar dagens pris på nytt.
+   * Null berre på ei annet-linje: ho er ein førespurnad, og kontoret set prisen.
+   */
+  price: number | null;
   quantity: number;
+  annet?: AnnetData;
 };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -31,7 +36,8 @@ const erLinje = (v: unknown): v is PickupCartLine => {
     typeof l.pipe_type_id === "string" &&
     typeof l.name === "string" &&
     typeof l.unit === "string" &&
-    typeof l.price === "number" &&
+    // Ei katalogvare utan pris kan ikkje bestillast. Berre ein førespurnad får stå utan.
+    (typeof l.price === "number" || (l.price === null && typeof l.annet === "object" && l.annet !== null)) &&
     typeof l.quantity === "number" &&
     l.quantity > 0
   );
@@ -76,9 +82,12 @@ export const pickupLineFromItem = (t: CatalogItem, quantity: number): PickupCart
         quantity: round2(quantity),
       };
 
-/** Summen eks. mva, rekna linje for linje slik basen gjer. */
+/** Ein førespurnad om noko katalogen manglar. Tel ikkje i summen. */
+export const pickupLineFromAnnet = (s: AnnetSkjema): PickupCartLine => annetLinjeFelt(s);
+
+/** Summen eks. mva, rekna linje for linje slik basen gjer. Førespurnader tel ikkje. */
 export const pickupCartEks = (lines: PickupCartLine[]) =>
-  lines.reduce((s, l) => s + Math.round(linjesum(l.price, l.quantity) * 100), 0) / 100;
+  lines.reduce((s, l) => (l.price === null ? s : s + Math.round(linjesum(l.price, l.quantity) * 100)), 0) / 100;
 
 /**
  * Kurva med reaktiv lesing. Endringar frå ei anna fane (storage) og frå andre

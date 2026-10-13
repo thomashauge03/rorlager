@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { annetLinjeFelt, talAnnet, type AnnetSkjema } from "@/lib/annet";
 import type { CartLine, CatalogItem } from "@/lib/types";
 
 const KEY = "rorlager.kurv.v1";
@@ -31,7 +32,12 @@ export const EMPTY_CUSTOMER: SavedCustomer = {
 const isCartLine = (v: unknown): v is CartLine => {
   if (!v || typeof v !== "object") return false;
   const l = v as Record<string, unknown>;
-  return typeof l.pipe_type_id === "string" && typeof l.name === "string" && typeof l.quantity === "number";
+  return (
+    typeof l.pipe_type_id === "string" &&
+    typeof l.name === "string" &&
+    typeof l.quantity === "number" &&
+    (l.annet === undefined || (typeof l.annet === "object" && l.annet !== null))
+  );
 };
 
 export function readCart(): CartLine[] {
@@ -90,13 +96,19 @@ export const cartLineFromType = (t: CatalogItem, quantity: number): CartLine => 
   location: t.location,
 });
 
+/** Ei annet-linje: ingen vare bak, og ingen pris før kontoret set han. */
+export const cartLineFromAnnet = (s: AnnetSkjema): CartLine => ({ ...annetLinjeFelt(s), location: null });
+
 export const cartCount = (lines: CartLine[]) => lines.length;
 
 export const cartTotal = (lines: CartLine[]) =>
   lines.reduce((sum, l) => (l.price === null ? sum : sum + l.price * l.quantity), 0);
 
-/** Sant når minst éi linje manglar pris – då er summen ikkje heile sanninga */
-export const cartHasUnpriced = (lines: CartLine[]) => lines.some((l) => l.price === null);
+/**
+ * Sant når ei katalogvare manglar pris – då er summen ikkje heile sanninga.
+ * Annet-linjer tel ikkje her: dei står for seg sjølv under summen.
+ */
+export const cartHasUnpriced = (lines: CartLine[]) => lines.some((l) => l.price === null && !l.annet);
 
 /**
  * Kurven med reaktiv lesing. Endringar frå ei anna fane (storage) og frå andre
@@ -158,5 +170,6 @@ export function useCart() {
     count: cartCount(lines),
     total: cartTotal(lines),
     hasUnpriced: cartHasUnpriced(lines),
+    annetCount: talAnnet(lines),
   };
 }

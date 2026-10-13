@@ -45,6 +45,8 @@ import { useNesteFelt } from "@/lib/neste-felt";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
+import { ANNET_TEKST, talAnnet } from "@/lib/annet";
+import { AnnetMerke } from "@/components/AnnetDialog";
 
 function Felt({
   label,
@@ -167,6 +169,8 @@ export default function PickupCheckout() {
   const linjer = useMemo(() => {
     const kart = new Map((katalog.data ?? []).map((t) => [t.id, t]));
     return cart.lines.map((l) => {
+      // Ein førespurnad har inga vare å slå opp og ingen pris å hente
+      if (l.annet) return { ...l, pris: null as number | null, lager: null as number | null, problem: null as string | null };
       const vare = kart.get(l.pipe_type_id);
       const problem = !katalog.data
         ? null
@@ -181,9 +185,10 @@ export default function PickupCheckout() {
 
   const harProblem = linjer.some((l) => l.problem);
   const sum = summer(
-    linjer.filter((l) => !l.problem).map((l) => linjesum(l.pris, l.quantity)),
+    linjer.filter((l) => !l.problem && l.pris !== null).map((l) => linjesum(l.pris as number, l.quantity)),
     vat,
   );
+  const forespurnader = talAnnet(cart.lines);
   const feilFor = (felt: keyof KasseSkjema) => (feil?.felt === felt ? feil.melding : undefined);
   const feilId = (felt: keyof KasseSkjema) => (feilFor(felt) ? `kasse-${felt}-feil` : undefined);
 
@@ -287,15 +292,22 @@ export default function PickupCheckout() {
             </h2>
             <ul className="mt-2 divide-y divide-border">
               {linjer.map((l) => {
-                const eks = linjesum(l.pris, l.quantity);
+                const eks = l.pris === null ? null : linjesum(l.pris, l.quantity);
                 return (
                   <li key={l.pipe_type_id} className="py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="break-words text-sm font-semibold text-foreground">{pipeLabel(l.name, l.dimension)}</p>
-                        <p className="tabular text-xs text-muted-foreground">
-                          {kr(medMva ? prisInklMva(l.pris, vat) : l.pris)} kr/{l.unit} {medMva ? "inkl. mva" : "eks. mva"}
+                        <p className="break-words text-sm font-semibold text-foreground">
+                          {l.annet ? <AnnetMerke /> : null}
+                          {pipeLabel(l.name, l.dimension)}
                         </p>
+                        {l.pris === null ? (
+                          <p className="text-xs text-muted-foreground">{ANNET_TEKST.bestilling}</p>
+                        ) : (
+                          <p className="tabular text-xs text-muted-foreground">
+                            {kr(medMva ? prisInklMva(l.pris, vat) : l.pris)} kr/{l.unit} {medMva ? "inkl. mva" : "eks. mva"}
+                          </p>
+                        )}
                       </div>
                       <button
                         type="button"
@@ -326,9 +338,11 @@ export default function PickupCheckout() {
                             Lageret viser {num(l.lager)} {l.unit}. Kontoret sjekker resten.
                           </p>
                         ) : null}
-                        <p className="tabular mt-1 text-right text-sm font-semibold text-foreground">
-                          {kr(medMva ? summer([eks], vat).inkl : eks)} kr
-                        </p>
+                        {eks === null ? null : (
+                          <p className="tabular mt-1 text-right text-sm font-semibold text-foreground">
+                            {kr(medMva ? summer([eks], vat).inkl : eks)} kr
+                          </p>
+                        )}
                       </>
                     )}
                   </li>
@@ -597,6 +611,11 @@ export default function PickupCheckout() {
             </dl>
             {/* Summen inkl. mva står i den faste bunnen, rett ved knappen */}
             <p className="mt-3 text-sm text-muted-foreground">Betaling: faktura, {frist} dager.</p>
+            {forespurnader > 0 ? (
+              <p className="mt-3 rounded-lg border border-border px-3 py-2 text-sm text-muted-foreground">
+                {ANNET_TEKST.ikkjeBindande}
+              </p>
+            ) : null}
             {skjema.kundetype !== "bedrift" ? (
               <p className="mt-3 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
                 {ANGRERETT_KORT.join(" ")}{" "}
@@ -631,6 +650,9 @@ export default function PickupCheckout() {
               <span className="text-sm text-muted-foreground">Sum inkl. mva</span>
               <span className="tabular text-lg font-bold text-foreground">{kr(sum.inkl)} kr</span>
             </div>
+            {forespurnader > 0 ? (
+              <p className="tabular -mt-1 text-right text-xs text-muted-foreground">{ANNET_TEKST.utanPris(forespurnader)}</p>
+            ) : null}
             <Button
               type="submit"
               disabled={sender || harProblem || !katalog.data}

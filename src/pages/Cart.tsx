@@ -14,13 +14,17 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useCart } from "@/lib/cart";
+import { useState } from "react";
+import { AnnetDialog, AnnetKnapp, AnnetMerke } from "@/components/AnnetDialog";
+import { ANNET_TEKST } from "@/lib/annet";
+import { cartLineFromAnnet, useCart } from "@/lib/cart";
 import { useSettings } from "@/lib/settings";
 import { kr, num, pipeLabel } from "@/lib/format";
 
 export default function Cart() {
   const navigate = useNavigate();
   const cart = useCart();
+  const [annetOpen, setAnnetOpen] = useState(false);
   const { data: settings } = useSettings();
 
   // Ein sum som ikkje er heile sanninga er verre enn ingen sum
@@ -60,9 +64,11 @@ export default function Cart() {
                     id={`kurv-vare-${line.pipe_type_id}`}
                     className="text-base font-bold leading-tight text-foreground break-words"
                   >
+                    {line.annet ? <AnnetMerke /> : null}
                     {pipeLabel(line.name, line.dimension)}
                   </p>
                   <p className="mt-0.5 flex flex-wrap items-center gap-x-3 text-xs text-muted-foreground">
+                    {line.annet?.note ? <span className="break-words">{line.annet.note}</span> : null}
                     {line.sku ? <span>Varenr. {line.sku}</span> : null}
                     {line.location ? (
                       <span className="inline-flex items-center gap-1">
@@ -99,7 +105,9 @@ export default function Cart() {
                 />
               </div>
 
-              {(settings?.show_prices ?? true) ? (
+              {line.annet ? (
+                <p className="mt-3 text-right text-sm text-muted-foreground">{ANNET_TEKST.uttak}</p>
+              ) : (settings?.show_prices ?? true) ? (
                 <p className="tabular mt-3 text-right text-sm text-muted-foreground">
                   {line.price === null ? (
                     "Pris avtales"
@@ -116,11 +124,27 @@ export default function Cart() {
         </ul>
 
         {showTotal ? (
-          <div className="hm-card mt-4 flex items-center justify-between gap-4 p-4">
-            <span className="text-base font-semibold text-foreground">Sum</span>
-            <span className="tabular text-2xl font-bold text-foreground">{kr(cart.total)} kr</span>
+          <div className="hm-card mt-4 p-4">
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-base font-semibold text-foreground">Sum</span>
+              <span className="tabular text-2xl font-bold text-foreground">{kr(cart.total)} kr</span>
+            </div>
+            {cart.annetCount > 0 ? (
+              <p className="tabular mt-1 text-right text-sm text-muted-foreground">+ {cart.annetCount} uten pris</p>
+            ) : null}
           </div>
         ) : null}
+
+        <AnnetKnapp className="mt-4" onClick={() => setAnnetOpen(true)} />
+        <AnnetDialog
+          open={annetOpen}
+          onOpenChange={setAnnetOpen}
+          slag="uttak"
+          onAdd={(s) => {
+            cart.add(cartLineFromAnnet(s));
+            setAnnetOpen(false);
+          }}
+        />
 
         <Button
           className="mt-4 h-16 w-full text-lg font-semibold [&_svg]:size-6"

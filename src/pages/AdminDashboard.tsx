@@ -7,6 +7,7 @@ import {
   FileText,
   FolderKanban,
   KeyRound,
+  Lightbulb,
   Loader2,
   LogOut,
   Package,
@@ -32,6 +33,8 @@ import { InvoiceTab } from "@/components/admin/InvoiceTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
 import { ProjectsTab } from "@/components/admin/ProjectsTab";
 import { ToOrderTab } from "@/components/admin/ToOrderTab";
+import { SuggestionsTab } from "@/components/admin/SuggestionsTab";
+import { useNewSuggestionCount } from "@/lib/suggestions";
 import { useWaitingPickupOrders } from "@/lib/pickup-orders";
 import { faneFor, lesDyplenke, type Dyplenke } from "@/lib/dyplenke";
 
@@ -40,6 +43,7 @@ const TABS = [
   { value: "abestille", label: "Å bestille", Icon: ShoppingBag },
   { value: "prosjekt", label: "Prosjekt", Icon: FolderKanban },
   { value: "lager", label: "Lager", Icon: Package },
+  { value: "forslag", label: "Forslag", Icon: Lightbulb },
   { value: "qr", label: "QR-koder", Icon: QrCode },
   { value: "faktura", label: "Faktura", Icon: FileText },
   { value: "innstillinger", label: "Innstillinger", Icon: Settings },
@@ -80,6 +84,7 @@ export default function AdminDashboard() {
   // send vidare, og ein utan rolle ser ingen faner.
   const venter = useWaitingPickupOrders(roleKnown && role !== null && role !== "prosjekt");
   const antallVenter = venter.data?.length ?? 0;
+  const antallForslag = useNewSuggestionCount(roleKnown && role !== null && role !== "prosjekt");
 
   /*
    * Prosjektbrukarar høyrer ikkje heime her.
@@ -273,6 +278,12 @@ export default function AdminDashboard() {
                       <span className="sr-only"> venter på godkjenning</span>
                     </span>
                   ) : null}
+                  {value === "forslag" && antallForslag > 0 ? (
+                    <span className="tabular ml-0.5 min-w-[1.25rem] rounded-full bg-destructive px-1.5 text-center text-[0.7rem] font-bold leading-5 text-destructive-foreground">
+                      {antallForslag}
+                      <span className="sr-only"> nye forslag</span>
+                    </span>
+                  ) : null}
                 </TabsTrigger>
               ))}
             </TabsList>
@@ -289,6 +300,9 @@ export default function AdminDashboard() {
           </TabsContent>
           <TabsContent value="lager" className="animate-fade-in">
             <StockTab />
+          </TabsContent>
+          <TabsContent value="forslag" className="animate-fade-in">
+            <SuggestionsTab />
           </TabsContent>
           <TabsContent value="qr" className="animate-fade-in">
             <QrTab />

@@ -22,7 +22,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type PickupOrderLine = Pick<
   PipeOrderLineRow,
   "name" | "dimension" | "sku" | "unit" | "quantity" | "unit_price" | "line_total"
->;
+> & {
+  /** Ein førespurnad frå «Annet». Fråverande frå basar utan 20261013110000. */
+  annet?: boolean;
+};
 
 /** Bestillinga slik kunden ser henne – det pipe_get_pickup_order gir. */
 export type PickupOrder = {
@@ -180,6 +183,7 @@ export function somBestilling(o: OrderWithLines): PickupOrder {
       quantity: l.quantity,
       unit_price: l.unit_price,
       line_total: l.line_total,
+      annet: l.is_annet,
     })),
     emails: {},
   };

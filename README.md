@@ -33,6 +33,10 @@ før lageret trekkes:
 En bestilling er et uttak meldt på forhånd, og ligger i `pipe_orders` med
 `kind = 'bestilling'`.
 
+Begge kurvene har **«Annet»** for det katalogen mangler. Det blir en linje uten
+vare og uten pris, og samtidig et forslag til kontoret om å legge varen inn – se
+[Annet og forslag](#annet-og-forslag).
+
 ## Kom i gang
 
 ```bash
@@ -176,7 +180,8 @@ kunne settes.
 | `/login` | Innlogging |
 | `/nytt-passord` | Første innlogging: velg ditt eget passord |
 | `/konto` | Bytt passord, for alle ansatte |
-| `/admin` | Bestillinger, Å bestille, Prosjekt, Lager, QR-koder, Faktura, Innstillinger |
+| `/admin` | Bestillinger, Å bestille, Prosjekt, Lager, Forslag, QR-koder, Faktura, Innstillinger |
+| `/admin` → **Forslag** | Det som ble lagt i kurven med «Annet»: opprett vare, sett pris eller avvis |
 | `/admin` → **Å bestille** | Fire utsnitt: Å bestille, Underveis, Mottak, Avvik |
 | `/admin/brukere` | Brukerregister (kun superadmin) |
 | `/prosjekt` | Prosjektene mine (byggeplass) |
@@ -337,6 +342,48 @@ bekreftet av advokat.
 Frontend tåler å bli rullet ut før punkt 1: da er butikken stengt, og alt i
 panelet oppfører seg som uttak.
 
+## Annet og forslag
+
+Katalogen har bare det kontoret har lagt inn. Står noen med noe i hånda som ikke
+finnes i lista, trykker de **«Finner du ikke det du skal ha? Legg til annet»** –
+under lista, i et tomt søk, i kurven, og på «Fant ikke røret» når QR-koden er
+ukjent. De skriver hva det er, eventuelt dimensjon, mengde i meter eller stykk,
+og en merknad.
+
+```
+«Legg til annet»  ->  linje uten vare og pris  ->  innsending  ->  Admin → Forslag
+                                                                   opprett vare | sett pris | avvis
+```
+
+**Linja går med uttaket eller bestillingen som en vanlig linje,** men med
+`pipe_type_id = null` og `is_annet = true`. `is_annet` trengs fordi en tom
+`pipe_type_id` også betyr «katalogvaren er slettet». Lageret trekkes aldri for en
+annet-linje – det finnes ingen vare å trekke fra. Høyst ti per innsending.
+
+**Hver annet-linje blir en rad i `pipe_suggestions`,** med teksten, mengden, om
+den kom fra en ansatt (innlogget) eller en kunde, og navnet. Bare kontoret kan
+lese og endre tabellen; radene skrives av innsendingsfunksjonene. Forslaget
+overlever at ordren slettes: det er tilbakemeldingen som er verdien.
+
+**Fanen Forslag** har tre knapper per forslag:
+
+| Knapp | Hva skjer |
+| --- | --- |
+| Opprett vare | «Ny vare»-dialogen åpnes med navn, dimensjon og enhet fylt inn. Linja forslaget kom fra får varens pris (hvis enheten er den samme), og forslaget blir `opprettet`. Det som allerede er tatt ut, trekkes ikke fra beholdningen i etterkant. |
+| Sett pris | En engangsvare: prisen gjelder bare den ene linja, og forslaget blir `engangs`. |
+| Avvis | Forslaget lukkes. Linja må fortsatt prises før faktura – fakturafanen sier fra. |
+
+**Prisen settes med `pipe_price_line`,** som regner linjesum og ordretotal på
+nytt og nekter på en fakturert ordre. Samme dialog brukes fra «Pris mangler» på
+en linje i Bestillinger.
+
+**I `/bestill` er en annet-linje en forespørsel.** En privatperson skal kjenne
+totalprisen før hen binder seg, så summen ved «Bestill med betalingsplikt»
+gjelder bare katalogvarene, og kassen sier at forespørsler uten pris ikke er
+bindende. Kontoret kan ikke godkjenne før annet-linjene har pris – sperren ligger
+i `pipe_approve_pickup_order`, ikke bare i knappen – og e-posten «klar til
+henting» viser dermed prisen. Vil kunden ikke ha varen, sier hen fra ved henting.
+
 ## Priser og avanse
 
 Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der
@@ -361,9 +408,10 @@ prisjusteringen på nytt.
 src/
   pages/          framside, rørside, kurv, kasse, kvittering, admin
                   Projects, ProjectPage, ProjectRequest, ProjectReceipt
-  components/     TopBar, CartBar, QuantityInput, SignaturePad, StatusBadge
-    admin/        OrdersTab, ToOrderTab, ProjectsTab, StockTab, QrTab,
-                  InvoiceTab, SettingsTab
+  components/     TopBar, CartBar, QuantityInput, SignaturePad, StatusBadge,
+                  AnnetDialog
+    admin/        OrdersTab, ToOrderTab, ProjectsTab, StockTab, SuggestionsTab,
+                  PriceLineDialog, QrTab, InvoiceTab, SettingsTab
   lib/
     auth.ts       innloggingsvakt og rolle, delt av admin og prosjekt
     cart.ts       handlekurven (localStorage)
@@ -376,6 +424,8 @@ src/
     invoice-pdf.ts fakturagrunnlag
     receipt-pdf.ts mottakskontroll – det du sender leverandøren ved reklamasjon
     pickup-*.ts   bestillingen: kurv, skjema, datalag og PDF
+    annet.ts      «Annet»: grenser, tekster og formatet ved innsending
+    suggestions.ts forslagene og pris på én linje
     scanner.ts    tolkningen av skannede koder
     mva.ts, orgnr.ts, vilkar.ts  sender videre fra supabase/functions/_shared
 supabase/migrations/   databaseskjemaet – kilden til supabase-setup.sql
@@ -409,7 +459,7 @@ Supabase gjør, og spør så som fire ulike brukere: kontoret, to prosjektbruker
 hvert sitt prosjekt, en innlogget fremmed uten tilgang, og en anonym besøkende.
 De dekker at innkjøpsprisen er utilgjengelig, at kundeflyten fortsatt virker,
 at prosjektbrukere ikke ser hverandres prosjekter, og hele veien fra behov via
-bestilling til to puljer med mottak. `bestilling.test.mjs` dekker bestillingene: innsending uten lagertrekk, godkjenning og avvisning, regelen om lager og status, takene og e-postlåsen.
+bestilling til to puljer med mottak. `bestilling.test.mjs` dekker bestillingene: innsending uten lagertrekk, godkjenning og avvisning, regelen om lager og status, takene og e-postlåsen. `annet.test.mjs` dekker «Annet»: linjer uten lagertrekk, forslagene bare kontoret ser, pris på én linje, og godkjenning som venter på prisen.
 
 Kjør dette **før** du limer SQL inn i Supabase. Mot en levende base sjekkes det
 samme utenfra med anon-nøkkelen:

@@ -10,6 +10,8 @@ import type { CompanyInfo } from "@/lib/order-pdf";
 import { dateTime, kr, num, pipeLabel } from "@/lib/format";
 import type { PipeOrderLineRow, PipeOrderRow, SubmittedOrder } from "@/lib/types";
 import { LAST_ORDER_KEY } from "@/lib/cart";
+import { ANNET_TEKST } from "@/lib/annet";
+import { AnnetMerke } from "@/components/AnnetDialog";
 
 /** Ei halvskriven eller framand sessionStorage-verdi skal ikkje velte sida */
 function isSubmittedOrder(v: unknown): v is SubmittedOrder {
@@ -55,7 +57,9 @@ export default function Receipt() {
   }, [order, navigate]);
 
   const pricesOn = settings?.show_prices ?? true;
-  const hasUnpriced = order?.lines?.some((l) => l.unit_price === null) ?? false;
+  // Annet-linjer står for seg: kontoret set prisen, og summen seier frå om dei
+  const hasUnpriced = order?.lines?.some((l) => l.unit_price === null && !l.annet) ?? false;
+  const annetCount = order?.lines?.filter((l) => l.annet).length ?? 0;
   const showPrices = pricesOn && (order?.lines?.some((l) => l.unit_price !== null) ?? false);
   // Databasen hoppar over linjer utan pris når totalen blir rekna ut, så ein sum
   // med slike linjer i ville vore lågare enn det kunden faktisk tek med seg
@@ -110,6 +114,7 @@ export default function Receipt() {
         unit_price: l.unit_price,
         line_total: l.line_total,
         sort_order: i,
+        is_annet: l.annet === true,
       }));
 
       downloadOrderPDF({ order: orderRow, lines, company }, { showPrices });
@@ -145,13 +150,16 @@ export default function Receipt() {
               <li key={`${line.sku ?? line.name}-${i}`} className="py-2.5">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="min-w-0 text-sm font-medium text-foreground break-words">
+                    {line.annet ? <AnnetMerke /> : null}
                     {pipeLabel(line.name, line.dimension)}
                   </span>
                   <span className="tabular shrink-0 text-sm font-semibold text-foreground">
                     {num(line.quantity)} {line.unit}
                   </span>
                 </div>
-                {showPrices && line.line_total !== null ? (
+                {line.annet ? (
+                  <p className="mt-0.5 text-right text-xs text-muted-foreground">{ANNET_TEKST.uttak}</p>
+                ) : showPrices && line.line_total !== null ? (
                   <p className="tabular mt-0.5 text-right text-xs text-muted-foreground">
                     {kr(line.line_total)} kr
                   </p>
@@ -161,9 +169,14 @@ export default function Receipt() {
           </ul>
 
           {showTotal ? (
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-              <span className="text-base font-semibold text-foreground">Sum</span>
-              <span className="tabular text-2xl font-bold text-foreground">{kr(order.total)} kr</span>
+            <div className="mt-3 border-t border-border pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-base font-semibold text-foreground">Sum</span>
+                <span className="tabular text-2xl font-bold text-foreground">{kr(order.total)} kr</span>
+              </div>
+              {annetCount > 0 ? (
+                <p className="tabular text-right text-sm text-muted-foreground">+ {annetCount} uten pris</p>
+              ) : null}
             </div>
           ) : pricesOn && hasUnpriced ? (
             <p className="mt-3 border-t border-border pt-3 text-sm text-muted-foreground">
