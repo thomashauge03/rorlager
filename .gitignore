@@ -26,3 +26,7 @@ dist-ssr
 # Miljøvariabler. Berre publishable/anon-nøklar i dag, men fila skal
 # uansett ikkje sporast - neste hemmelegheit hamnar her.
 .env
+
+# Supabase-tokenet til scripts/supabase-oppdater.mjs. Det opnar ALLE
+# prosjekta på kontoen, ikkje berre rørlageret, og skal aldri til git.
+.env.supabase

@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "check:db": "node scripts/check-db.mjs",
     "bygg:setup": "node scripts/bygg-setup.mjs",
-    "test:db": "node scripts/db-test/kjor.mjs"
+    "test:db": "node scripts/db-test/kjor.mjs",
+    "supabase:oppdater": "node scripts/supabase-oppdater.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -72,6 +72,18 @@ Sjekk at alt sitter:
 npm run check:db
 ```
 
+**Eller alt i ett, fra repoet:** kopier `.env.supabase.example` til
+`.env.supabase` og lim inn et Supabase access token. Da kjører
+
+```bash
+npm run supabase:oppdater
+```
+
+`supabase-setup.sql`, ruller ut `opprett-bruker` og kjører `check:db`.
+`--berre-sql` hopper over funksjonen, `--med-epost` tar med `bestilling-epost`.
+Tokenet åpner alle prosjektene på kontoen: gi det en utløpsdato, og trekk det
+tilbake når det ikke trengs. `.env.supabase` står i `.gitignore`.
+
 `.env` må peke på samme prosjekt:
 
 ```
