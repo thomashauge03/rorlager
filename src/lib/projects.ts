@@ -177,21 +177,40 @@ export async function fetchProject(id: string): Promise<ProjectRow | null> {
   return data ?? null;
 }
 
-export async function saveProject(patch: Partial<ProjectRow> & { id?: string }): Promise<ProjectRow> {
-  const { id, ...values } = patch;
-  const query = id
-    ? supabase.from("projects").update(values).eq("id", id).select("*").single()
-    : supabase.from("projects").insert(values as ProjectRow).select("*").single();
-
-  const { data, error } = await query;
-  if (error) fail("Klarte ikke å lagre prosjektet", error);
-  return data as ProjectRow;
+/*
+ * Prosjektene eies av SmartDok. Synken fra adminbordet skriver nummer, navn,
+ * oppdragsgiver, adresse og status hvert kvarter, så alt appen selv endret i de
+ * feltene ville blitt overskrevet i stillhet. Derfor finnes det ingen
+ * opprett-, endre- eller slettfunksjon her lenger, bare notatet, som synken
+ * lar være.
+ */
+export async function saveProjectNote(id: string, note: string | null): Promise<void> {
+  const { data, error } = await supabase.from("projects").update({ note }).eq("id", id).select("id");
+  if (error) fail("Klarte ikke å lagre notatet", error);
+  kreverTreff(data, "Notatet ble ikke lagret. Bare kontoret kan endre et prosjekt.");
 }
 
-export async function deleteProject(id: string): Promise<void> {
-  const { data, error } = await supabase.from("projects").delete().eq("id", id).select("id");
-  if (error) fail("Klarte ikke å slette prosjektet", error);
-  kreverTreff(data, "Prosjektet ble ikke slettet. Du har kanskje ikke tilgang til det lenger.");
+/**
+ * Prosjektene som skal vises i en liste eller et valg.
+ *
+ * Med over 700 prosjekter fra SmartDok, de fleste avsluttet, drukner de aktive
+ * hvis alt vises. Avsluttede tas derfor bare med når brukeren ber om det, eller
+ * når de står i `alltidMed` (for eksempel prosjekter en person alt er satt på,
+ * slik at en avhuking ikke forsvinner ut av syne og blir fjernet ved lagring).
+ */
+export function filtrerProsjekter(
+  liste: ProjectRow[],
+  valg: { søk?: string; visAvsluttede?: boolean; alltidMed?: readonly string[] } = {},
+): ProjectRow[] {
+  const ord = (valg.søk ?? "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+  const alltidMed = new Set(valg.alltidMed ?? []);
+
+  return liste.filter((p) => {
+    if (p.status === "avsluttet" && !valg.visAvsluttede && !alltidMed.has(p.id)) return false;
+    if (ord.length === 0) return true;
+    const tekst = [String(p.project_number), p.name, p.client, p.address].join(" ").toLowerCase();
+    return ord.every((o) => tekst.includes(o));
+  });
 }
 
 // ---------------------------------------------------------------- medlemmer

@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { isOverdue, receivedForLine, remainderLabel, suggestDeviation, withReceived } from "@/lib/projects";
-import type { ProjectOrderLineRow, ProjectReceiptLineRow } from "@/lib/types";
+import {
+  filtrerProsjekter,
+  isOverdue,
+  receivedForLine,
+  remainderLabel,
+  suggestDeviation,
+  withReceived,
+} from "@/lib/projects";
+import type { ProjectOrderLineRow, ProjectReceiptLineRow, ProjectRow } from "@/lib/types";
 
 // Mottakskontrollen står og fell på eitt tal: kor mykje som framleis manglar.
 // Blir det rekna feil, kvitterer nokon ut ein leveranse som ikkje er komen –
@@ -149,5 +156,60 @@ describe("remainderLabel", () => {
 
   it("skriver norsk komma og ingen flyttallsstøy", () => {
     expect(remainderLabel(6.4, -0.30000000000000004, "m")).toBe("6,7 m mottatt – 0,3 m for mye");
+  });
+});
+
+// Over 700 prosjekter kommer fra SmartDok, og de fleste er avsluttet. Slipper
+// de gjennom, drukner de aktive i hvert valg; forsvinner et prosjekt en person
+// alt står på, blir avhukingen fjernet neste gang noen trykker Lagre.
+describe("filtrerProsjekter", () => {
+  const prosjekt = (
+    id: string,
+    nr: number,
+    name: string,
+    status: ProjectRow["status"],
+    client: string | null = null,
+  ): ProjectRow => ({
+    id,
+    project_number: nr,
+    name,
+    client,
+    address: null,
+    status,
+    note: null,
+    created_at: "2026-10-12T00:00:00Z",
+    updated_at: "2026-10-12T00:00:00Z",
+    created_by: null,
+  });
+
+  const liste = [
+    prosjekt("a", 4512, "Vann og avløp Sandnes", "aktiv", "Sandnes kommune"),
+    prosjekt("b", 3301, "Gamle Fjellvei", "avsluttet"),
+    prosjekt("c", 4520, "Tomt Hommersåk", "aktiv"),
+  ];
+
+  const ids = (rader: ProjectRow[]) => rader.map((p) => p.id);
+
+  it("viser bare aktive som standard", () => {
+    expect(ids(filtrerProsjekter(liste))).toEqual(["a", "c"]);
+  });
+
+  it("tar med avsluttede når brukeren ber om det", () => {
+    expect(ids(filtrerProsjekter(liste, { visAvsluttede: true }))).toEqual(["a", "b", "c"]);
+  });
+
+  it("beholder avsluttede som står i alltidMed", () => {
+    expect(ids(filtrerProsjekter(liste, { alltidMed: ["b"] }))).toEqual(["a", "b", "c"]);
+  });
+
+  it("søker i nummer, navn og oppdragsgiver, og krever alle ordene", () => {
+    expect(ids(filtrerProsjekter(liste, { søk: "4520" }))).toEqual(["c"]);
+    expect(ids(filtrerProsjekter(liste, { søk: "sandnes KOMMUNE" }))).toEqual(["a"]);
+    expect(ids(filtrerProsjekter(liste, { søk: "sandnes hommersåk" }))).toEqual([]);
+  });
+
+  it("søket slipper ikke gjennom avsluttede uten at de er slått på", () => {
+    expect(ids(filtrerProsjekter(liste, { søk: "fjellvei" }))).toEqual([]);
+    expect(ids(filtrerProsjekter(liste, { søk: "fjellvei", visAvsluttede: true }))).toEqual(["b"]);
   });
 });

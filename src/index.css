@@ -204,3 +204,18 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Saken en dyplenke fra Innboks peker på. Står utenfor @layer så Tailwind
+   aldri renser den bort: klassen settes fra lib/dyplenke.ts, ikke i JSX.
+   Rødt fra logoen, og ingen animasjon, så den virker likt med
+   prefers-reduced-motion. Tabellrader får fargen på cellene, fordi
+   bakgrunn og omriss på selve <tr> tegnes ulikt fra nettleser til nettleser. */
+.hm-dyplenke {
+  outline: 3px solid hsl(var(--primary));
+  outline-offset: 2px;
+  background-color: hsl(var(--primary) / 0.08);
+}
+
+tr.hm-dyplenke > td {
+  background-color: hsl(var(--primary) / 0.12);
+}

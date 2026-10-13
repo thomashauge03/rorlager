@@ -2,7 +2,7 @@
 // med detaljvising, statusbyte, PDF og plukkliste. Bestillingar som ventar på
 // godkjenning ligg i ei eiga stripe øvst, uavhengig av datofilteret.
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { subDays } from "date-fns";
 import { Download, FileText, Inbox, Loader2, Search, Trash2 } from "lucide-react";
@@ -31,7 +31,8 @@ import { PickupDetails, PickupQueue } from "@/components/admin/PickupQueue";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, isoDate, kr, krShort, num, pipeLabel, qtyLabel, shortDate } from "@/lib/format";
-import { deleteOrder, fetchOrders, QK, setOrderStatus, updateOrder } from "@/lib/orders";
+import { deleteOrder, fetchOrders, findOrderByNumber, QK, setOrderStatus, updateOrder } from "@/lib/orders";
+import { markerOgRull } from "@/lib/dyplenke";
 import { downloadOrderPDF, downloadPickListPDF, type CompanyInfo } from "@/lib/order-pdf";
 import { summer } from "@/lib/mva";
 import { downloadPickupPDF } from "@/lib/pickup-pdf";
@@ -88,7 +89,11 @@ function DetailRow({ label, value }: { label: string; value: ReactNode }) {
   );
 }
 
-export function OrdersTab() {
+/**
+ * ordre: order_number fra en dyplenke (/admin?fane=bestillinger&ordre=1042).
+ * Allerede validert i AdminDashboard; null når lenken ikke peker hit.
+ */
+export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const isMobile = useIsMobile();
@@ -175,6 +180,65 @@ export function OrdersTab() {
       title: fallback,
       description: err instanceof Error ? err.message : undefined,
     });
+
+  /*
+   * Dyplenke fra Innboks: finn ordren, vis den og åpne den.
+   *
+   * Lista er avgrenset av datofilteret og kanskje et søk, så ordren slås først
+   * opp for seg selv. Ligger den utenfor perioden, settes perioden til dagen
+   * den kom inn, og alle andre filtre nullstilles. Selve rullingen venter til
+   * lista er hentet med de nye filtrene.
+   *
+   * Refen holder styr på hvilket nummer som er tatt, så et nytt filtervalg
+   * etterpå ikke drar brukeren tilbake til ordren.
+   */
+  const [dypMål, setDypMål] = useState<string | null>(null);
+  const dypTatt = useRef<number | null>(null);
+  const dypÅpne = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(dypÅpne.current), []);
+
+  useEffect(() => {
+    if (ordre === null || dypTatt.current === ordre) return;
+    dypTatt.current = ordre;
+    findOrderByNumber(ordre)
+      .then((treff) => {
+        if (!treff) {
+          toast({ title: `Fant ikke ordre ${ordre}.`, description: "Den kan være slettet." });
+          return;
+        }
+        const dag = isoDate(new Date(treff.created_at));
+        if (dag < from || dag > to) {
+          setFrom(dag);
+          setTo(dag);
+        }
+        setStatus("alle");
+        setKind("alle");
+        setSearch("");
+        setSearchTerm("");
+        setOnlyUninvoiced(false);
+        setDypMål(treff.id);
+      })
+      .catch((err) => fail(err, "Klarte ikke å slå opp ordren"));
+    // Bare nummeret skal starte oppslaget. from og to leses som de er nå.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ordre]);
+
+  useEffect(() => {
+    if (!dypMål || isLoading) return;
+    setDypMål(null);
+    // Feilboksen over lista sier allerede fra, og en «fant ikke» ville vært feil.
+    if (isError) return;
+    const rad = document.querySelector<HTMLElement>(`[data-dyplenke="${dypMål}"]`);
+    if (!rad) {
+      // Kan skje om ordren ble slettet mellom oppslaget og hentingen.
+      toast({ title: `Fant ikke ordre ${ordre}.`, description: "Den kan være slettet." });
+      return;
+    }
+    markerOgRull(rad);
+    // Sidepanelet dekker lista. Det åpnes etter et øyeblikk, så brukeren
+    // rekker å se hvor i lista ordren står.
+    dypÅpne.current = window.setTimeout(() => setOpenId(dypMål), 700);
+  }, [dypMål, isLoading, isError, ordre, toast]);
 
   const toggleOne = (id: string, checked: boolean) =>
     setSelected((prev) => (checked ? [...new Set([...prev, id])] : prev.filter((x) => x !== id)));
@@ -409,7 +473,7 @@ export function OrdersTab() {
       ) : isMobile ? (
         <div className="space-y-2">
           {orders.map((o) => (
-            <div key={o.id} className="hm-card hm-card-interactive p-3 flex gap-3">
+            <div key={o.id} data-dyplenke={o.id} className="hm-card hm-card-interactive p-3 flex gap-3">
               <Checkbox
                 className="mt-1 shrink-0"
                 checked={selected.includes(o.id)}
@@ -461,7 +525,7 @@ export function OrdersTab() {
             </TableHeader>
             <TableBody>
               {orders.map((o) => (
-                <TableRow key={o.id} className="cursor-pointer" onClick={() => setOpenId(o.id)}>
+                <TableRow key={o.id} data-dyplenke={o.id} className="cursor-pointer" onClick={() => setOpenId(o.id)}>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <Checkbox
                       checked={selected.includes(o.id)}

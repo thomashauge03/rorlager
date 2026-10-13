@@ -3,15 +3,21 @@
 // Kontoret ser alle prosjekt her òg, men styrer dei frå adminpanelet – denne
 // sida er laga for ein telefon i ei arbeidshanske, ikkje for eit skrivebord.
 
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ClipboardList, FolderOpen, KeyRound, Loader2, LogOut, MapPin, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ClipboardList, FolderOpen, KeyRound, Loader2, LogOut, MapPin, Search, ShieldAlert } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TopBar } from "@/components/TopBar";
 import { QK } from "@/lib/orders";
-import { fetchAllProjectOrders, fetchProjects, isOverdue } from "@/lib/projects";
+import { fetchAllProjectOrders, fetchProjects, filtrerProsjekter, isOverdue } from "@/lib/projects";
+
+// Kontoret ser alle prosjektene fra SmartDok her, over 700. Søket tar resten.
+const MAKS_VISTE = 100;
 import { loggUt, useAuth } from "@/lib/auth";
 
 export default function Projects() {
@@ -49,6 +55,27 @@ export default function Projects() {
     };
   };
 
+  const [søk, setSøk] = useState("");
+  const [visAvsluttede, setVisAvsluttede] = useState(false);
+
+  // Et avsluttet prosjekt med varer som fortsatt venter på mottak, skal ikke
+  // forsvinne fra plassen før mottakskontrollen er gjort.
+  const medÅpneBestillinger = useMemo(
+    () =>
+      (orders.data ?? [])
+        .filter((o) => o.status === "bestilt" || o.status === "delvis")
+        .map((o) => o.project_id),
+    [orders.data],
+  );
+
+  const liste = projects.data ?? [];
+  const antallAvsluttede = liste.filter((p) => p.status === "avsluttet").length;
+  const treff = useMemo(
+    () => filtrerProsjekter(projects.data ?? [], { søk, visAvsluttede, alltidMed: medÅpneBestillinger }),
+    [projects.data, søk, visAvsluttede, medÅpneBestillinger],
+  );
+  const viste = treff.slice(0, MAKS_VISTE);
+
   const logout = async () => {
     await loggUt(queryClient);
     navigate("/login", { replace: true });
@@ -84,8 +111,6 @@ export default function Projects() {
       </div>
     );
   }
-
-  const liste = projects.data ?? [];
 
   return (
     <div className="hm-page min-h-dvh flex flex-col">
@@ -146,72 +171,115 @@ export default function Projects() {
             </p>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {liste.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => navigate(`/prosjekt/${p.id}`)}
-                  className="hm-card hm-card-interactive w-full p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-foreground">{p.name}</p>
-                      {p.client ? <p className="truncate text-sm text-muted-foreground">{p.client}</p> : null}
+          <div className="space-y-3">
+            {/* Plassen har som regel noen få prosjekter, og trenger ikke et søkefelt
+                i veien. Kontoret ser alle fra SmartDok og trenger det. */}
+            {liste.length > 8 ? (
+              <div className="relative">
+                <Label htmlFor="prosjekter-sok" className="sr-only">
+                  Søk i prosjektene
+                </Label>
+                <Search
+                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  id="prosjekter-sok"
+                  className="h-12 pl-9"
+                  placeholder="Nummer, navn, oppdragsgiver eller adresse"
+                  value={søk}
+                  onChange={(e) => setSøk(e.target.value)}
+                />
+              </div>
+            ) : null}
+
+            {treff.length === 0 ? (
+              <p className="hm-card p-6 text-center text-sm text-muted-foreground">
+                {søk.trim()
+                  ? "Ingen prosjekter passer søket."
+                  : "Ingen aktive prosjekter. De avsluttede finner du under."}
+              </p>
+            ) : null}
+
+            <ul className="space-y-3">
+              {viste.map((p) => (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/prosjekt/${p.id}`)}
+                    className="hm-card hm-card-interactive w-full p-4 text-left focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-semibold text-foreground">{p.name}</p>
+                        {p.client ? <p className="truncate text-sm text-muted-foreground">{p.client}</p> : null}
+                      </div>
+                      <span className="flex shrink-0 items-center gap-2">
+                        {/* Eit avslutta prosjekt såg heilt normalt ut her – det låg
+                            berre lenger ned i lista. Då melder nokon inn behov til
+                            ein ferdig jobb. */}
+                        {p.status === "avsluttet" ? (
+                          <span className="hm-chip border border-border bg-muted text-muted-foreground">Avsluttet</span>
+                        ) : null}
+                        <span className="tabular text-xs text-muted-foreground">#{p.project_number}</span>
+                      </span>
                     </div>
-                    <span className="flex shrink-0 items-center gap-2">
-                      {/* Eit avslutta prosjekt såg heilt normalt ut her – det låg
-                          berre lenger ned i lista. Då melder nokon inn behov til
-                          ein ferdig jobb. */}
-                      {p.status === "avsluttet" ? (
-                        <span className="hm-chip border border-border bg-muted text-muted-foreground">Avsluttet</span>
-                      ) : null}
-                      <span className="tabular text-xs text-muted-foreground">#{p.project_number}</span>
-                    </span>
-                  </div>
 
-                  {p.address ? (
-                    <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
-                      <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
-                      <span className="truncate">{p.address}</span>
-                    </p>
-                  ) : null}
+                    {p.address ? (
+                      <p className="mt-2 flex items-center gap-1.5 text-sm text-muted-foreground">
+                        <MapPin className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span className="truncate">{p.address}</span>
+                      </p>
+                    ) : null}
 
-                  {/* Tal, ikkje ein statisk frase. «Åpne bestillinger» sa
-                      ingenting om kva som hastar, og kunne til og med lesast
-                      som ein imperativ. */}
-                  {(() => {
-                    const s = status(p.id);
-                    if (!s) {
+                    {/* Tal, ikkje ein statisk frase. «Åpne bestillinger» sa
+                        ingenting om kva som hastar, og kunne til og med lesast
+                        som ein imperativ. */}
+                    {(() => {
+                      const s = status(p.id);
+                      if (!s) {
+                        return (
+                          <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
+                            <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
+                            {orders.isError ? "Fikk ikke hentet bestillingene" : "Henter bestillinger …"}
+                          </p>
+                        );
+                      }
+                      const { venter, forsinka } = s;
                       return (
-                        <p className="mt-3 flex items-center gap-1.5 text-sm text-muted-foreground">
-                          <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
-                          {orders.isError ? "Fikk ikke hentet bestillingene" : "Henter bestillinger …"}
+                        <p
+                          className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${
+                            forsinka > 0 ? "text-warning-ink dark:text-warning" : "text-primary"
+                          }`}
+                        >
+                          {forsinka > 0 ? (
+                            <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          ) : (
+                            <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
+                          )}
+                          {venter === 0
+                            ? "Ingenting venter på mottak"
+                            : `${venter} venter på mottak${forsinka > 0 ? ` · ${forsinka} forsinket` : ""}`}
                         </p>
                       );
-                    }
-                    const { venter, forsinka } = s;
-                    return (
-                      <p
-                        className={`mt-3 flex items-center gap-1.5 text-sm font-medium ${
-                          forsinka > 0 ? "text-warning-ink dark:text-warning" : "text-primary"
-                        }`}
-                      >
-                        {forsinka > 0 ? (
-                          <AlertTriangle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        ) : (
-                          <ClipboardList className="h-4 w-4 shrink-0" aria-hidden="true" />
-                        )}
-                        {venter === 0
-                          ? "Ingenting venter på mottak"
-                          : `${venter} venter på mottak${forsinka > 0 ? ` · ${forsinka} forsinket` : ""}`}
-                      </p>
-                    );
-                  })()}
-                </button>
-              </li>
-            ))}
-          </ul>
+                    })()}
+                  </button>
+                </li>
+              ))}
+            </ul>
+
+            {treff.length > viste.length ? (
+              <p className="py-2 text-center text-sm text-muted-foreground">
+                Viser {viste.length} av {treff.length}. Søk for å finne resten.
+              </p>
+            ) : null}
+
+            {antallAvsluttede > 0 ? (
+              <Button variant="outline" className="h-12 w-full" onClick={() => setVisAvsluttede((v) => !v)}>
+                {visAvsluttede ? "Skjul avsluttede prosjekter" : `Vis avsluttede prosjekter (${antallAvsluttede})`}
+              </Button>
+            ) : null}
+          </div>
         )}
       </main>
     </div>

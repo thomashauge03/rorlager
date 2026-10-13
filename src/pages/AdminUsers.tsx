@@ -30,12 +30,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Copy, FolderKanban, Info, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, UserPlus, Users, Wand2 } from "lucide-react";
+import { Check, Copy, FolderKanban, Info, KeyRound, Loader2, Pencil, Search, ShieldCheck, Trash2, UserPlus, Users, Wand2 } from "lucide-react";
 import { shortDate } from "@/lib/format";
 import { opprettBruker, type OpprettSvar } from "@/lib/brukere";
 import { useKravOmNyttPassord } from "@/lib/auth";
 import { MIN_LENGDE, lagPassord, sjekkPassord } from "@/lib/passord";
-import { fetchMemberProjects, fetchProjects, setMemberProjects } from "@/lib/projects";
+import { fetchMemberProjects, fetchProjects, filtrerProsjekter, setMemberProjects } from "@/lib/projects";
 import type { ProjectRow } from "@/lib/types";
 
 const ROLES = [
@@ -873,6 +873,8 @@ function ProsjektVelger({
   status?: "laster" | "klar" | "feil";
   onPrøvIgjen?: () => void;
 }) {
+  const [søk, setSøk] = useState("");
+
   const veksle = (id: string) =>
     onEndre(valgte.includes(id) ? valgte.filter((x) => x !== id) : [...valgte, id]);
 
@@ -894,9 +896,10 @@ function ProsjektVelger({
     );
   }
 
-  // Avslutta prosjekt blir berre viste når nokon alt står på dei, så lista
-  // ikkje veks med gammalt for kvart år som går.
-  const synlege = alle.filter((p) => p.status === "aktiv" || valgte.includes(p.id));
+  // Avsluttede prosjekter vises bare når personen alt står på dem. SmartDok har
+  // hundrevis av dem, og de skal ikke fylle valget.
+  const aktuelle = filtrerProsjekter(alle, { alltidMed: valgte });
+  const synlege = filtrerProsjekter(aktuelle, { søk, alltidMed: valgte });
 
   return (
     <div className="space-y-2 rounded-lg border border-border p-3">
@@ -921,34 +924,56 @@ function ProsjektVelger({
           <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
           Henter hvilke prosjekter han står på …
         </p>
-      ) : synlege.length === 0 ? (
+      ) : aktuelle.length === 0 ? (
         <p className="py-2 text-sm text-muted-foreground">
-          Ingen prosjekter opprettet ennå. Lag dem under Admin → Prosjekt.
+          Ingen aktive prosjekter ennå. Prosjektene hentes fra SmartDok gjennom adminbordet.
         </p>
       ) : (
-        <ul className="max-h-56 space-y-0.5 overflow-y-auto">
-          {synlege.map((p) => (
-            <li key={p.id}>
-              <label
-                htmlFor={`${idPrefiks}-prosjekt-${p.id}`}
-                className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 transition-colors hover:bg-muted"
-              >
-                <Checkbox
-                  id={`${idPrefiks}-prosjekt-${p.id}`}
-                  checked={valgte.includes(p.id)}
-                  onCheckedChange={() => veksle(p.id)}
-                />
-                <span className="min-w-0 flex-1 truncate text-sm">
-                  <span className="tabular text-muted-foreground">#{p.project_number}</span> {p.name}
-                  {p.client ? <span className="text-muted-foreground"> · {p.client}</span> : null}
-                </span>
-                {p.status === "avsluttet" ? (
-                  <span className="hm-chip shrink-0 border border-border bg-muted text-muted-foreground">Avsluttet</span>
-                ) : null}
-              </label>
-            </li>
-          ))}
-        </ul>
+        <>
+          <div className="relative">
+            <Label htmlFor={`${idPrefiks}-prosjekt-sok`} className="sr-only">
+              Søk etter prosjekt
+            </Label>
+            <Search
+              className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <Input
+              id={`${idPrefiks}-prosjekt-sok`}
+              className="h-11 pl-9"
+              placeholder="Søk på nummer, navn eller oppdragsgiver"
+              value={søk}
+              onChange={(e) => setSøk(e.target.value)}
+            />
+          </div>
+          {synlege.length === 0 ? (
+            <p className="py-2 text-sm text-muted-foreground">Ingen prosjekter passer søket.</p>
+          ) : (
+            <ul className="max-h-56 space-y-0.5 overflow-y-auto">
+              {synlege.map((p) => (
+                <li key={p.id}>
+                  <label
+                    htmlFor={`${idPrefiks}-prosjekt-${p.id}`}
+                    className="flex min-h-11 cursor-pointer items-center gap-3 rounded-md px-2 transition-colors hover:bg-muted"
+                  >
+                    <Checkbox
+                      id={`${idPrefiks}-prosjekt-${p.id}`}
+                      checked={valgte.includes(p.id)}
+                      onCheckedChange={() => veksle(p.id)}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-sm">
+                      <span className="tabular text-muted-foreground">#{p.project_number}</span> {p.name}
+                      {p.client ? <span className="text-muted-foreground"> · {p.client}</span> : null}
+                    </span>
+                    {p.status === "avsluttet" ? (
+                      <span className="hm-chip shrink-0 border border-border bg-muted text-muted-foreground">Avsluttet</span>
+                    ) : null}
+                  </label>
+                </li>
+              ))}
+            </ul>
+          )}
+        </>
       )}
     </div>
   );
