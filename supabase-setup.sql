@@ -37,7 +37,7 @@
 --   20260924100200_bestilling_epost.sql
 --   20260928100000_uttak_pa_brukaren.sql
 --   20261012100000_prosjektnummer_fra_smartdok.sql
---   20261013100000_annet_forslag.sql
+--   20261013110000_annet_forslag.sql
 
 
 -- ══════════════════════════════════════════════════════════════════════
@@ -5231,7 +5231,7 @@ select setval(
 );
 
 -- ══════════════════════════════════════════════════════════════════════
--- 20261013100000_annet_forslag.sql
+-- 20261013110000_annet_forslag.sql
 -- ══════════════════════════════════════════════════════════════════════
 
 -- «Annet»: det katalogen manglar, med eigne ord, rett i kurva.
