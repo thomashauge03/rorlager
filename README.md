@@ -393,6 +393,21 @@ bindende. Kontoret kan ikke godkjenne før annet-linjene har pris – sperren li
 i `pipe_approve_pickup_order`, ikke bare i knappen – og e-posten «klar til
 henting» viser dermed prisen. Vil kunden ikke ha varen, sier hen fra ved henting.
 
+### Rette et uttak
+
+I detaljene til et uttak (Admin → Bestillinger) kan kontoret rette det som ble
+registrert feil på lageret, så lenge uttaket ikke er fakturert:
+
+| Hva | Hvor | Hva skjer |
+| --- | --- | --- |
+| Bytt prosjekt | «Endre» ved Prosjekt | Velg fra prosjektlista (teksten skrives fra prosjektet, og `project_id` settes) eller skriv fritt. |
+| Endre navn | Under en annet-linje | Navn og dimensjon på linja – og på forslaget, så «Opprett vare» blir riktig utfylt. |
+| Bytt vare | Under hver linje | Linja får varens navn, varenummer, enhet og pris; mengden står. Har ordren trukket lageret, legges den gamle varen tilbake og den nye trekkes, begge med grunnen `retting` i lagerloggen. En annet-linje blir en vanlig linje, og forslaget merkes `opprettet`. |
+
+Alle tre går gjennom en databasefunksjon (`pipe_bytt_prosjekt`,
+`pipe_endre_annet`, `pipe_bytt_vare`) som sjekker kontoret, nekter en fakturert
+ordre og skriver lager, sum og forslag i én transaksjon.
+
 ## Priser og avanse
 
 Varekatalogen kommer fra prislisten til Brødrene Dahl (tilbud 94587). Prisene der

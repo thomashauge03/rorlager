@@ -478,6 +478,12 @@ export type Database = {
       pipe_approve_pickup_order: { Args: { p_id: string; p_message?: string | null }; Returns: Json };
       pipe_reject_pickup_order: { Args: { p_id: string; p_message: string }; Returns: Json };
       pipe_price_line: { Args: { p_line_id: string; p_unit_price: number }; Returns: Json };
+      pipe_bytt_prosjekt: {
+        Args: { p_order_id: string; p_project_id?: string | null; p_project?: string | null };
+        Returns: Json;
+      };
+      pipe_endre_annet: { Args: { p_line_id: string; p_name: string; p_dimension?: string | null }; Returns: Json };
+      pipe_bytt_vare: { Args: { p_line_id: string; p_pipe_type_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

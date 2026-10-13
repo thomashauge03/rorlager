@@ -57,6 +57,33 @@ export async function priceLine(lineId: string, unitPrice: number): Promise<Pipe
   return data as unknown as PipeOrderLineRow;
 }
 
+// ── Retting av eit uttak ──
+//
+// Alle tre går gjennom funksjonar i basen som sjekkar kontoret, nektar ein
+// fakturert ordre og skriv lager, sum og forslag i same transaksjon.
+
+/** Anna prosjekt. Med projectId skriv basen teksten frå prosjektet; elles fritekst. */
+export async function byttProsjekt(orderId: string, valg: { projectId: string } | { tekst: string }) {
+  const { error } = await supabase.rpc("pipe_bytt_prosjekt", {
+    p_order_id: orderId,
+    p_project_id: "projectId" in valg ? valg.projectId : null,
+    p_project: "tekst" in valg ? valg.tekst : null,
+  });
+  if (error) throw new Error(error.message || "Klarte ikke å bytte prosjekt");
+}
+
+/** Nytt namn på ei annet-linje. Forslaget følgjer med. */
+export async function endreAnnet(lineId: string, name: string, dimension: string | null) {
+  const { error } = await supabase.rpc("pipe_endre_annet", { p_line_id: lineId, p_name: name, p_dimension: dimension });
+  if (error) throw new Error(error.message || "Klarte ikke å endre navnet");
+}
+
+/** Anna vare på linja. Lageret følgjer med når ordren har trekt det. */
+export async function byttVare(lineId: string, pipeTypeId: string) {
+  const { error } = await supabase.rpc("pipe_bytt_vare", { p_line_id: lineId, p_pipe_type_id: pipeTypeId });
+  if (error) throw new Error(error.message || "Klarte ikke å bytte vare");
+}
+
 /** Talet på fana. Same nøkkel som lista, så det følgjer med når eit forslag blir lukka. */
 export function useNewSuggestionCount(enabled: boolean) {
   const q = useQuery({ queryKey: QK.suggestions, queryFn: fetchSuggestions, enabled });

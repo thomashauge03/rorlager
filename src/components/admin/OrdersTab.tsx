@@ -49,6 +49,7 @@ import {
 } from "@/lib/types";
 import { AnnetMerke } from "@/components/AnnetDialog";
 import { PriceLineDialog } from "@/components/admin/PriceLineDialog";
+import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog } from "@/components/admin/RettUttak";
 
 const STATUS_OPTIONS: (OrderStatus | "alle")[] = ["alle", "ny", "behandlet", "levert", "avvist"];
 
@@ -125,6 +126,10 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
   const [selected, setSelected] = useState<string[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [prisFor, setPrisFor] = useState<PipeOrderLineRow | null>(null);
+  // Rettingane: anna prosjekt, nytt namn på ei annet-linje, anna vare
+  const [prosjektFor, setProsjektFor] = useState<OrderWithLines | null>(null);
+  const [namnFor, setNamnFor] = useState<PipeOrderLineRow | null>(null);
+  const [vareFor, setVareFor] = useState<PipeOrderLineRow | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -586,7 +591,30 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                 <div>
                   <DetailRow label={erAnsattUttak(open) ? "Tatt ut av" : "Kunde"} value={open.customer_name} />
                   <DetailRow label="Firma" value={open.company} />
-                  <DetailRow label="Prosjekt" value={open.project} />
+                  {/* Eit uttak skal alltid ha prosjektraden, òg utan prosjekt:
+                      det er der kontoret set det. Fakturert er låst i basen. */}
+                  {!erBestilling(open) ? (
+                    <div className="flex items-center justify-between gap-4 py-1.5 border-b border-border">
+                      <span className="text-sm text-muted-foreground shrink-0">Prosjekt</span>
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="text-sm font-medium text-foreground text-right break-words">
+                          {open.project ?? <span className="text-muted-foreground">Ikke satt</span>}
+                        </span>
+                        {!open.invoice_id ? (
+                          <button
+                            type="button"
+                            onClick={() => setProsjektFor(open)}
+                            className="shrink-0 min-h-9 px-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                            aria-label="Bytt prosjekt"
+                          >
+                            Endre
+                          </button>
+                        ) : null}
+                      </span>
+                    </div>
+                  ) : (
+                    <DetailRow label="Prosjekt" value={open.project} />
+                  )}
                   <DetailRow
                     label="Telefon"
                     value={
@@ -625,6 +653,26 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                             {pipeLabel(line.name, line.dimension)}
                           </p>
                           {line.sku ? <p className="text-xs text-muted-foreground">{line.sku}</p> : null}
+                          {!open.invoice_id ? (
+                            <div className="mt-0.5 flex flex-wrap gap-x-3">
+                              {line.is_annet ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setNamnFor(line)}
+                                  className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                >
+                                  Endre navn
+                                </button>
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => setVareFor(line)}
+                                className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                              >
+                                Bytt vare
+                              </button>
+                            </div>
+                          ) : null}
                         </div>
                         <div className="text-right shrink-0">
                           <p className="text-sm font-semibold text-foreground tabular">{qtyLabel(line.quantity, line.unit)}</p>
@@ -750,6 +798,13 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
       </Sheet>
 
       <PriceLineDialog line={prisFor} onClose={() => setPrisFor(null)} />
+      <ByttProsjektDialog order={prosjektFor} onClose={() => setProsjektFor(null)} />
+      <EndreAnnetDialog line={namnFor} onClose={() => setNamnFor(null)} />
+      <ByttVareDialog
+        line={vareFor}
+        lagerTrekt={Boolean(open?.stock_drawn_at) || (open ? !erBestilling(open) : false)}
+        onClose={() => setVareFor(null)}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent>

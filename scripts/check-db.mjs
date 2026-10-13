@@ -211,6 +211,13 @@ for (const fn of [
 // Prisen på ei linje er kontoret si. Annet-hjelparen skriv linjer på kva ordre
 // som helst, og skal berre nåast frå innsendingsfunksjonane.
 await stengtForAnon("pipe_price_line", { p_line_id: "00000000-0000-0000-0000-000000000000", p_unit_price: 1 });
+// 20261014110000: kontoret rettar eit uttak
+await stengtForAnon("pipe_bytt_prosjekt", { p_order_id: "00000000-0000-0000-0000-000000000000", p_project: "x" });
+await stengtForAnon("pipe_endre_annet", { p_line_id: "00000000-0000-0000-0000-000000000000", p_name: "x" });
+await stengtForAnon("pipe_bytt_vare", {
+  p_line_id: "00000000-0000-0000-0000-000000000000",
+  p_pipe_type_id: "00000000-0000-0000-0000-000000000000",
+});
 await stengtForAnon("pipe_annet_linje", {
   p_order_id: "00000000-0000-0000-0000-000000000000",
   p_line: {},
