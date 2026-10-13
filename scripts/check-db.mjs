@@ -216,6 +216,7 @@ await stengtForAnon("pipe_price_line", { p_line_id: "00000000-0000-0000-0000-000
 // 20261014110000: kontoret rettar eit uttak
 await stengtForAnon("pipe_bytt_prosjekt", { p_order_id: "00000000-0000-0000-0000-000000000000", p_project: "x" });
 await stengtForAnon("pipe_endre_annet", { p_line_id: "00000000-0000-0000-0000-000000000000", p_name: "x" });
+await stengtForAnon("pipe_prosjekt_uttak", { p_project_id: "00000000-0000-0000-0000-000000000000" });
 await stengtForAnon("pipe_endre_mengde", { p_line_id: "00000000-0000-0000-0000-000000000000", p_quantity: 1 });
 await stengtForAnon("pipe_bytt_vare", {
   p_line_id: "00000000-0000-0000-0000-000000000000",

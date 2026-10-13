@@ -315,6 +315,10 @@ export async function fetchOrders(
     onlyUninvoiced?: boolean;
     /** Berre ordrane på eitt fakturagrunnlag – for «Last ned PDF på nytt». */
     invoiceId?: string;
+    /** Berre uttak på eitt prosjekt frå lista – forbruket. */
+    projectId?: string;
+    /** Berre uttak som er førte på eit prosjekt frå lista – eksporten. */
+    medProsjekt?: boolean;
   } = {},
 ): Promise<OrderWithLines[]> {
   /*
@@ -340,6 +344,8 @@ export async function fetchOrders(
     if (opts.status && opts.status !== "alle") query = query.eq("status", opts.status);
     if (opts.onlyUninvoiced) query = query.is("invoice_id", null);
     if (opts.invoiceId) query = query.eq("invoice_id", opts.invoiceId);
+    if (opts.projectId) query = query.eq("project_id", opts.projectId);
+    if (opts.medProsjekt) query = query.not("project_id", "is", null);
     return query.range(fra, til);
   };
 

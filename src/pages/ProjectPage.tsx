@@ -27,6 +27,7 @@ import { useSettings } from "@/lib/settings";
 import { downloadReceiptPDFMedBilder } from "@/lib/receipt-pdf";
 import { num, shortDate } from "@/lib/format";
 import { useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
 import type { ProjectOrderWithLines } from "@/lib/types";
 
 /** Kor mange av dei bestilte linjene som er fullt mottatt. */
@@ -310,6 +311,8 @@ export default function ProjectPage() {
             </ul>
           )}
         </div>
+
+        <TattFraLageret prosjektId={id} klar={klar} />
       </main>
 
       <AlertDialog open={!!skalTrekke} onOpenChange={(o) => !o && setSkalTrekke(null)}>
@@ -337,5 +340,67 @@ export default function ProjectPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  );
+}
+
+type UttakPåProsjekt = {
+  id: string;
+  order_number: number;
+  created_at: string;
+  tatt_ut_av: string;
+  linjer: { name: string; dimension: string | null; quantity: number; unit: string }[];
+};
+
+/**
+ * Det som er henta frå eige lager til denne jobben.
+ *
+ * Plassen såg berre det kontoret har bestilt hos leverandør; uttaka frå
+ * rørlageret var usynlege her. Utan prisar: pipe_prosjekt_uttak gir berre kva,
+ * kor mykje, når og kven – prisane er kontoret si sak.
+ */
+function TattFraLageret({ prosjektId, klar }: { prosjektId: string; klar: boolean }) {
+  const uttak = useQuery({
+    queryKey: ["pipe_prosjekt_uttak", prosjektId],
+    queryFn: async (): Promise<UttakPåProsjekt[]> => {
+      const { data, error } = await supabase.rpc("pipe_prosjekt_uttak", { p_project_id: prosjektId });
+      // Før migrasjonen finst ikkje funksjonen – då er seksjonen berre borte
+      if (error) return [];
+      return (data ?? []) as unknown as UttakPåProsjekt[];
+    },
+    enabled: klar && !!prosjektId,
+  });
+
+  if (!uttak.data || uttak.data.length === 0) return null;
+
+  return (
+    <section className="mt-6" aria-labelledby="tatt-fra-lageret">
+      <h2 id="tatt-fra-lageret" className="mb-2 text-lg font-semibold text-foreground">
+        Tatt fra lageret
+      </h2>
+      <ul className="space-y-2">
+        {uttak.data.map((u) => (
+          <li key={u.id} className="hm-card p-4">
+            <div className="flex items-baseline justify-between gap-3">
+              <span className="text-sm font-semibold text-foreground tabular">Uttak #{u.order_number}</span>
+              <span className="text-xs text-muted-foreground tabular">{shortDate(u.created_at)}</span>
+            </div>
+            <p className="text-xs text-muted-foreground">{u.tatt_ut_av}</p>
+            <ul className="mt-1.5 space-y-0.5">
+              {u.linjer.map((l, i) => (
+                <li key={i} className="flex justify-between gap-3 text-sm">
+                  <span className="min-w-0 break-words text-foreground">
+                    {l.name}
+                    {l.dimension ? ` ${l.dimension}` : ""}
+                  </span>
+                  <span className="shrink-0 tabular text-muted-foreground">
+                    {num(l.quantity)} {l.unit}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

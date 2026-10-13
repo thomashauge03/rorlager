@@ -10,7 +10,7 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ExternalLink, FolderOpen, Info, Loader2, MapPin, NotebookPen, Search, Trash2, UserPlus, Users } from "lucide-react";
+import { BarChart3, ExternalLink, FolderOpen, Info, Loader2, MapPin, NotebookPen, Search, Trash2, UserPlus, Users } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +30,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Stat } from "@/components/Stat";
+import { ForbrukEksport, ForbrukPanel } from "@/components/admin/ForbrukPanel";
 import { useToast } from "@/hooks/use-toast";
 import { QK } from "@/lib/orders";
 import {
@@ -62,6 +63,7 @@ export function ProjectsTab() {
   const [notatFor, setNotatFor] = useState<ProjectRow | null>(null);
   const [notat, setNotat] = useState("");
   const [medlemmerFor, setMedlemmerFor] = useState<ProjectRow | null>(null);
+  const [forbrukFor, setForbrukFor] = useState<ProjectRow | null>(null);
 
   const åpneNotat = (p: ProjectRow) => {
     setNotatFor(p);
@@ -117,6 +119,8 @@ export function ProjectsTab() {
         <Stat label="Aktive" value={String(antallAktive)} />
         <Stat label="Avsluttet" value={String(antallAvsluttet)} />
       </div>
+
+      <ForbrukEksport prosjekter={alle} />
 
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <div className="relative flex-1">
@@ -207,6 +211,10 @@ export function ProjectsTab() {
                     <NotebookPen className="mr-2 h-4 w-4" aria-hidden="true" />
                     Notat
                   </Button>
+                  <Button size="sm" variant="outline" className="h-11" onClick={() => setForbrukFor(p)}>
+                    <BarChart3 className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Forbruk
+                  </Button>
                 </div>
               </li>
             ))}
@@ -247,6 +255,7 @@ export function ProjectsTab() {
       ) : null}
 
       {medlemmerFor ? <MedlemsPanel project={medlemmerFor} onClose={() => setMedlemmerFor(null)} /> : null}
+      {forbrukFor ? <ForbrukPanel project={forbrukFor} onClose={() => setForbrukFor(null)} /> : null}
     </div>
   );
 }

@@ -91,6 +91,8 @@ export type PipeOrderLineRow = {
   sort_order: number;
   /** Lagt inn med eigne ord frå «Annet» – ikkje ei sletta katalogvare. */
   is_annet: boolean;
+  /** Kostprisen då linja blei skriven. Berre for kontoret; manglar før 20261014160000. */
+  unit_cost?: number | null;
 };
 
 export type PipeStockLogRow = {
@@ -488,6 +490,7 @@ export type Database = {
       pipe_endre_annet: { Args: { p_line_id: string; p_name: string; p_dimension?: string | null }; Returns: Json };
       pipe_bytt_vare: { Args: { p_line_id: string; p_pipe_type_id: string }; Returns: Json };
       pipe_endre_mengde: { Args: { p_line_id: string; p_quantity: number }; Returns: Json };
+      pipe_prosjekt_uttak: { Args: { p_project_id: string }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
