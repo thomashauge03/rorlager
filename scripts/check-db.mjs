@@ -205,6 +205,8 @@ for (const fn of [
   "hm_passord_byttet",
   // 20261014100000: prosjektlista i kassen for innlogga
   "pipe_prosjektliste",
+  // 20261014140000: nattleg rydding av persondata
+  "pipe_rydd_persondata",
 ])
   await stengtForAnon(fn);
 

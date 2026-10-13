@@ -20,6 +20,8 @@ import { ANNET_TEKST } from "@/lib/annet";
 import { cartLineFromAnnet, useCart } from "@/lib/cart";
 import { useSettings } from "@/lib/settings";
 import { kr, num, pipeLabel } from "@/lib/format";
+import { linjesum, prisInklMva, summer } from "@/lib/mva";
+import { Sum } from "@/components/Pris";
 
 export default function Cart() {
   const navigate = useNavigate();
@@ -29,6 +31,7 @@ export default function Cart() {
 
   // Ein sum som ikkje er heile sanninga er verre enn ingen sum
   const showTotal = (settings?.show_prices ?? true) && !cart.hasUnpriced;
+  const vat = settings?.vat_rate ?? 25;
 
   if (cart.count === 0) {
     return (
@@ -113,8 +116,11 @@ export default function Cart() {
                     "Pris avtales"
                   ) : (
                     <>
-                      {num(line.quantity)} {line.unit} × {kr(line.price)} kr ={" "}
-                      <span className="font-semibold text-foreground">{kr(line.price * line.quantity)} kr</span>
+                      {num(line.quantity)} {line.unit} × {kr(prisInklMva(line.price, vat))} kr ={" "}
+                      <span className="font-semibold text-foreground">
+                        {kr(summer([linjesum(line.price, line.quantity)], vat).inkl)} kr
+                      </span>{" "}
+                      inkl. mva
                     </>
                   )}
                 </p>
@@ -125,9 +131,9 @@ export default function Cart() {
 
         {showTotal ? (
           <div className="hm-card mt-4 p-4">
-            <div className="flex items-center justify-between gap-4">
+            <div className="flex items-start justify-between gap-4">
               <span className="text-base font-semibold text-foreground">Sum</span>
-              <span className="tabular text-2xl font-bold text-foreground">{kr(cart.total)} kr</span>
+              <Sum eks={cart.total} vat={vat} />
             </div>
             {cart.annetCount > 0 ? (
               <p className="tabular mt-1 text-right text-sm text-muted-foreground">+ {cart.annetCount} uten pris</p>

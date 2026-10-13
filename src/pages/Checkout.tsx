@@ -8,11 +8,21 @@ import { SignaturePad } from "@/components/SignaturePad";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { loggUt, useAuth, useMeg } from "@/lib/auth";
-import { EMPTY_CUSTOMER, LAST_ORDER_KEY, clearCart, readCustomer, useCart, writeCustomer } from "@/lib/cart";
+import {
+  EMPTY_CUSTOMER,
+  LAST_ORDER_KEY,
+  clearCart,
+  forgetCustomer,
+  hasSavedCustomer,
+  readCustomer,
+  useCart,
+  writeCustomer,
+} from "@/lib/cart";
 import type { SavedCustomer } from "@/lib/cart";
 import { fetchProsjektliste, submitOrder } from "@/lib/orders";
 import { ProsjektVelger, type ProsjektSvar } from "@/components/ProsjektVelger";
@@ -22,6 +32,8 @@ import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
 import { ANNET_TEKST } from "@/lib/annet";
 import { AnnetMerke } from "@/components/AnnetDialog";
+import { Sum } from "@/components/Pris";
+import { summer } from "@/lib/mva";
 
 function Field({
   label,
@@ -73,6 +85,8 @@ export default function Checkout() {
   const { data: settings } = useSettings();
 
   const [form, setForm] = useState<SavedCustomer>(() => ({ ...EMPTY_CUSTOMER, ...readCustomer() }));
+  // Avkryssa når kunden alt er hugsa – då har han sagt ja før
+  const [husk, setHusk] = useState(hasSavedCustomer);
   const [comment, setComment] = useState("");
   const [signature, setSignature] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -130,6 +144,7 @@ export default function Checkout() {
   const submitted = useRef(false);
 
   const showPrices = settings?.show_prices ?? true;
+  const vat = settings?.vat_rate ?? 25;
   const requirePhone = settings?.require_phone ?? true;
   const requireSignature = settings?.require_signature ?? false;
 
@@ -241,9 +256,11 @@ export default function Checkout() {
             },
       );
 
-      // Den tilsette blir ikkje hugsa som kunde: på eit delt nettbrett ville
-      // neste kunde fått namnet hans ferdig utfylt.
-      if (!ansatt) {
+      // Den tilsette blir ikkje hugsa som kunde. Kunden blir berre hugsa når han
+      // har kryssa av: på eit delt nettbrett i lageret ville neste kunde elles
+      // fått namn, telefon og e-post hans ferdig utfylt.
+      if (!ansatt && !husk) forgetCustomer();
+      if (!ansatt && husk) {
         writeCustomer({
           customer_name: name,
           customer_phone: form.customer_phone.trim(),
@@ -325,9 +342,9 @@ export default function Checkout() {
           </ul>
           {showPrices && !cart.hasUnpriced ? (
             <div className="mt-3 border-t border-border pt-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between">
                 <span className="text-sm font-semibold text-foreground">Sum</span>
-                <span className="tabular text-lg font-bold text-foreground">{kr(cart.total)} kr</span>
+                <Sum eks={cart.total} vat={vat} className="text-lg" />
               </div>
               {cart.annetCount > 0 ? (
                 <p className="tabular text-right text-xs text-muted-foreground">
@@ -471,6 +488,14 @@ export default function Checkout() {
                 />
               </Field>
 
+              <div className="flex items-center gap-3">
+                <Checkbox id="kasse-husk" checked={husk} onCheckedChange={(v) => setHusk(v === true)} className="h-5 w-5" />
+                {/* Luft i etiketten, så heile rada er lett å treffe med tommelen */}
+                <Label htmlFor="kasse-husk" className="flex-1 cursor-pointer py-3 text-sm font-normal leading-snug text-foreground">
+                  Husk opplysningene mine på denne enheten
+                </Label>
+              </div>
+
               {kommentarFelt}
             </section>
           )}
@@ -506,8 +531,8 @@ export default function Checkout() {
           <FastBunn>
             {showPrices && !cart.hasUnpriced ? (
               <div className="flex items-baseline justify-between gap-3">
-                <span className="text-sm text-muted-foreground">Sum</span>
-                <span className="tabular text-lg font-bold text-foreground">{kr(cart.total)} kr</span>
+                <span className="text-sm text-muted-foreground">Sum inkl. mva</span>
+                <span className="tabular text-lg font-bold text-foreground">{kr(summer([cart.total], vat).inkl)} kr</span>
               </div>
             ) : null}
             <Button type="submit" disabled={sending} className="h-14 w-full text-lg font-semibold sm:h-16 [&_svg]:size-6">

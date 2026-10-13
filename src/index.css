@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&display=swap');
+/* DM Sans ligg i appen (@fontsource-variable/dm-sans, importert i main.tsx),
+   ikkje hos Google: kvar henting frå fonts.googleapis.com sende IP-adressa til
+   kunden til Google utan grunnlag, i strid med personvernerklæringa. */
 
 @tailwind base;
 @tailwind components;
@@ -135,7 +137,7 @@
 
   body {
     @apply bg-background text-foreground font-sans;
-    font-family: 'DM Sans', system-ui, sans-serif;
+    font-family: 'DM Sans Variable', system-ui, sans-serif;
     /* Siste skanse: eitt element som blir for breitt, skal ikkje gjere heile
        sida mogleg å zoome ut og dra sidelengs. clip, ikkje hidden: hidden lagar
        ein rullebehaldar og øydelegg den klistra toppen. */

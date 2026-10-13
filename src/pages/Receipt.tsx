@@ -8,6 +8,8 @@ import { useSettings } from "@/lib/settings";
 import { downloadOrderPDF } from "@/lib/order-pdf";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { dateTime, kr, num, pipeLabel } from "@/lib/format";
+import { summer } from "@/lib/mva";
+import { Sum } from "@/components/Pris";
 import type { PipeOrderLineRow, PipeOrderRow, SubmittedOrder } from "@/lib/types";
 import { LAST_ORDER_KEY } from "@/lib/cart";
 import { ANNET_TEKST } from "@/lib/annet";
@@ -57,6 +59,7 @@ export default function Receipt() {
   }, [order, navigate]);
 
   const pricesOn = settings?.show_prices ?? true;
+  const vat = settings?.vat_rate ?? 25;
   // Annet-linjer står for seg: kontoret set prisen, og summen seier frå om dei
   const hasUnpriced = order?.lines?.some((l) => l.unit_price === null && !l.annet) ?? false;
   const annetCount = order?.lines?.filter((l) => l.annet).length ?? 0;
@@ -117,7 +120,7 @@ export default function Receipt() {
         is_annet: l.annet === true,
       }));
 
-      downloadOrderPDF({ order: orderRow, lines, company }, { showPrices });
+      downloadOrderPDF({ order: orderRow, lines, company }, { showPrices, vatRate: vat });
     } catch {
       toast({
         title: "Klarte ikke å lage PDF",
@@ -161,7 +164,7 @@ export default function Receipt() {
                   <p className="mt-0.5 text-right text-xs text-muted-foreground">{ANNET_TEKST.uttak}</p>
                 ) : showPrices && line.line_total !== null ? (
                   <p className="tabular mt-0.5 text-right text-xs text-muted-foreground">
-                    {kr(line.line_total)} kr
+                    {kr(summer([line.line_total], vat).inkl)} kr inkl. mva
                   </p>
                 ) : null}
               </li>
@@ -170,9 +173,9 @@ export default function Receipt() {
 
           {showTotal ? (
             <div className="mt-3 border-t border-border pt-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-start justify-between">
                 <span className="text-base font-semibold text-foreground">Sum</span>
-                <span className="tabular text-2xl font-bold text-foreground">{kr(order.total)} kr</span>
+                <Sum eks={order.total} vat={vat} />
               </div>
               {annetCount > 0 ? (
                 <p className="tabular text-right text-sm text-muted-foreground">+ {annetCount} uten pris</p>

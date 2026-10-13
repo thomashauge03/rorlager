@@ -39,6 +39,13 @@ export default function Personvern() {
               personopplysningene som samles inn gjennom denne tjenesten.
               {adresse ? ` Adresse: ${adresse}.` : ""}
             </p>
+            {/* Er innstillingane tomme eller basen nede, skal det framleis stå
+                ein veg til oss – erklæringa er det einaste kunden har. */}
+            {!epost && !telefon ? (
+              <p className="mt-2">
+                Har du spørsmål om personvern, ta kontakt med {firma} på kontoret eller lageret.
+              </p>
+            ) : null}
             {(epost || telefon) && (
               <p className="mt-2">
                 Har du spørsmål om personvern, ta kontakt
@@ -63,7 +70,7 @@ export default function Personvern() {
               <li>Fakturaadresse, når en privatperson bestiller</li>
               <li>Organisasjonsnummer, når en bedrift bestiller</li>
               <li>Hva du tok ut eller bestilte, hvor mye, og når du vil hente</li>
-              <li>Signatur, dersom utleier har slått på signering</li>
+              <li>Signatur, dersom vi har slått på signering ved uttak</li>
             </ul>
 
             <p className="mt-3">
@@ -100,19 +107,36 @@ export default function Personvern() {
           </Avsnitt>
 
           <Avsnitt tittel="Hvor lenge">
-            <p>
-              Uttak og bestillinger som er fakturert, lagres så lenge
-              bokføringsloven krever, i dag fem år etter regnskapsåret. Det som
-              ikke blir fakturert, slettes når det ikke lenger har noe formål. En
-              logg over hvilke e-poster som er sendt om en bestilling, slettes
-              sammen med bestillingen.
+            {/* Fristane står i pipe_rydd_persondata() (20261014140000_rydding.sql),
+                som køyrer kvar natt. Endrar du ein frist der, endrar du han her. */}
+            <ul className="list-disc space-y-1 pl-5">
+              <li>
+                Uttak og bestillinger som er fakturert, lagres så lenge bokføringsloven krever – fem år etter
+                regnskapsåret. Etter seks år fjernes navn, telefon, e-post, adresse og signatur.
+              </li>
+              <li>Uttak og bestillinger som ikke blir fakturert, får de samme opplysningene fjernet etter to år.</li>
+              <li>En bestilling vi avviste, slettes helt etter 90 dager.</li>
+              <li>Loggen over hvilke e-poster som er sendt, slettes etter ett år.</li>
+              <li>
+                Legger du inn noe med «Annet», blir det et forslag til vareutvalget. Navnet ditt fjernes fra
+                forslaget etter ett år, eller med en gang uttaket slettes.
+              </li>
+            </ul>
+            <p className="mt-3">
+              Det som blir igjen – hva som ble tatt ut, når og til hvilken pris – er lagertall og regnskap, og sier
+              ikke lenger noe om hvem du er. Ryddingen går automatisk hver natt.
             </p>
           </Avsnitt>
 
           <Avsnitt tittel="Hvem ser opplysningene">
             <p>
               Bare ansatte hos {firma} som har med lager og fakturering å gjøre.
-              Data ligger hos Supabase, som er databehandler for oss. E-postene om
+              Data ligger hos Supabase, som er databehandler for oss, på servere i
+              Frankfurt (EU). Nettsiden leveres av Vercel, som også er
+              databehandler: som alle nettsteder ser Vercel IP-adressen din når
+              siden lastes, og den havner i en kortvarig driftslogg. Vercel er et
+              amerikansk selskap; overføringen skjer etter databehandleravtalen,
+              som bygger på EUs standardavtalevilkår (SCC). E-postene om
               bestillinger sendes gjennom Resend, som også er databehandler.
               Resend er et amerikansk selskap, og overføringen til USA skjer etter
               databehandleravtalen med Resend, som bygger på EUs
@@ -127,12 +151,13 @@ export default function Personvern() {
               og innloggingen skal virke. Mens du fyller ut en bestilling, ligger
               skjemaet i nettleseren til du lukker fanen. Bestillingskassen husker
               navn og kontaktopplysninger, med adresse eller organisasjonsnummer,
-              på enheten bare hvis du krysser av for det. Kassen for uttak husker
-              navn, telefon, e-post, firma og prosjekt på enheten til neste uttak.
+              på enheten bare hvis du krysser av for det. Det samme gjelder kassen
+              for uttak: navn, telefon, e-post, firma og prosjekt huskes bare hvis
+              du krysser av, og fjernes hvis du sender inn uten hake.
               Vi har ingen analyse- eller markedsføringssporing, og derfor heller
               ikke noe samtykkebanner.
-              Kodeleseren som lar kameraet lese QR-koder på iPhone, lastes fra
-              vårt eget domene.
+              Skrifttypen og kodeleseren som lar kameraet lese QR-koder på
+              iPhone, lastes fra vårt eget domene – ikke fra Google eller andre.
             </p>
           </Avsnitt>
 

@@ -83,6 +83,24 @@ export function writeCustomer(c: SavedCustomer) {
   }
 }
 
+/** Gløym kunden. Brukt når han ikkje vil bli hugsa – på eit delt nettbrett. */
+export function forgetCustomer() {
+  try {
+    localStorage.removeItem(CUSTOMER_KEY);
+  } catch {
+    /* privat modus – då finst det ingenting å gløyme */
+  }
+}
+
+/** Er det lagra ein kunde på denne eininga? Då har han sagt ja til å bli hugsa før. */
+export function hasSavedCustomer(): boolean {
+  try {
+    return localStorage.getItem(CUSTOMER_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
 // CatalogItem og ikkje PipeType: kurven blir fylt frå kundesida, som les
 // katalogvisninga utan innkjøpspris. Ein PipeType passar like fullt inn her.
 export const cartLineFromType = (t: CatalogItem, quantity: number): CartLine => ({

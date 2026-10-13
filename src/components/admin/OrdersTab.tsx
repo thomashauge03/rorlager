@@ -356,7 +356,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
           vatRate: settings?.vat_rate ?? 25,
         });
       } else {
-        downloadOrderPDF({ order, lines: order.lines, company }, { showPrices: true });
+        downloadOrderPDF({ order, lines: order.lines, company }, { showPrices: true, vatRate: mvaSats });
       }
     } catch (err) {
       fail(err, "Klarte ikke å lage PDF-en");

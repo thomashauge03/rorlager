@@ -253,8 +253,14 @@ console.log("\n── Sletting ──\n");
 await som(db, LEIF, async () => {
   await db.query(`select public.pipe_delete_order($1)`, [ua.id]);
 });
-const etter = await en(`select order_id, order_line_id, name from public.pipe_suggestions where submitted_by = 'Leif Lager'`);
-sjekk("forslaget overlever at ordren slettes", [etter.order_id, etter.order_line_id, etter.name], [null, null, "Muffe 32"]);
+// Namnet til avsendaren går med ordren (20261014140000_rydding.sql) – det er
+// tilbakemeldinga som er verdien, ikkje kven som sende ho.
+const etter = await en(`select order_id, order_line_id, name, submitted_by from public.pipe_suggestions where name = 'Muffe 32'`);
+sjekk(
+  "forslaget overlever at ordren slettes, men uten navnet",
+  [etter.order_id, etter.order_line_id, etter.name, etter.submitted_by],
+  [null, null, "Muffe 32", null],
+);
 
 console.log(tilstand.feil === 0 ? "\nAlt holdt.\n" : `\n${tilstand.feil} feil.\n`);
 process.exit(tilstand.feil === 0 ? 0 : 1);

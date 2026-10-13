@@ -16,6 +16,7 @@ import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
 import { cartLineFromAnnet, useCart } from "@/lib/cart";
 import { AnnetBrikke, AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
+import { Pris } from "@/components/Pris";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { CatalogItem } from "@/lib/types";
@@ -85,7 +86,7 @@ function Innlogget() {
 
 // CatalogItem og ikkje PipeType: framsida les katalogvisninga, som ikkje har
 // cost_price. Typen held innkjøpsprisen ute av kundesida for godt.
-function PipeCard({ pipe, showPrice }: { pipe: CatalogItem; showPrice: boolean }) {
+function PipeCard({ pipe, showPrice, vat }: { pipe: CatalogItem; showPrice: boolean; vat: number }) {
   const status = stockStatus(pipe);
 
   return (
@@ -119,9 +120,9 @@ function PipeCard({ pipe, showPrice }: { pipe: CatalogItem; showPrice: boolean }
           )}
         </div>
         {showPrice && pipe.price !== null ? (
-          <p className="tabular shrink-0 text-sm font-semibold text-foreground">
-            {kr(pipe.price)} kr/{pipe.unit}
-          </p>
+          <span className="shrink-0 text-sm">
+            <Pris price={pipe.price} unit={pipe.unit} vat={vat} />
+          </span>
         ) : null}
       </div>
     </Link>
@@ -290,7 +291,7 @@ export default function Index() {
             <>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {visible.map((pipe) => (
-                  <PipeCard key={pipe.id} pipe={pipe} showPrice={showPrices} />
+                  <PipeCard key={pipe.id} pipe={pipe} showPrice={showPrices} vat={settings?.vat_rate ?? 25} />
                 ))}
               </div>
               <AnnetKnapp className="mt-4" onClick={() => setAnnetOpen(true)} />

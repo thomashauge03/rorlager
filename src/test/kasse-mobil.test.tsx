@@ -155,11 +155,24 @@ describe("uttakskassen", () => {
     expect(screen.getByLabelText(/E-post/)).toHaveValue("ola@firma.no");
   });
 
-  it("har summen ved knappen i den faste bunnen", () => {
+  it("har summen inkl. mva ved knappen i den faste bunnen", () => {
     visUttak();
     const bunn = screen.getByRole("button", { name: /Send inn uttak/ }).closest("[data-fast-bunn]") as HTMLElement;
     expect(bunn).not.toBeNull();
-    expect(within(bunn).getByText(/398,15/)).toBeInTheDocument();
+    // 5 m × 79,63 = 398,15 eks. mva → 497,69 inkl. 25 % mva
+    expect(within(bunn).getByText("Sum inkl. mva")).toBeInTheDocument();
+    expect(within(bunn).getByText(/497,69/)).toBeInTheDocument();
+  });
+
+  it("hugsar ikkje kunden utan at han har kryssa av", async () => {
+    visUttak();
+    fireEvent.change(screen.getByLabelText(/Navn/), { target: { value: "Kari" } });
+    fireEvent.change(screen.getByLabelText(/Telefon/), { target: { value: "900 00 000" } });
+    fireEvent.change(screen.getByLabelText(/E-post/), { target: { value: "kari@kunde.no" } });
+    expect(screen.getByLabelText("Husk opplysningene mine på denne enheten")).not.toBeChecked();
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    await waitFor(() => expect(sendUttak).toHaveBeenCalled());
+    expect(localStorage.getItem("rorlager.kunde.v1")).toBeNull();
   });
 
   it("innlogga: uttaket står på brukaren, og berre jobben blir spurd om", async () => {

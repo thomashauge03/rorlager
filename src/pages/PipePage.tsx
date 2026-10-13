@@ -15,6 +15,7 @@ import { stockStatus } from "@/lib/stock";
 import { cartLineFromAnnet, cartLineFromType, useCart } from "@/lib/cart";
 import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
+import { linjesum, prisInklMva, summer } from "@/lib/mva";
 
 /** Ei rad med etikett og verdi. Tomme felt blir hoppa over – "–" seier ingenting. */
 function Fact({ label, value }: { label: string; value: string | null | undefined }) {
@@ -47,6 +48,7 @@ export default function PipePage() {
 
   const pipe = pipeQuery.data ?? null;
   const showPrices = settings?.show_prices ?? true;
+  const vat = settings?.vat_rate ?? 25;
 
   // Ny skanning skal starte på blankt ark, ikkje arve mengda frå førre rør
   useEffect(() => {
@@ -198,7 +200,11 @@ export default function PipePage() {
               {showPrices ? (
                 <Fact
                   label={pipe.unit === "m" ? "Pris per meter" : "Pris per stk"}
-                  value={pipe.price === null ? "Avtales" : `${kr(pipe.price)} kr`}
+                  value={
+                    pipe.price === null
+                      ? "Avtales"
+                      : `${kr(prisInklMva(pipe.price, vat))} kr inkl. mva (${kr(pipe.price)} kr eks.)`
+                  }
                 />
               ) : null}
             </div>
@@ -244,7 +250,11 @@ export default function PipePage() {
 
             {showPrices && pipe.price !== null && quantity !== null && quantity > 0 ? (
               <p className="tabular mt-3 text-right text-sm text-muted-foreground">
-                Sum: <span className="font-semibold text-foreground">{kr(pipe.price * quantity)} kr</span>
+                Sum:{" "}
+                <span className="font-semibold text-foreground">
+                  {kr(summer([linjesum(pipe.price, quantity)], vat).inkl)} kr
+                </span>{" "}
+                inkl. mva
               </p>
             ) : null}
           </div>

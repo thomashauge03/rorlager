@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useCart } from "@/lib/cart";
 import { useSettings } from "@/lib/settings";
 import { kr, qtyLabel } from "@/lib/format";
+import { summer } from "@/lib/mva";
 
 type CartBarProps = {
   label?: string;
@@ -40,7 +41,7 @@ export function CartBar({ label = "Se kurven", to = "/kurv" }: CartBarProps) {
             {count} {count === 1 ? "vare" : "varer"}
           </p>
           <p className="text-sm text-muted-foreground tabular truncate">
-            {showTotal ? `${kr(total)} kr` : quantitySummary}
+            {showTotal ? `${kr(summer([total], settings?.vat_rate ?? 25).inkl)} kr inkl. mva` : quantitySummary}
           </p>
         </div>
         <Button className="h-12 px-6 text-base font-semibold shrink-0" onClick={() => navigate(to)}>

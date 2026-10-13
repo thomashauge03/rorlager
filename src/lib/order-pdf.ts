@@ -3,6 +3,7 @@ import jsPDF from "jspdf";
 import hmLogo from "@/assets/hm-logo-pdf.png";
 import { dateTime, isoDate, kr, num, pipeLabel, shortDate } from "@/lib/format";
 import { ORDER_STATUS_LABEL } from "@/lib/types";
+import { summer } from "@/lib/mva";
 import type { PipeOrderLineRow, PipeOrderRow } from "@/lib/types";
 
 // Forholdet må haldast, elles blir merket klemt
@@ -107,8 +108,8 @@ export function drawFooter(doc: jsPDF, company: CompanyInfo, note?: string) {
 
 /* ---------- Uttaksseddel for éi bestilling ---------- */
 
-export function buildOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolean } = {}) {
-  const { showPrices = false } = opts;
+export function buildOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolean; vatRate?: number } = {}) {
+  const { showPrices = false, vatRate = 25 } = opts;
   const { order, lines, company } = docInput;
 
   const doc = new jsPDF({ unit: "mm", format: "a4", compress: true });
@@ -184,7 +185,7 @@ export function buildOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolea
     doc.text("VARENR", colSku, y);
     doc.text("MENGDE", colQty, y, { align: "right" });
     doc.text("ENHET", colUnit, y);
-    if (showPrices) doc.text("BELØP", colValue, y, { align: "right" });
+    if (showPrices) doc.text("BELØP EKS. MVA", colValue, y, { align: "right" });
     y += 6.5;
   };
 
@@ -243,12 +244,29 @@ export function buildOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolea
   doc.setLineWidth(0.2);
   y += 7;
 
+  if (showPrices) {
+    // Prisane i basen er eks. mva. Kvitteringa går òg til privatpersonar, som
+    // skal sjå totalen inkl. mva – så alle tre står.
+    const s = summer([order.total ?? 0], vatRate);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9.5);
+    setText(doc, GREY);
+    doc.text("Sum eks. mva", MARGIN + 2, y);
+    doc.text(`${kr(s.eks)} kr`, pw - MARGIN, y, { align: "right" });
+    y += 5;
+    doc.text(`Mva ${num(vatRate)} %`, MARGIN + 2, y);
+    doc.text(`${kr(s.mva)} kr`, pw - MARGIN, y, { align: "right" });
+    y += 7;
+    ensure(10);
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   setText(doc, BLACK);
-  doc.text("SUM", MARGIN + 2, y);
+  doc.text(showPrices ? "SUM INKL. MVA" : "SUM", MARGIN + 2, y);
   setText(doc, RED);
-  doc.text(showPrices ? `${kr(order.total)} kr` : unitSums(lines), pw - MARGIN, y, { align: "right" });
+  doc.text(showPrices ? `${kr(summer([order.total ?? 0], vatRate).inkl)} kr` : unitSums(lines), pw - MARGIN, y, {
+    align: "right",
+  });
   y += 9;
 
   /* ---------- Kommentar frå kunden ---------- */
@@ -293,7 +311,7 @@ export function buildOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolea
   return doc;
 }
 
-export function downloadOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolean } = {}) {
+export function downloadOrderPDF(docInput: OrderPdfDoc, opts: { showPrices?: boolean; vatRate?: number } = {}) {
   const doc = buildOrderPDF(docInput, opts);
   doc.save(`uttaksseddel_${docInput.order.order_number}_${safeName(docInput.order.customer_name)}.pdf`);
 }
