@@ -32,6 +32,7 @@ import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
 import { saveSettings, useOfficeSettings } from "@/lib/settings";
 import type { PipeSettingsRow, PipeType } from "@/lib/types";
+import { EndringsLogg } from "@/components/admin/EndringsLogg";
 
 /** Skjemaet held alt som tekst, slik at eit halvskrive tal ikkje blir tolka
  *  som 0 medan brukaren framleis skriv. */
@@ -782,6 +783,8 @@ export function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <EndringsLogg />
     </div>
   );
 }

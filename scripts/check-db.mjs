@@ -109,6 +109,7 @@ const stengde = [
   ["pipe_stock_log", null],
   ["pipe_order_emails", "hvem som har fått e-post, og adressene"],
   ["pipe_suggestions", "forslagene fra «Annet», med navn"],
+  ["pipe_revisjon", "hvem som endret hva"],
   ["projects", null],
   ["project_members", null],
   ["project_orders", null],

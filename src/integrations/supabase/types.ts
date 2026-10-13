@@ -306,6 +306,19 @@ export type PipeOrderEmailRow = {
 export type SuggestionStatus = "ny" | "opprettet" | "engangs" | "avvist";
 
 /** Éi rad per annet-linje. Berre kontoret kan lese og endre. */
+/** Revisjonssporet (20261014190000). Skrive av triggerar, berre lese frå appen. */
+export type PipeRevisjonRow = {
+  id: string;
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  tabell: string;
+  rad_id: string | null;
+  kva: string | null;
+  handling: "ny" | "endret" | "slettet";
+  endringar: Json;
+};
+
 export type PipeSuggestionRow = {
   id: string;
   created_at: string;
@@ -357,6 +370,7 @@ export type Database = {
       project_receipt_photos: Table<ProjectReceiptPhotoRow>;
       pipe_order_emails: Table<PipeOrderEmailRow>;
       pipe_suggestions: Table<PipeSuggestionRow>;
+      pipe_revisjon: Table<PipeRevisjonRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;

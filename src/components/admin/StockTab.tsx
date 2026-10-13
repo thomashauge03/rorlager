@@ -24,6 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { InnkjopPanel } from "@/components/admin/InnkjopPanel";
+import { Prishistorikk } from "@/components/admin/EndringsLogg";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -1033,6 +1034,9 @@ export function PipeDialog({
             </span>
           </label>
         </div>
+
+        {/* Prisane går gjennom revisjonssporet; lagermannen ser ikkje kostprisen */}
+        {pipe && visKostpris ? <Prishistorikk pipeTypeId={pipe.id} /> : null}
 
         <DialogFooter>
           <Button variant="outline" className="h-12" onClick={onClose}>
