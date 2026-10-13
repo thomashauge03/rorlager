@@ -89,7 +89,18 @@ export default function Checkout() {
    */
   const auth = useAuth();
   const meg = useMeg(auth.email);
-  const ansatt = !auth.checking && Boolean(auth.email);
+  // Ei rolle, ikkje berre ei innlogging: sjølvregistrering er open, og ein
+  // framand med konto er ein kunde. Basen avgjer det same (pipe_submit_order).
+  const ansatt = !auth.checking && Boolean(auth.email) && auth.roleKnown && auth.role !== null;
+  /** Innlogga, men rolla er ikkje svart enno – vent før skjemaet blir vist. */
+  const ventarPåRolle = !auth.checking && Boolean(auth.email) && !auth.roleKnown && !auth.roleFailed;
+
+  /*
+   * Same referanse for kvart forsøk på dette uttaket. Forsvinn svaret på veg
+   * tilbake og kunden trykkjer igjen, gir basen tilbake det første uttaket i
+   * staden for å trekkje lageret ein gong til.
+   */
+  const [clientRef] = useState(() => crypto.randomUUID());
   const ansattNavn = meg.data?.navn ?? auth.email ?? "";
 
   /*
@@ -215,6 +226,7 @@ export default function Checkout() {
               comment: comment.trim() || null,
               signature: null,
               lines,
+              client_ref: clientRef,
             }
           : {
               customer_name: name,
@@ -225,6 +237,7 @@ export default function Checkout() {
               comment: comment.trim() || null,
               signature,
               lines,
+              client_ref: clientRef,
             },
       );
 
@@ -335,7 +348,7 @@ export default function Checkout() {
           className="mt-4 space-y-4"
           noValidate
         >
-          {auth.checking ? (
+          {auth.checking || ventarPåRolle ? (
             <Skeleton className="h-48 w-full rounded-lg" />
           ) : ansatt ? (
             <section className="hm-card space-y-4 p-4" aria-labelledby="registreres">

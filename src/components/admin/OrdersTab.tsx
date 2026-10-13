@@ -756,7 +756,11 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        {(Object.keys(ORDER_STATUS_LABEL) as OrderStatus[]).map((s) => (
+                        {/* Ikkje «Avvist»: eit uttak er rør som alt har forlate hylla.
+                            Basen nektar det òg (pipe_orders_uttak_ikkje_avvist). */}
+                        {(Object.keys(ORDER_STATUS_LABEL) as OrderStatus[])
+                          .filter((s) => s !== "avvist")
+                          .map((s) => (
                           <SelectItem key={s} value={s}>
                             {ORDER_STATUS_LABEL[s]}
                           </SelectItem>
@@ -787,7 +791,13 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                   </Button>
                   {/* Ei bestilling er ein avtale med kunden. Ho blir avvist, så kunden
                       får beskjed, før ho kan slettast. */}
-                  {erBestilling(open) && open.status !== "avvist" ? (
+                  {open.invoice_id ? (
+                    // Basen nektar òg: røra ville gått tilbake på lageret medan
+                    // grunnlaget stod att med den gamle summen.
+                    <p className="self-center text-sm text-muted-foreground">
+                      Fakturert. Slett fakturagrunnlaget under Faktura først hvis den skal bort.
+                    </p>
+                  ) : erBestilling(open) && open.status !== "avvist" ? (
                     <p className="self-center text-sm text-muted-foreground">
                       En bestilling slettes ikke før den er avvist – avvis den, så får kunden beskjed.
                     </p>

@@ -677,11 +677,9 @@ await som(db, LEIF, async () => {
   m === null ? ok("sletting av et ukjent grunnlag er en stille no-op (funn)") : nei("stille no-op", m);
 });
 
-// FUNN: sletting av et fakturert uttak trekker ikke beløpet fra grunnlaget.
-// Grunnlaget blir stående med sin gamle total mens en av bestillingene bak det
-// er borte. pipe_delete_order sjekker heller ikke statusen: et uttak som står
-// som 'levert' kan slettes, og rørene blir ført tilbake på lageret selv om de
-// fysisk har forlatt det.
+// RETTA 14.10.2026 (20261014130000_sikring.sql): sletting av et fakturert
+// uttak la rørene tilbake på lageret, mens grunnlaget stod igjen med den gamle
+// summen. Nå nekter basen – grunnlaget må slettes først.
 await som(db, KONTOR, async () => {
   const f = (
     await en(`select (public.pipe_create_invoice('Ola AS', current_date, current_date, array[$1::uuid, $2::uuid], 0)).id as id`, [
@@ -689,21 +687,16 @@ await som(db, KONTOR, async () => {
       o2,
     ])
   ).id;
-  // Summen ved opprettelsen, regnet ut i basen
   const før = tal((await en(`select total from public.pipe_invoices where id = $1`, [f])).total);
 
   await db.query(`update public.pipe_orders set status = 'levert' where id = $1`, [o1]);
-  await db.query(`select public.pipe_delete_order($1)`, [o1]);
+  await avvist("et fakturert uttak kan ikke slettes", `select public.pipe_delete_order($1)`, [o1], /fakturert/);
   const etter = await en(
     `select i.total, (select count(*) from public.pipe_orders o where o.invoice_id = i.id) as n
        from public.pipe_invoices i where i.id = $1`,
     [f],
   );
-  sjekk(
-    "et levert uttak kan slettes, og grunnlaget beholder summen fra opprettelsen (funn)",
-    [tal(etter.total), Number(etter.n)],
-    [før, 1],
-  );
+  sjekk("grunnlaget og begge uttakene står urørt", [tal(etter.total), Number(etter.n)], [før, 2]);
 });
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -847,18 +840,23 @@ const anonLogg = await en(
 );
 sjekk("et uttak uten innlogging står ikke på noen bruker", [anonLogg?.navn, anonLogg?.av], [null, null]);
 
-// Den framande har logga inn, men står ikkje i system_users: då er e-posten namnet
+// RETTA 14.10.2026 (20261014130000_sikring.sql): den framande har logga inn,
+// men står ikkje i system_users. Før blei han rekna som tilsett – uttak utan
+// e-post, rett inn i fakturagrunnlaget. No er han ein kunde som alle andre.
 let framandId;
 await som(db, FREMMED, async () => {
+  await avvist(
+    "innlogget uten rolle: må fylle ut e-post som en kunde",
+    `select public.pipe_submit_order('X', $1::jsonb, null, null, null, 'Egen jobb')`,
+    [EI_LINJE],
+    /E-post må fylles ut/,
+  );
   framandId = (
-    await en(`select (public.pipe_submit_order('X', $1::jsonb, null, null, null, 'Egen jobb')) ->> 'id' as id`, [EI_LINJE])
+    await en(`select (public.pipe_submit_order('Frank Fremmed', $1::jsonb, null, 'frank@x.no')) ->> 'id' as id`, [EI_LINJE])
   ).id;
 });
-sjekk(
-  "uten navn i system_users blir e-posten navnet",
-  (await en(`select customer_name from public.pipe_orders where id = $1`, [framandId]))?.customer_name,
-  FREMMED.epost,
-);
+const framand = await en(`select customer_name, created_by from public.pipe_orders where id = $1`, [framandId]);
+sjekk("navnet er det han skrev, og uttaket står ikke på noen bruker", [framand?.customer_name, framand?.created_by], ["Frank Fremmed", null]);
 
 // Lagerendringar i adminpanelet har alltid lagra brukaren (created_by). No
 // står namnet der òg, så panelet kan vise kven som gjorde det.

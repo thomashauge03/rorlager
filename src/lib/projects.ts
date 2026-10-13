@@ -6,6 +6,7 @@
 // rørt, og ingenting her skriv til pipe_stock_log.
 
 import { supabase } from "@/integrations/supabase/client";
+import { hentAlle } from "@/lib/orders";
 import type { Json } from "@/integrations/supabase/types";
 import type {
   Deviation,
@@ -342,11 +343,13 @@ export async function fetchProjectOrders(projectId: string): Promise<ProjectOrde
 
 /** Alle bestillingar på tvers av prosjekt. Kontoret sitt oversyn. */
 export async function fetchAllProjectOrders(): Promise<ProjectOrderWithLines[]> {
-  const { data, error } = await supabase.from("project_orders").select(ORDER_SELECT);
-  if (error) fail("Klarte ikke å hente bestillingene", error);
-  return ((data ?? []) as unknown as RaaBestilling[])
-    .map(formBestilling)
-    .sort((a, b) => b.created_at.localeCompare(a.created_at));
+  // I sider med fast rekkjefølgje: Supabase gir høgst 1000 rader, og utan
+  // rekkjefølgje forsvann tilfeldige bestillingar frå «Å bestille» og «Mottak».
+  const rader = await hentAlle<RaaBestilling>(
+    (fra, til) => supabase.from("project_orders").select(ORDER_SELECT).order("id").range(fra, til),
+    "Klarte ikke å hente bestillingene",
+  );
+  return rader.map(formBestilling).sort((a, b) => b.created_at.localeCompare(a.created_at));
 }
 
 export async function fetchProjectOrder(id: string): Promise<ProjectOrderWithLines | null> {

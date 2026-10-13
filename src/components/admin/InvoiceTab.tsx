@@ -113,7 +113,7 @@ export function InvoiceTab() {
   // Ei bestilling som ventar, eller som er avvist, har ingen rør på seg å
   // fakturere. Basen nektar henne uansett (pipe_create_invoice); her blir ho
   // ikkje ein gong vist. Før migrasjonen er feltet undefined, og då er alt uttak.
-  const orders = (uninvoiced.data ?? []).filter((o) => o.stock_drawn_at !== null);
+  const orders = (uninvoiced.data ?? []).filter((o) => o.stock_drawn_at !== null && o.status !== "avvist");
 
   /* ---------------- Steg 1: kundane som har noko å fakturere ---------------- */
 
@@ -285,9 +285,9 @@ export function InvoiceTab() {
     setBusyInvoice(inv.id);
     try {
       // Fakturerte bestillingar ligg ikkje i lista over ufakturerte, så dei må
-      // hentast på nytt og plukkast ut på invoice_id
-      const all = await fetchOrders();
-      const rows = all.filter((o) => o.invoice_id === inv.id);
+      // hentast på nytt – rett på invoice_id. Å hente alt og plukke ut gav
+      // «fant ingen» på gamle grunnlag så snart det var over 1000 ordrar.
+      const rows = await fetchOrders({ invoiceId: inv.id });
       if (rows.length === 0) {
         toast({
           title: "Fant ingen bestillinger",
@@ -559,9 +559,12 @@ export function InvoiceTab() {
                   {summary.utenPris > 0 && (
                     <div className="flex gap-2.5 rounded-lg border border-warning/60 bg-warning/10 px-3 py-2.5">
                       <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-warning-ink" aria-hidden="true" />
+                      {/* Basen nektar grunnlaget så lenge ei linje manglar pris: etterpå
+                          kan ho ikkje prisast, og beløpet ville vore tapt. */}
                       <p className="text-sm text-warning-ink">
-                        {summary.utenPris} {summary.utenPris === 1 ? "linje mangler" : "linjer mangler"} pris og
-                        teller ikke med i summen. Sett prisen på rørtypen under Lager først hvis den skal med.
+                        {summary.utenPris} {summary.utenPris === 1 ? "linje mangler" : "linjer mangler"} pris. Sett
+                        prisen på linja i Bestillinger («Pris mangler – sett pris»), eller fjern haken på bestillingen,
+                        før grunnlaget kan lages.
                       </p>
                     </div>
                   )}
@@ -624,7 +627,7 @@ export function InvoiceTab() {
                     <Button
                       className="h-11 flex-1 sm:flex-none"
                       onClick={() => create.mutate()}
-                      disabled={selected.length === 0 || !from || !to || create.isPending}
+                      disabled={selected.length === 0 || !from || !to || summary.utenPris > 0 || create.isPending}
                     >
                       {create.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />

@@ -96,7 +96,7 @@ function sorterKatalog<T extends { sort_order: number; name: string; dimension: 
  * sa frå. Sidene blir henta til ei kjem tilbake ufull.
  */
 const SIDE = 1000;
-async function hentAlle<T>(side: (fra: number, til: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>, kontekst: string): Promise<T[]> {
+export async function hentAlle<T>(side: (fra: number, til: number) => PromiseLike<{ data: unknown; error: { message?: string } | null }>, kontekst: string): Promise<T[]> {
   const alle: T[] = [];
   for (let fra = 0; ; fra += SIDE) {
     const { data, error } = await side(fra, fra + SIDE - 1);
@@ -225,6 +225,12 @@ export async function submitOrder(input: {
   project?: string | null;
   /** Prosjektet ein tilsett valde frå lista. Basen skriv då sjølv teksten i project. */
   project_id?: string | null;
+  /**
+   * Same referanse ved kvart nytt forsøk på same uttak. Kjem svaret aldri fram
+   * (dårleg dekning) og kunden trykkjer igjen, gir basen tilbake det første
+   * uttaket i staden for å lage eit til.
+   */
+  client_ref?: string | null;
   comment?: string | null;
   signature?: string | null;
   lines: Parameters<typeof tilInnsendingslinje>[0][];
@@ -241,11 +247,20 @@ export async function submitOrder(input: {
     // Berre med når det er valt: ein base utan 20261014100000 kjenner ikkje
     // parameteren, og eit uttak med fritekst skal gå gjennom der òg.
     ...(input.project_id ? { p_project_id: input.project_id } : {}),
+    ...(input.client_ref ? { p_client_ref: input.client_ref } : {}),
   });
 
   // Meldinga frå databasen er allereie skriven for kunden ("Handlekurven er tom"),
-  // så ho blir sendt vidare uendra.
-  if (error) throw new Error(error.message || "Klarte ikke å sende inn uttaket");
+  // så ho blir sendt vidare uendra. Ein nettverksfeil er det ikkje: «Failed to
+  // fetch» seier ingenting til nokon som står i eit lager utan dekning.
+  if (error) {
+    if (/failed to fetch|networkerror|load failed|network request failed/i.test(error.message ?? "")) {
+      throw new Error(
+        "Fikk ikke kontakt – sjekk dekningen og trykk «Send inn» igjen. Uttaket blir ikke registrert to ganger.",
+      );
+    }
+    throw new Error(error.message || "Klarte ikke å sende inn uttaket");
+  }
   if (!data) throw new Error("Klarte ikke å sende inn uttaket");
 
   return data as unknown as SubmittedOrder;
@@ -289,25 +304,43 @@ function orderHaystack(order: PipeOrderRow): string {
 }
 
 export async function fetchOrders(
-  opts: { from?: string; to?: string; status?: OrderStatus | "alle"; search?: string; onlyUninvoiced?: boolean } = {},
+  opts: {
+    from?: string;
+    to?: string;
+    status?: OrderStatus | "alle";
+    search?: string;
+    onlyUninvoiced?: boolean;
+    /** Berre ordrane på eitt fakturagrunnlag – for «Last ned PDF på nytt». */
+    invoiceId?: string;
+  } = {},
 ): Promise<OrderWithLines[]> {
-  // Lagerprosjektet med namn, ved namnet på framandnøkkelen: pipe_orders har
-  // to nøklar til projects (project_id og stock_project_id), og utan namnet
-  // veit ikkje PostgREST kva for ein som er meint.
-  let query = supabase
-    .from("pipe_orders")
-    .select("*, pipe_order_lines(*), lagerprosjekt:projects!pipe_orders_stock_project_id_fkey(project_number, name)")
-    .order("created_at", { ascending: false });
+  /*
+   * I SIDER, IKKJE I EITT.
+   *
+   * Supabase gir høgst 1000 rader per spørjing og seier ingenting om resten.
+   * Med over 1000 ufakturerte uttak forsvann dei eldste stille frå Faktura, og
+   * «PDF på nytt» fann ikkje ordrane til eit gamalt grunnlag. Fast rekkjefølgje
+   * (tid, så id), elles kan ei rad hamne på to sider eller ingen.
+   */
+  const side = (fra: number, til: number) => {
+    // Lagerprosjektet med namn, ved namnet på framandnøkkelen: pipe_orders har
+    // to nøklar til projects (project_id og stock_project_id), og utan namnet
+    // veit ikkje PostgREST kva for ein som er meint.
+    let query = supabase
+      .from("pipe_orders")
+      .select("*, pipe_order_lines(*), lagerprosjekt:projects!pipe_orders_stock_project_id_fkey(project_number, name)")
+      .order("created_at", { ascending: false })
+      .order("id");
 
-  if (opts.from) query = query.gte("created_at", startOfDayIso(opts.from));
-  if (opts.to) query = query.lte("created_at", endOfDayIso(opts.to));
-  if (opts.status && opts.status !== "alle") query = query.eq("status", opts.status);
-  if (opts.onlyUninvoiced) query = query.is("invoice_id", null);
+    if (opts.from) query = query.gte("created_at", startOfDayIso(opts.from));
+    if (opts.to) query = query.lte("created_at", endOfDayIso(opts.to));
+    if (opts.status && opts.status !== "alle") query = query.eq("status", opts.status);
+    if (opts.onlyUninvoiced) query = query.is("invoice_id", null);
+    if (opts.invoiceId) query = query.eq("invoice_id", opts.invoiceId);
+    return query.range(fra, til);
+  };
 
-  const { data, error } = await query;
-  if (error) fail("Klarte ikke å hente bestillingene", error);
-
-  const rows = (data ?? []) as unknown as (PipeOrderRow & { pipe_order_lines?: PipeOrderLineRow[] })[];
+  const rows = await hentAlle<PipeOrderRow & { pipe_order_lines?: PipeOrderLineRow[] }>(side, "Klarte ikke å hente bestillingene");
 
   const orders: OrderWithLines[] = rows.map(({ pipe_order_lines, ...order }) => ({
     ...order,

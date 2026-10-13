@@ -34,6 +34,10 @@ vi.mock("@/lib/auth", () => ({
   loggUt: (...a: unknown[]) => innlogga.loggUt(...a),
 }));
 
+// Grensa i nettlesaren ligg i minnet til modulen og ville talt innsendingar
+// frå alle testane i fila. Ho er ikkje det desse testane handlar om.
+vi.mock("@/lib/rate-limiter", () => ({ checkRateLimit: () => ({ allowed: true, retryAfterMs: 0 }) }));
+
 vi.mock("@/lib/settings", () => ({
   useSettings: () => ({
     data: {
@@ -239,6 +243,36 @@ describe("uttakskassen", () => {
         expect(sendUttak).toHaveBeenCalledWith(expect.objectContaining({ project_id: null, project: "Verkstedet" })),
       );
     });
+  });
+
+  it("eit nytt forsøk etter ein nettverksfeil sender same referanse – basen lagar ikkje uttaket to gonger", async () => {
+    visUttak();
+    fireEvent.change(screen.getByLabelText(/Navn/), { target: { value: "Kari" } });
+    fireEvent.change(screen.getByLabelText(/Telefon/), { target: { value: "900 00 000" } });
+    fireEvent.change(screen.getByLabelText(/E-post/), { target: { value: "kari@kunde.no" } });
+
+    sendUttak.mockRejectedValueOnce(new Error("Fikk ikke kontakt"));
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    await waitFor(() => expect(sendUttak).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole("button", { name: /Send inn uttak/ }));
+    await waitFor(() => expect(sendUttak).toHaveBeenCalledTimes(2));
+
+    const [første, andre] = sendUttak.mock.calls.map((c) => (c as unknown as [{ client_ref: string }])[0].client_ref);
+    expect(første).toMatch(/^[0-9a-f-]{36}$/);
+    expect(andre).toBe(første);
+  });
+
+  it("ein feil står ved feltet, ikkje berre i ein toast", async () => {
+    visUttak();
+    fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+    const navn = screen.getByLabelText(/Navn/);
+    expect(navn).toHaveAttribute("aria-invalid", "true");
+    expect(navn).toHaveAttribute("aria-describedby", "navn-feil");
+    expect(document.getElementById("navn-feil")).toHaveTextContent("Skriv inn navnet ditt");
+
+    fireEvent.change(navn, { target: { value: "Kari" } });
+    expect(navn).not.toHaveAttribute("aria-invalid");
   });
 
   it("innlogga: «Ikke deg?» loggar ut", () => {

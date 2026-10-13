@@ -369,6 +369,7 @@ export type Database = {
           p_comment?: string | null;
           p_signature?: string | null;
           p_project_id?: string | null;
+          p_client_ref?: string | null;
         };
         Returns: Json;
       };
