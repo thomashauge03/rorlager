@@ -2,7 +2,7 @@
 // katalogen mangla. Kvart forslag kan bli ei vare, ein pris på éi linje, eller
 // lukkast. Lista er kontoret sin måte å sjå kva som manglar.
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Inbox, PackagePlus, Pencil, RotateCcw, Tag } from "lucide-react";
@@ -27,10 +27,18 @@ import type { PipeTypeRow } from "@/lib/types";
 import { PipeDialog } from "@/components/admin/StockTab";
 import { PriceLineDialog, type PrisLinje } from "@/components/admin/PriceLineDialog";
 import { EndreAnnetDialog } from "@/components/admin/RettUttak";
+import { finnDyplenke, markerOgRull } from "@/lib/dyplenke";
 
 type Utsnitt = "nye" | "behandlet";
 
-export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean } = {}) {
+export function SuggestionsTab({
+  visKostpris = true,
+  forslag: dypForslag = null,
+}: {
+  visKostpris?: boolean;
+  /** Dyplenke fra Innboks: id-en til et forslag. */
+  forslag?: string | null;
+} = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("nye");
@@ -48,6 +56,37 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
   const nye = alle.filter((s) => s.status === "ny");
   const behandla = alle.filter((s) => s.status !== "ny");
   const synlege = utsnitt === "nye" ? nye : behandla;
+
+  /*
+   * Dyplenke fra Innboks: bytt til utsnittet forslaget står i, og rull fram
+   * til det. Er det nytt og har like forslag, står det inne i gruppa, så da
+   * er det gruppa som markeres.
+   */
+  const [dypMål, setDypMål] = useState<string | null>(null);
+  const dypTatt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!dypForslag || dypTatt.current === dypForslag || !forslag.data) return;
+    dypTatt.current = dypForslag;
+    const s = forslag.data.find((x) => x.id === dypForslag);
+    if (!s) {
+      toast({ title: "Fant ikke forslaget.", description: "Det kan være slettet." });
+      return;
+    }
+    if (s.status !== "ny") {
+      setUtsnitt("behandlet");
+      setDypMål(`forslag-${s.id}`);
+      return;
+    }
+    const gruppe = grupperForslag(forslag.data.filter((x) => x.status === "ny")).find((g) => g.some((x) => x.id === s.id));
+    setUtsnitt("nye");
+    setDypMål(gruppe && gruppe.length > 1 ? `forslaggruppe-${gruppe[0].id}` : `forslag-${s.id}`);
+  }, [dypForslag, forslag.data, toast]);
+  useEffect(() => {
+    if (!dypMål) return;
+    setDypMål(null);
+    const el = finnDyplenke(dypMål);
+    if (el) markerOgRull(el);
+  }, [dypMål]);
 
   const oppdater = () => {
     queryClient.invalidateQueries({ queryKey: QK.suggestions });
@@ -263,7 +302,7 @@ function ForslagKort({
   const harPris = s.line?.unit_price !== null && s.line?.unit_price !== undefined;
 
   return (
-    <li className="hm-card p-4">
+    <li data-dyplenke={`forslag-${s.id}`} className="hm-card p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-base font-bold text-foreground">{pipeLabel(s.name, s.dimension)}</p>
@@ -386,7 +425,7 @@ function ForslagGruppe({
   const sum = gruppe.reduce((s, f) => s + Number(f.quantity), 0);
   const frå = [...new Set(gruppe.map((f) => f.submitted_by).filter(Boolean))];
   return (
-    <li className="hm-card space-y-3 p-4">
+    <li data-dyplenke={`forslaggruppe-${første.id}`} className="hm-card space-y-3 p-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="break-words text-base font-bold text-foreground">{pipeLabel(første.name, første.dimension)}</p>

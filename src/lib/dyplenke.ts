@@ -12,7 +12,11 @@ export type Dyplenke =
   /** Prosjektbehov, på order_number i project_orders. */
   | { type: "behov"; nummer: number }
   /** Mottakskontroll, på receipt_number i project_receipts. */
-  | { type: "mottak"; nummer: number };
+  | { type: "mottak"; nummer: number }
+  /** Lav beholdning, på id i pipe_types. */
+  | { type: "vare"; id: string }
+  /** Forslag fra «Annet», på id i pipe_suggestions. */
+  | { type: "forslag"; id: string };
 
 /**
  * Bare et positivt heltall slipper gjennom.
@@ -29,11 +33,21 @@ export function lesNummer(verdi: string | null | undefined): number | null {
   return n > 0 ? n : null;
 }
 
+/** Bare en uuid slipper gjennom, med små bokstaver. */
+export function lesId(verdi: string | null | undefined): string | null {
+  const v = verdi?.trim().toLowerCase() ?? "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v) ? v : null;
+}
+
 /** Den første gyldige dyplenken i URL-en, eller null. */
 export function lesDyplenke(params: URLSearchParams): Dyplenke | null {
   for (const type of ["ordre", "behov", "mottak"] as const) {
     const nummer = lesNummer(params.get(type));
     if (nummer !== null) return { type, nummer };
+  }
+  for (const type of ["vare", "forslag"] as const) {
+    const id = lesId(params.get(type));
+    if (id !== null) return { type, id };
   }
   return null;
 }
@@ -45,8 +59,20 @@ export function lesDyplenke(params: URLSearchParams): Dyplenke | null {
  * ikke under «Prosjekt», så en lenke med fane=prosjekt&behov=12 skal likevel
  * havne der behovet står.
  */
-export function faneFor(d: Dyplenke): "bestillinger" | "abestille" {
-  return d.type === "ordre" ? "bestillinger" : "abestille";
+export function faneFor(d: Dyplenke): "bestillinger" | "abestille" | "lager" | "forslag" {
+  if (d.type === "ordre") return "bestillinger";
+  if (d.type === "vare") return "lager";
+  if (d.type === "forslag") return "forslag";
+  return "abestille";
+}
+
+/**
+ * Elementet for saken som faktisk vises. Lagerfanen tegner både tabell og
+ * kort og skjuler det ene med CSS, så det første treffet kan være usynlig.
+ */
+export function finnDyplenke(sel: string): HTMLElement | null {
+  const alle = [...document.querySelectorAll<HTMLElement>(`[data-dyplenke="${sel}"]`)];
+  return alle.find((el) => el.getClientRects().length > 0) ?? alle[0] ?? null;
 }
 
 /**

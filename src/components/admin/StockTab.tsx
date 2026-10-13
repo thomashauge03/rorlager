@@ -3,7 +3,7 @@
 // varen er oppretta; alt går gjennom justering eller opptelling, slik at
 // lagerloggen fortel heile historia.
 
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -78,6 +78,7 @@ import {
   setStock,
 } from "@/lib/orders";
 import type { PipeCategoryRow, PipeType, PipeTypeRow } from "@/lib/types";
+import { finnDyplenke, markerOgRull } from "@/lib/dyplenke";
 
 const SORT_OPTIONS: { key: PipeSort["key"]; label: string }[] = [
   { key: "name", label: "Navn" },
@@ -114,7 +115,15 @@ const SLUG_OK = /^[a-z0-9-]+$/;
 
 // ------------------------------------------------------------------- fana
 
-export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: innkjøpsprisen er kontoret si sak. */ visKostpris?: boolean } = {}) {
+export function StockTab({
+  visKostpris = true,
+  vare = null,
+}: {
+  /** Av for rolla «lager»: innkjøpsprisen er kontoret si sak. */
+  visKostpris?: boolean;
+  /** Dyplenke fra Innboks (lav beholdning): id-en til varen. */
+  vare?: string | null;
+} = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -153,6 +162,34 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
     });
     return onlyLow ? list.filter((t) => stockStatus(t) !== "pa_lager") : list;
   }, [rows, search, categoryId, showInactive, sort, onlyLow]);
+
+  /*
+   * Dyplenke fra Innboks: nullstill filtrene så varen kommer med, og rull fram
+   * til den når lista er tegnet. Refen gjør at et filtervalg etterpå ikke drar
+   * brukeren tilbake.
+   */
+  const [dypMål, setDypMål] = useState<string | null>(null);
+  const dypTatt = useRef<string | null>(null);
+  useEffect(() => {
+    if (!vare || dypTatt.current === vare || !types.data) return;
+    dypTatt.current = vare;
+    const t = types.data.find((x) => x.id === vare);
+    if (!t) {
+      toast({ title: "Fant ikke varen.", description: "Den kan være slettet." });
+      return;
+    }
+    setSearch("");
+    setCategoryId(ALLE);
+    setOnlyLow(false);
+    if (!t.active) setShowInactive(true);
+    setDypMål(t.id);
+  }, [vare, types.data, toast]);
+  useEffect(() => {
+    if (!dypMål) return;
+    setDypMål(null);
+    const el = finnDyplenke(`vare-${dypMål}`);
+    if (el) markerOgRull(el);
+  }, [dypMål]);
 
   const activeToggle = useMutation({
     mutationFn: (args: { id: string; active: boolean }) => savePipeType({ id: args.id, active: args.active }),
@@ -378,7 +415,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
                 {visible.map((t) => {
                   const label = pipeLabel(t.name, t.dimension);
                   return (
-                    <TableRow key={t.id} className={cn(!t.active && "opacity-60")}>
+                    <TableRow key={t.id} data-dyplenke={`vare-${t.id}`} className={cn(!t.active && "opacity-60")}>
                       <TableCell>
                         <p className="font-medium text-foreground">{label}</p>
                         <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -432,7 +469,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
             {visible.map((t) => {
               const label = pipeLabel(t.name, t.dimension);
               return (
-                <div key={t.id} className={cn("hm-card p-3 space-y-3", !t.active && "opacity-60")}>
+                <div key={t.id} data-dyplenke={`vare-${t.id}`} className={cn("hm-card p-3 space-y-3", !t.active && "opacity-60")}>
                   <div className="flex items-start gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-foreground">{label}</p>

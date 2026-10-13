@@ -126,7 +126,8 @@ export default function AdminDashboard() {
   const ønskt = dyplenke ? faneFor(dyplenke) : requested;
   // Ei fane rolla ikkje har – frå ei lenkje eller ein dyplenke – blir startfana
   const tab = faner.some((t) => t.value === ønskt) ? (ønskt as string) : DEFAULT_TAB;
-  const nr = (type: Dyplenke["type"]) => (dyplenke?.type === type ? dyplenke.nummer : null);
+  const nr = (type: Dyplenke["type"]) => (dyplenke?.type === type && "nummer" in dyplenke ? dyplenke.nummer : null);
+  const dypId = (type: Dyplenke["type"]) => (dyplenke?.type === type && "id" in dyplenke ? dyplenke.id : null);
 
   // Fana ligg i URL-en så ei oppdatering av sida hamnar same stad. replace,
   // elles ville tilbakeknappen gå fane for fane gjennom heile økta.
@@ -317,10 +318,10 @@ export default function AdminDashboard() {
             <ProjectsTab />
           </TabsContent>
           <TabsContent value="lager" className="animate-fade-in">
-            <StockTab visKostpris={!erLager} />
+            <StockTab visKostpris={!erLager} vare={dypId("vare")} />
           </TabsContent>
           <TabsContent value="forslag" className="animate-fade-in">
-            <SuggestionsTab visKostpris={!erLager} />
+            <SuggestionsTab visKostpris={!erLager} forslag={dypId("forslag")} />
           </TabsContent>
           <TabsContent value="qr" className="animate-fade-in">
             <QrTab />

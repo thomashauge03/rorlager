@@ -65,6 +65,17 @@ describe("parameteren", () => {
     expect(faneFor({ type: "ordre", nummer: 3 })).toBe("bestillinger");
     expect(lesDyplenke(new URLSearchParams("fane=bestillinger&ordre=abc"))).toBeNull();
   });
+
+  it("vare og forslag kommer på id, og bare en gyldig uuid slipper gjennom", () => {
+    const id = "00000000-0000-0000-0000-0000000000AB";
+    const vare = lesDyplenke(new URLSearchParams(`fane=lager&vare=${id}`));
+    expect(vare).toEqual({ type: "vare", id: id.toLowerCase() });
+    expect(faneFor(vare!)).toBe("lager");
+    expect(faneFor(lesDyplenke(new URLSearchParams(`forslag=${id}`))!)).toBe("forslag");
+    for (const ugyldig of ["", "abc", `${id}x`, "' or 1=1", `"]<b>`]) {
+      expect(lesDyplenke(new URLSearchParams({ vare: ugyldig }))).toBeNull();
+    }
+  });
 });
 
 describe("next etter innlogging", () => {
