@@ -513,6 +513,7 @@ export type Database = {
       pipe_prosjekt_uttak: { Args: { p_project_id: string }; Returns: Json };
       pipe_forbruk_per_vare: { Args: { p_dagar?: number }; Returns: { pipe_type_id: string; forbruk: number }[] };
       pipe_finn_ean: { Args: { p_ean: string }; Returns: string | null };
+      pipe_inventur: { Args: { p_linjer: Json; p_merknad?: string | null }; Returns: Json };
       pipe_retur: { Args: { p_line_id: string; p_quantity: number; p_note?: string | null }; Returns: Json };
     };
     Enums: Record<string, never>;
