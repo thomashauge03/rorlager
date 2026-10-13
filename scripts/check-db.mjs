@@ -203,6 +203,8 @@ for (const fn of [
   // 20261013100000: eige passord ved første innlogging
   "hm_ma_bytte_passord",
   "hm_passord_byttet",
+  // 20261014100000: prosjektlista i kassen for innlogga
+  "pipe_prosjektliste",
 ])
   await stengtForAnon(fn);
 

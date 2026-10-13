@@ -11,6 +11,10 @@ import PickupCheckout from "@/pages/PickupCheckout";
 // brukaren sin og skriv berre kva jobb varene skal til.
 
 const innlogga = vi.hoisted(() => ({ epost: null as string | null, loggUt: vi.fn() }));
+/** Prosjektlista i kassen. null: funksjonen finst ikkje (gammal base), og kassen fell tilbake til fritekst. */
+const prosjektliste = vi.hoisted(() => ({
+  svar: null as { id: string; project_number: number; name: string }[] | null,
+}));
 const sendUttak = vi.hoisted(() =>
   vi.fn(async () => ({ id: "o1", order_number: 1, created_at: "", customer_name: "", lines: [], total: 0 })),
 );
@@ -51,6 +55,10 @@ vi.mock("@/lib/settings", () => ({
 vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
   submitOrder: (...a: unknown[]) => sendUttak(...(a as [])),
+  fetchProsjektliste: async () => {
+    if (prosjektliste.svar === null) throw new Error("Could not find the function public.pipe_prosjektliste");
+    return prosjektliste.svar;
+  },
   fetchCatalog: async () => [
     {
       id: "t1",
@@ -88,6 +96,7 @@ beforeEach(() => {
   sessionStorage.clear();
   innlogga.epost = null;
   innlogga.loggUt.mockReset();
+  prosjektliste.svar = null;
   sendUttak.mockClear();
 });
 
@@ -149,7 +158,7 @@ describe("uttakskassen", () => {
     expect(within(bunn).getByText(/398,15/)).toBeInTheDocument();
   });
 
-  it("innlogga: uttaket står på brukaren, og berre jobben blir spurd om", () => {
+  it("innlogga: uttaket står på brukaren, og berre jobben blir spurd om", async () => {
     innlogga.epost = "lager@hauge.no";
     visUttak();
     expect(screen.getByText("Registreres på deg")).toBeInTheDocument();
@@ -158,16 +167,17 @@ describe("uttakskassen", () => {
     expect(screen.queryByLabelText(/Navn/)).toBeNull();
     expect(screen.queryByLabelText(/Telefon/)).toBeNull();
     expect(screen.queryByLabelText(/E-post/)).toBeNull();
-    expect(screen.getByLabelText(/Jobb eller prosjekt/)).toBeInTheDocument();
+    expect(await screen.findByLabelText(/Jobb eller prosjekt/)).toBeInTheDocument();
   });
 
-  it("innlogga: krev jobben, og sender uttaket på brukaren", async () => {
+  it("innlogga, utan prosjektliste i basen: krev jobben som fritekst, og sender uttaket på brukaren", async () => {
     innlogga.epost = "lager@hauge.no";
     visUttak();
+    const felt = await screen.findByLabelText(/Jobb eller prosjekt/);
     fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
     expect(sendUttak).not.toHaveBeenCalled();
 
-    fireEvent.change(screen.getByLabelText(/Jobb eller prosjekt/), { target: { value: "Byggefelt Vest" } });
+    fireEvent.change(felt, { target: { value: "Byggefelt Vest" } });
     fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
     await waitFor(() =>
       expect(sendUttak).toHaveBeenCalledWith(
@@ -183,6 +193,52 @@ describe("uttakskassen", () => {
     );
     // Eit delt nettbrett skal ikkje hugse den tilsette som neste kunde
     expect(localStorage.getItem("rorlager.kunde.v1")).toBeNull();
+  });
+
+  describe("prosjektlista", () => {
+    beforeEach(() => {
+      innlogga.epost = "ola@hauge.no";
+      prosjektliste.svar = [
+        { id: "p1", project_number: 9000123, name: "Storgata 4" },
+        { id: "p2", project_number: 9000124, name: "Havnevegen 12" },
+      ];
+    });
+
+    it("krev eit val før uttaket blir sendt", async () => {
+      visUttak();
+      await screen.findByRole("radio", { name: /Storgata 4/ });
+      fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+      expect(sendUttak).not.toHaveBeenCalled();
+    });
+
+    it("søk på nummer finn prosjektet, og uttaket går med project_id", async () => {
+      visUttak();
+      fireEvent.change(await screen.findByLabelText("Søk etter prosjekt"), { target: { value: "124" } });
+      expect(screen.queryByRole("radio", { name: /Storgata 4/ })).toBeNull();
+      fireEvent.click(screen.getByRole("radio", { name: /Havnevegen 12/ }));
+
+      // Lista fell saman til det valde, med «Bytt»
+      expect(screen.getByText("9000124 · Havnevegen 12")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: /Bytt prosjekt/ })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+      await waitFor(() =>
+        expect(sendUttak).toHaveBeenCalledWith(expect.objectContaining({ project_id: "p2", project: null })),
+      );
+    });
+
+    it("«Annet – skriv selv» sender teksten og ingen project_id", async () => {
+      visUttak();
+      fireEvent.click(await screen.findByRole("radio", { name: /Annet – skriv selv/ }));
+      fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+      expect(sendUttak).not.toHaveBeenCalled();
+
+      fireEvent.change(screen.getByLabelText("Skriv hvor varene skal"), { target: { value: "Verkstedet" } });
+      fireEvent.click(screen.getByRole("button", { name: /Send inn uttak/ }));
+      await waitFor(() =>
+        expect(sendUttak).toHaveBeenCalledWith(expect.objectContaining({ project_id: null, project: "Verkstedet" })),
+      );
+    });
   });
 
   it("innlogga: «Ikke deg?» loggar ut", () => {

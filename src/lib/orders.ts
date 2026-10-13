@@ -223,6 +223,8 @@ export async function submitOrder(input: {
   customer_email?: string | null;
   company?: string | null;
   project?: string | null;
+  /** Prosjektet ein tilsett valde frå lista. Basen skriv då sjølv teksten i project. */
+  project_id?: string | null;
   comment?: string | null;
   signature?: string | null;
   lines: Parameters<typeof tilInnsendingslinje>[0][];
@@ -236,6 +238,9 @@ export async function submitOrder(input: {
     p_project: input.project ?? null,
     p_comment: input.comment ?? null,
     p_signature: input.signature ?? null,
+    // Berre med når det er valt: ein base utan 20261014100000 kjenner ikkje
+    // parameteren, og eit uttak med fritekst skal gå gjennom der òg.
+    ...(input.project_id ? { p_project_id: input.project_id } : {}),
   });
 
   // Meldinga frå databasen er allereie skriven for kunden ("Handlekurven er tom"),
@@ -244,6 +249,29 @@ export async function submitOrder(input: {
   if (!data) throw new Error("Klarte ikke å sende inn uttaket");
 
   return data as unknown as SubmittedOrder;
+}
+
+/** Eit prosjekt slik kassen viser det. Ikkje adresse, kunde eller notat. */
+export type ProsjektValg = { id: string; project_number: number; name: string };
+
+/** «9000123 · Storgata 4» – same tekst som basen skriv på uttaket. */
+export const prosjektTekst = (p: Pick<ProsjektValg, "project_number" | "name">) =>
+  `${p.project_number} · ${p.name.trim()}`;
+
+/**
+ * Dei aktive prosjekta, til kassen for ein innlogga tilsett.
+ *
+ * Kastar når funksjonen manglar (før 20261014100000), slik at kassen kan falle
+ * tilbake til fritekst i staden for å vise ei tom liste.
+ */
+export async function fetchProsjektliste(): Promise<ProsjektValg[]> {
+  const { data, error } = await supabase.rpc("pipe_prosjektliste");
+  if (error) throw new Error(error.message || "Klarte ikke å hente prosjektene");
+  return ((data ?? []) as { id: string; project_number: number | string; name: string }[]).map((p) => ({
+    id: p.id,
+    project_number: Number(p.project_number),
+    name: p.name,
+  }));
 }
 
 /** Frå-dato tel frå midnatt lokalt, ikkje UTC – elles fell kvelden før med. */

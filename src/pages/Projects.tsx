@@ -3,7 +3,7 @@
 // Kontoret ser alle prosjekt her òg, men styrer dei frå adminpanelet – denne
 // sida er laga for ein telefon i ei arbeidshanske, ikkje for eit skrivebord.
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { AlertTriangle, ClipboardList, FolderOpen, KeyRound, Loader2, LogOut, MapPin, Search, ShieldAlert } from "lucide-react";
@@ -24,6 +24,12 @@ export default function Projects() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const auth = useAuth(() => navigate("/login", { replace: true }));
+
+  // Ein vanleg tilsett er ikkje med på prosjekt her – han fører uttak på dei
+  // frå kassen. Her ville han sett ei tom liste.
+  useEffect(() => {
+    if (auth.isAnsatt) navigate("/", { replace: true });
+  }, [auth.isAnsatt, navigate]);
 
   const projects = useQuery({
     queryKey: QK.projects,

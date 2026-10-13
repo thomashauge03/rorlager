@@ -128,7 +128,34 @@ export async function heimeside({ sjekkPassord = true } = {}): Promise<string> {
     // prosjektbrukar til /admin, møter han eit panel han ikkje har tilgang til.
     return "/prosjekt";
   }
-  return svar.data === "prosjekt" ? "/prosjekt" : "/admin";
+  return heimFor(svar.data);
+}
+
+/**
+ * Rollene som ser adminpanelet. Same kvitliste som hm_er_kontor() i basen.
+ *
+ * Her stod det `role !== "prosjekt"`, altså «alt som ikkje er prosjekt er
+ * kontor». Basen gjekk over til kvitliste 3. september; appen gjorde ikkje, og
+ * med rolla «ansatt» ville ein tilsett blitt sleppt inn i eit panel der kvar
+ * spørjing svarar med null rader. Ingen lekkasje – basen nektar – men eit tomt
+ * panel er ei dårleg forklaring.
+ */
+export const KONTORROLLER = ["super_admin", "admin", "kontor", "lager"] as const;
+
+export const erKontorRolle = (role: string | null | undefined): boolean =>
+  !!role && (KONTORROLLER as readonly string[]).includes(role);
+
+/**
+ * Kvar ei rolle høyrer heime.
+ *
+ * Ein vanleg tilsett («ansatt») tek ut frå lageret som ein kunde, så han høyrer
+ * heime på framsida. Ei rolle ingen har tenkt på, hamnar same stad: framsida
+ * viser ingenting som ikkje alle andre òg ser.
+ */
+export function heimFor(role: string): string {
+  if (erKontorRolle(role)) return "/admin";
+  if (role === "prosjekt") return "/prosjekt";
+  return "/";
 }
 
 /**
@@ -154,7 +181,7 @@ export type Auth = {
   /** Sant til første sesjonssjekk er ferdig. Hindrar at sida blinkar fram. */
   checking: boolean;
   email: string | null;
-  /** 'super_admin' | 'admin' | 'prosjekt' | … eller null utan tilgang. */
+  /** 'super_admin' | 'admin' | 'kontor' | 'lager' | 'prosjekt' | 'ansatt', eller null utan tilgang. */
   role: string | null;
   /** undefined betyr «ikkje svart enno» – ikkje det same som eit nei. */
   roleKnown: boolean;
@@ -163,6 +190,8 @@ export type Auth = {
   prøvRolleIgjen: () => void;
   isProsjekt: boolean;
   isKontor: boolean;
+  /** Vanleg tilsett: tek ut på seg sjølv, ser ikkje adminpanelet. */
+  isAnsatt: boolean;
 };
 
 /**
@@ -227,6 +256,7 @@ export function useAuth(onSignedOut?: () => void): Auth {
     roleFailed: isError,
     prøvRolleIgjen: () => void refetch(),
     isProsjekt: role === "prosjekt",
-    isKontor: isSuccess && role !== null && role !== "prosjekt",
+    isKontor: isSuccess && erKontorRolle(role),
+    isAnsatt: role === "ansatt",
   };
 }

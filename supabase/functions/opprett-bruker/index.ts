@@ -121,7 +121,7 @@ Deno.serve(async (req) => {
    * skriver `rolle` og ikke `kropp.role`, kan den asymmetrien ikke nås.
    */
   const rolle = (kropp.role ?? "admin").trim().toLowerCase();
-  if (!["admin", "kontor", "lager", "prosjekt"].includes(rolle)) {
+  if (!["admin", "kontor", "lager", "ansatt", "prosjekt"].includes(rolle)) {
     return svar({ error: "Ukjent rolle" }, 400);
   }
 

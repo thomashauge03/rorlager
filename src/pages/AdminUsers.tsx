@@ -43,6 +43,11 @@ const ROLES = [
   { value: "kontor", label: "Kontor", hjelp: "Hele adminpanelet" },
   { value: "lager", label: "Lager", hjelp: "Hele adminpanelet" },
   {
+    value: "ansatt",
+    label: "Ansatt",
+    hjelp: "Tar ut fra lageret på seg selv og velger prosjekt. Ser ikke adminpanelet.",
+  },
+  {
     value: "prosjekt",
     label: "Prosjekt",
     hjelp: "Bare prosjektene han settes på. Ikke lager, priser eller faktura.",

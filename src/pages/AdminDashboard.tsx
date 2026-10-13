@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import hmLogo from "@/assets/hm-logo.png";
 import { useQueryClient } from "@tanstack/react-query";
-import { loggUt, useAuth } from "@/lib/auth";
+import { erKontorRolle, heimFor, loggUt, useAuth } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -82,20 +82,24 @@ export default function AdminDashboard() {
 
   // Talet på fana Bestillinger. Berre for kontoret: ein prosjektbrukar blir
   // send vidare, og ein utan rolle ser ingen faner.
-  const venter = useWaitingPickupOrders(roleKnown && role !== null && role !== "prosjekt");
+  const kontor = roleKnown && erKontorRolle(role);
+  /** Har ei rolle, men ikkje ei som ser panelet: prosjekt eller ansatt. */
+  const skalVidare = roleKnown && role !== null && !kontor;
+  const venter = useWaitingPickupOrders(kontor);
   const antallVenter = venter.data?.length ?? 0;
-  const antallForslag = useNewSuggestionCount(roleKnown && role !== null && role !== "prosjekt");
+  const antallForslag = useNewSuggestionCount(kontor);
 
   /*
-   * Prosjektbrukarar høyrer ikkje heime her.
+   * Prosjektbrukarar og vanlege tilsette høyrer ikkje heime her.
    *
    * Dei har tilgang til appen, men ikkje til admindelen: hm_er_kontor() er
    * usann for dei, så kvar spørjing på denne sida ville svart 200 med null
-   * rader. Eit tomt panel er ei dårleg forklaring – dei skal til prosjektsida.
+   * rader. Eit tomt panel er ei dårleg forklaring – prosjektbrukaren skal til
+   * prosjektsida, den tilsette til framsida.
    */
   useEffect(() => {
-    if (role === "prosjekt") navigate("/prosjekt", { replace: true });
-  }, [role, navigate]);
+    if (skalVidare && role) navigate(heimFor(role), { replace: true });
+  }, [skalVidare, role, navigate]);
 
   const logout = async () => {
     await loggUt(queryClient);
@@ -165,7 +169,7 @@ export default function AdminDashboard() {
     );
   }
 
-  if (!roleKnown || role === "prosjekt") {
+  if (!roleKnown || skalVidare) {
     return (
       <div className="min-h-dvh hm-page flex items-center justify-center">
         <Loader2 className="h-7 w-7 animate-spin text-primary" aria-hidden="true" />

@@ -815,7 +815,7 @@ await som(db, LEIF, async () => {
     "innlogget: jobb eller prosjekt må fylles ut",
     `select public.pipe_submit_order('Hvem som helst', $1::jsonb)`,
     [EI_LINJE],
-    /jobb eller hvilket prosjekt/,
+    /Velg hvilket prosjekt/,
   );
   ansattId = (
     await en(

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Plus, Send } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { FastBunn } from "@/components/FastBunn";
@@ -14,7 +14,8 @@ import { useToast } from "@/hooks/use-toast";
 import { loggUt, useAuth, useMeg } from "@/lib/auth";
 import { EMPTY_CUSTOMER, LAST_ORDER_KEY, clearCart, readCustomer, useCart, writeCustomer } from "@/lib/cart";
 import type { SavedCustomer } from "@/lib/cart";
-import { submitOrder } from "@/lib/orders";
+import { fetchProsjektliste, submitOrder } from "@/lib/orders";
+import { ProsjektVelger, type ProsjektSvar } from "@/components/ProsjektVelger";
 import { useSettings } from "@/lib/settings";
 import { useNesteFelt } from "@/lib/neste-felt";
 import { checkRateLimit } from "@/lib/rate-limiter";
@@ -72,6 +73,25 @@ export default function Checkout() {
   const ansatt = !auth.checking && Boolean(auth.email);
   const ansattNavn = meg.data?.navn ?? auth.email ?? "";
 
+  /*
+   * PROSJEKTET FRÅ EI LISTE, IKKJE FRÅ HUGSEN.
+   *
+   * Fritekst gav «Storgata 4», «storgata4» og «Storg. 4» på same jobb, og
+   * fakturagrunnlaget, som samlar uttaka på teksten, fekk tre jobbar. Med lista
+   * skriv basen teksten sjølv.
+   *
+   * Feilar lista – til dømes før 20261014100000 er køyrd – er fritekstfeltet
+   * tilbake, så ingen blir ståande utan å kunne sende inn.
+   */
+  const prosjektliste = useQuery({
+    queryKey: ["pipe_prosjektliste", auth.email],
+    queryFn: fetchProsjektliste,
+    enabled: ansatt,
+    staleTime: 5 * 60_000,
+  });
+  const medListe = prosjektliste.isSuccess && prosjektliste.data.length > 0;
+  const [prosjektValg, setProsjektValg] = useState<ProsjektSvar>(null);
+
   // Kommentaren er valfri og ligg bak ei lenkje
   const [visKommentar, setVisKommentar] = useState(false);
   const [opnaKommentar, setOpnaKommentar] = useState(false);
@@ -95,7 +115,12 @@ export default function Checkout() {
 
     const name = form.customer_name.trim();
     if (ansatt) {
-      if (!form.project.trim()) {
+      if (medListe && !prosjektValg) {
+        toast({ title: "Velg hvilket prosjekt varene skal på", variant: "destructive" });
+        document.getElementById("prosjekt-sok")?.focus();
+        return;
+      }
+      if ((!medListe || prosjektValg?.kind === "annet") && !form.project.trim()) {
         toast({ title: "Skriv hvilken jobb eller hvilket prosjekt varene skal til", variant: "destructive" });
         document.getElementById("prosjekt")?.focus();
         return;
@@ -136,6 +161,8 @@ export default function Checkout() {
       return;
     }
 
+    const valgtProsjektId = medListe && prosjektValg?.kind === "prosjekt" ? prosjektValg.id : null;
+
     setSending(true);
     try {
       // Heile linja, ikkje berre id og mengd: ei annet-linje har namnet sitt med
@@ -147,7 +174,9 @@ export default function Checkout() {
               customer_phone: null,
               customer_email: auth.email,
               company: null,
-              project: form.project.trim(),
+              // Med eit prosjekt frå lista skriv basen teksten sjølv
+              project: valgtProsjektId ? null : form.project.trim(),
+              project_id: valgtProsjektId,
               comment: comment.trim() || null,
               signature: null,
               lines,
@@ -294,15 +323,29 @@ export default function Checkout() {
                 </button>
               </div>
 
-              <Field label="Jobb eller prosjekt" htmlFor="prosjekt" required hint="Hvor skal rørene brukes?">
-                <Input
-                  id="prosjekt"
-                  value={form.project}
-                  onChange={(e) => set("project", e.target.value)}
-                  placeholder="Byggefelt Vest, tomt 4"
-                  className="h-12 text-base"
-                />
-              </Field>
+              {prosjektliste.isLoading ? (
+                <Skeleton className="h-40 w-full rounded-lg" />
+              ) : medListe ? (
+                <Field label="Hvilket prosjekt skal varene på?" htmlFor="prosjekt-sok" required>
+                  <ProsjektVelger
+                    prosjekter={prosjektliste.data}
+                    valgt={prosjektValg}
+                    onVelg={setProsjektValg}
+                    annetTekst={form.project}
+                    onAnnetTekst={(v) => set("project", v)}
+                  />
+                </Field>
+              ) : (
+                <Field label="Jobb eller prosjekt" htmlFor="prosjekt" required hint="Hvor skal rørene brukes?">
+                  <Input
+                    id="prosjekt"
+                    value={form.project}
+                    onChange={(e) => set("project", e.target.value)}
+                    placeholder="Byggefelt Vest, tomt 4"
+                    className="h-12 text-base"
+                  />
+                </Field>
+              )}
 
               {kommentarFelt}
             </section>

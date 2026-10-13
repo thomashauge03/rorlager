@@ -90,11 +90,20 @@ Tilgangen har tre nivåer, og **rollen i `system_users` avgjør hvilket**:
 | Rolle | Ser |
 | --- | --- |
 | Ingen rad | Ingenting. Møter «Ingen tilgang». |
+| `ansatt` | Forsiden, som en kunde – men uten skjema. Uttaket registreres på ham, og han velger bare prosjektet fra en liste. Ikke adminpanelet. |
 | `prosjekt` | Bare prosjektene han er satt på. Ikke lager, priser, faktura eller andre prosjekter. |
-| Alt annet (`admin`, `kontor`, `lager`) | Hele adminpanelet, som før. |
+| `admin`, `kontor`, `lager` | Hele adminpanelet. |
 
-Vilkåret er formulert negativt — «rolle forskjellig fra `prosjekt`» — slik at
-eksisterende brukere beholder tilgangen uten at noen rad må flyttes.
+Kontortilgangen er en **hviteliste** (`admin`, `kontor`, `lager`) både i basen
+(`hm_er_kontor()`) og i appen (`erKontorRolle()` i `src/lib/auth.ts`). En ny
+rolle gir derfor ingen tilgang før noen legger den inn der med vilje.
+
+**Prosjektet i kassen.** Alle innloggede (ansatt og kontor) velger prosjekt fra
+en søkbar liste over aktive prosjekter, med «Annet – skriv selv» nederst. Lista
+kommer fra `pipe_prosjektliste()`, som bare gir nummer og navn. Velges et
+prosjekt, skriver `pipe_submit_order` selv «9000123 · Storgata 4» og setter
+`pipe_orders.project_id` – teksten kommer fra prosjektet, ikke fra nettleseren,
+så fakturagrunnlaget samler uttakene på samme jobb.
 
 **Å gi en person tilgang gjøres på ett sted:** Admin → Brukere. Der velger du
 rolle og huker av hvilke prosjekter personen skal se — så mange som trengs, og

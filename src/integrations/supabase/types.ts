@@ -43,6 +43,8 @@ export type PipeOrderRow = {
   customer_email: string | null;
   company: string | null;
   project: string | null;
+  /** Prosjektet frå lista i kassen. Null for kundar og fritekst; manglar før 20261014100000. */
+  project_id?: string | null;
   comment: string | null;
   signature: string | null;
   status: "ny" | "behandlet" | "levert" | "avvist";
@@ -364,8 +366,13 @@ export type Database = {
           p_project?: string | null;
           p_comment?: string | null;
           p_signature?: string | null;
+          p_project_id?: string | null;
         };
         Returns: Json;
+      };
+      pipe_prosjektliste: {
+        Args: Record<string, never>;
+        Returns: { id: string; project_number: number; name: string }[];
       };
       pipe_adjust_stock: {
         Args: { p_pipe_type_id: string; p_change: number; p_reason?: string; p_note?: string | null };

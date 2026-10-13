@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
-import { CalendarClock, Camera, Lock, MapPin, PackageSearch, Search, X } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, Camera, KeyRound, Lock, LogOut, MapPin, PackageSearch, Search, X } from "lucide-react";
+import { loggUt, useAuth, useMeg } from "@/lib/auth";
 import { TopBar } from "@/components/TopBar";
 import { CartBar } from "@/components/CartBar";
 import { StockBadge } from "@/components/StatusBadge";
@@ -21,6 +22,62 @@ import type { CatalogItem } from "@/lib/types";
 
 const DEFAULT_INTRO =
   "Skann QR-koden som henger på hylla, eller søk opp røret i lista under. Tast inn hvor mye du tar ut, og legg det i handlekurven.";
+
+/* ------------------------------------------------------------------ */
+/*  Kven er logga inn                                                  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Nedst på framsida.
+ *
+ * Ein vanleg tilsett hamnar her etter innlogging og har ikkje adminpanelet å
+ * logge ut frå, så han treng «Logg ut» og «Bytt passord» her. Står nettbrettet
+ * i lageret, ser neste mann òg kven som er logga inn – og at uttaket hans ville
+ * blitt registrert på ein annan.
+ */
+function Innlogget() {
+  const queryClient = useQueryClient();
+  const auth = useAuth();
+  const meg = useMeg(auth.email);
+  const lenke = "inline-flex min-h-11 items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground";
+
+  if (auth.checking) return <div className="mt-10 h-11" />;
+
+  if (!auth.email) {
+    return (
+      <div className="mt-10 text-center">
+        <Link to="/login" className={lenke}>
+          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+          Logg inn
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-10 flex flex-col items-center gap-1 text-center">
+      <p className="text-xs text-muted-foreground break-all">
+        Innlogget som <span className="font-medium text-foreground">{meg.data?.navn ?? auth.email}</span>
+      </p>
+      <div className="flex flex-wrap items-center justify-center gap-x-4">
+        {auth.isKontor ? (
+          <Link to="/admin" className={lenke}>
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            Adminpanel
+          </Link>
+        ) : null}
+        <Link to="/konto" className={lenke}>
+          <KeyRound className="h-3.5 w-3.5" aria-hidden="true" />
+          Bytt passord
+        </Link>
+        <button type="button" onClick={() => void loggUt(queryClient)} className={lenke}>
+          <LogOut className="h-3.5 w-3.5" aria-hidden="true" />
+          Logg ut
+        </button>
+      </div>
+    </div>
+  );
+}
 
 /* ------------------------------------------------------------------ */
 /*  Varekort                                                           */
@@ -253,15 +310,7 @@ export default function Index() {
           }}
         />
 
-        <div className="mt-10 text-center">
-          <Link
-            to="/login"
-            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-            Adminpanel
-          </Link>
-        </div>
+        <Innlogget />
       </main>
 
       {/* Same skannar som butikken. Han går til varesida, som slår opp koden
