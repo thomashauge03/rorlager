@@ -28,6 +28,26 @@ export async function fetchSuggestions(): Promise<Suggestion[]> {
   return (data ?? []) as unknown as Suggestion[];
 }
 
+/** Same vare, skriven likt nok: namn, dimensjon og eining utan store bokstavar og doble mellomrom. */
+export const forslagNøkkel = (s: Pick<Suggestion, "name" | "dimension" | "unit">) =>
+  [s.name, s.dimension ?? "", s.unit].map((v) => v.trim().replace(/\s+/g, " ").toLowerCase()).join("|");
+
+/**
+ * Like forslag samla: fem som har bede om «PE-rør 40 mm» er éin vare kontoret
+ * bør ta inn, ikkje fem kort. Rekkjefølgja er etter det nyaste forslaget i
+ * kvar gruppe, og innanfor gruppa nyaste først.
+ */
+export function grupperForslag(liste: Suggestion[]): Suggestion[][] {
+  const grupper = new Map<string, Suggestion[]>();
+  for (const s of liste) {
+    const k = forslagNøkkel(s);
+    grupper.set(k, [...(grupper.get(k) ?? []), s]);
+  }
+  return [...grupper.values()]
+    .map((g) => [...g].sort((a, b) => b.created_at.localeCompare(a.created_at)))
+    .sort((a, b) => b[0].created_at.localeCompare(a[0].created_at));
+}
+
 /** Lukkar eit forslag. Varen blir knytt til når ho er oppretta frå forslaget. */
 export async function closeSuggestion(id: string, status: Exclude<SuggestionStatus, "ny">, pipeTypeId: string | null = null) {
   const { data: auth } = await supabase.auth.getUser();

@@ -146,7 +146,8 @@ export async function fetchPipeTypeBySlug(slug: string): Promise<CatalogItem | n
   if (!key) return null;
 
   const select = "*, pipe_categories(name)";
-  const flatten = (row: any): CatalogItem | null => {
+  const flatten = (data: unknown): CatalogItem | null => {
+    const row = data as (CatalogItem & { pipe_categories?: { name: string } | null }) | null;
     if (!row) return null;
     const { pipe_categories, ...rest } = row;
     return { ...rest, category_name: pipe_categories?.name ?? null } as CatalogItem;
@@ -160,7 +161,25 @@ export async function fetchPipeTypeBySlug(slug: string): Promise<CatalogItem | n
 
   const bySku = await supabase.from("pipe_catalog").select(select).ilike("sku", key).maybeSingle();
   if (bySku.error) fail("Klarte ikke å hente røret", bySku.error);
-  return flatten(bySku.data);
+  if (bySku.data) return flatten(bySku.data);
+
+  // Strekkoden frå produsenten, sist: han finst berre på varer kontoret har
+  // registrert han på, og oppslaget går via ein funksjon (sjå 20261014200000).
+  const slugForEan = await finnSlugForEan(key);
+  if (!slugForEan) return null;
+  const byEan = await supabase.from("pipe_catalog").select(select).eq("qr_slug", slugForEan).maybeSingle();
+  if (byEan.error) fail("Klarte ikke å hente røret", byEan.error);
+  return flatten(byEan.data);
+}
+
+/** QR-koden til vara med denne strekkoden, eller null. Berre for tal på 8–14 siffer. */
+export async function finnSlugForEan(kode: string): Promise<string | null> {
+  const ean = (kode ?? "").replace(/\s/g, "");
+  if (!/^\d{8,14}$/.test(ean)) return null;
+  const { data, error } = await supabase.rpc("pipe_finn_ean", { p_ean: ean });
+  // Før migrasjonen finst ikkje funksjonen: då finst det heller ingen strekkodar
+  if (error) return null;
+  return typeof data === "string" ? data : null;
 }
 
 export async function fetchCategories(): Promise<PipeCategoryRow[]> {

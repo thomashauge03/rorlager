@@ -2,7 +2,7 @@
 // katalogen mangla. Kvart forslag kan bli ei vare, ein pris på éi linje, eller
 // lukkast. Lista er kontoret sin måte å sjå kva som manglar.
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Ban, Inbox, PackagePlus, Pencil, RotateCcw, Tag } from "lucide-react";
@@ -17,6 +17,7 @@ import {
   closeSuggestion,
   endreForslag,
   fetchSuggestions,
+  grupperForslag,
   kanPrisast,
   priceLine,
   reopenSuggestion,
@@ -33,9 +34,10 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("nye");
-  const [opprett, setOpprett] = useState<Suggestion | null>(null);
+  // Opprett og nytt namn gjeld heile gruppa av like forslag
+  const [opprett, setOpprett] = useState<Suggestion[] | null>(null);
   const [prisFor, setPrisFor] = useState<Suggestion | null>(null);
-  const [namnFor, setNamnFor] = useState<Suggestion | null>(null);
+  const [namnFor, setNamnFor] = useState<Suggestion[] | null>(null);
 
   const forslag = useQuery({ queryKey: QK.suggestions, queryFn: fetchSuggestions });
   // Vare-dialogen sjekkar at QR-kode og varenummer er ledige, og treng difor heile katalogen
@@ -53,10 +55,13 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
   };
 
   const avvis = useMutation({
-    mutationFn: (s: Suggestion) => closeSuggestion(s.id, "avvist"),
-    onSuccess: () => {
+    mutationFn: async (liste: Suggestion[]) => {
+      for (const s of liste) await closeSuggestion(s.id, "avvist");
+      return liste.length;
+    },
+    onSuccess: (n) => {
       oppdater();
-      toast({ title: "Forslaget er avvist" });
+      toast({ title: n === 1 ? "Forslaget er avvist" : `${n} forslag er avvist` });
     },
     onError: (e: Error) => toast({ title: "Forslaget ble ikke lagret", description: e.message, variant: "destructive" }),
   });
@@ -171,18 +176,33 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
         </div>
       ) : (
         <ul className="space-y-3">
-          {synlege.map((s) => (
-            <ForslagKort
-              key={s.id}
-              s={s}
-              onOpprett={() => setOpprett(s)}
-              onNamn={() => setNamnFor(s)}
-              onPris={() => setPrisFor(s)}
-              onAvvis={() => avvis.mutate(s)}
-              onOpne={() => opne.mutate(s)}
-              opptatt={avvis.isPending || opne.isPending}
-            />
-          ))}
+          {(utsnitt === "nye" ? grupperForslag(synlege) : synlege.map((s) => [s])).map((gruppe) => {
+            const kort = (s: Suggestion) => (
+              <ForslagKort
+                key={s.id}
+                s={s}
+                onOpprett={() => setOpprett([s])}
+                onNamn={() => setNamnFor([s])}
+                onPris={() => setPrisFor(s)}
+                onAvvis={() => avvis.mutate([s])}
+                onOpne={() => opne.mutate(s)}
+                opptatt={avvis.isPending || opne.isPending}
+              />
+            );
+            if (gruppe.length === 1) return kort(gruppe[0]);
+            return (
+              <ForslagGruppe
+                key={gruppe[0].id}
+                gruppe={gruppe}
+                onOpprett={() => setOpprett(gruppe)}
+                onNamn={() => setNamnFor(gruppe)}
+                onAvvis={() => avvis.mutate(gruppe)}
+                opptatt={avvis.isPending}
+              >
+                {gruppe.map(kort)}
+              </ForslagGruppe>
+            );
+          })}
         </ul>
       )}
 
@@ -192,8 +212,11 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
           visKostpris={visKostpris}
           allPipes={types.data}
           categories={categories.data}
-          initial={{ name: opprett.name, dimension: opprett.dimension ?? "", unit: opprett.unit }}
-          onSaved={(vare) => etterOppretting(opprett, vare)}
+          initial={{ name: opprett[0].name, dimension: opprett[0].dimension ?? "", unit: opprett[0].unit }}
+          // Éi vare for heile gruppa: kvar linje får prisen, og kvart forslag blir lukka
+          onSaved={async (vare) => {
+            for (const s of opprett) await etterOppretting(s, vare);
+          }}
           onClose={() => setOpprett(null)}
         />
       ) : null}
@@ -201,10 +224,10 @@ export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean }
       {/* Rett namnet først, så blir «Opprett vare» fylt ut med det kontoret
           faktisk meiner og ikkje med det som blei tasta på lageret */}
       <EndreAnnetDialog
-        line={namnFor}
+        line={namnFor?.[0] ?? null}
         onClose={() => setNamnFor(null)}
         lagreMed={async (name, dimension) => {
-          if (namnFor) await endreForslag(namnFor, name, dimension);
+          for (const s of namnFor ?? []) await endreForslag(s, name, dimension);
         }}
       />
 
@@ -335,6 +358,65 @@ function ForslagKort({
           </Button>
         )}
       </div>
+    </li>
+  );
+}
+
+/**
+ * Like forslag i éin rad: kor mange som har bede om det, og kor mykje til
+ * saman. Handlingane gjeld heile gruppa; dei enkelte forslaga ligg under, med
+ * sine eigne knappar for pris på kvar linje.
+ */
+function ForslagGruppe({
+  gruppe,
+  onOpprett,
+  onNamn,
+  onAvvis,
+  opptatt,
+  children,
+}: {
+  gruppe: Suggestion[];
+  onOpprett: () => void;
+  onNamn: () => void;
+  onAvvis: () => void;
+  opptatt: boolean;
+  children: ReactNode;
+}) {
+  const første = gruppe[0];
+  const sum = gruppe.reduce((s, f) => s + Number(f.quantity), 0);
+  const frå = [...new Set(gruppe.map((f) => f.submitted_by).filter(Boolean))];
+  return (
+    <li className="hm-card space-y-3 p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="break-words text-base font-bold text-foreground">{pipeLabel(første.name, første.dimension)}</p>
+          <p className="tabular text-sm text-muted-foreground">
+            {gruppe.length} forslag · {num(sum)} {første.unit} til sammen
+            {frå.length > 0 ? ` · fra ${frå.slice(0, 3).join(", ")}${frå.length > 3 ? ` og ${frå.length - 3} til` : ""}` : ""}
+          </p>
+        </div>
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">Etterspurt</span>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <Button size="sm" onClick={onOpprett} className="h-10 [&_svg]:size-4">
+          <PackagePlus aria-hidden="true" />
+          Opprett vare
+        </Button>
+        <Button size="sm" variant="outline" onClick={onNamn} className="h-10 [&_svg]:size-4">
+          <Pencil aria-hidden="true" />
+          Endre navn
+        </Button>
+        <Button size="sm" variant="ghost" onClick={onAvvis} disabled={opptatt} className="h-10 text-muted-foreground [&_svg]:size-4">
+          <Ban aria-hidden="true" />
+          Avvis alle
+        </Button>
+      </div>
+      <details className="group">
+        <summary className="min-h-11 cursor-pointer list-none py-2 text-sm font-medium text-primary hover:underline">
+          Vis de {gruppe.length} forslagene
+        </summary>
+        <ul className="mt-2 space-y-3">{children}</ul>
+      </details>
     </li>
   );
 }

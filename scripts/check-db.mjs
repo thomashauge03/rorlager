@@ -218,6 +218,7 @@ await stengtForAnon("pipe_price_line", { p_line_id: "00000000-0000-0000-0000-000
 await stengtForAnon("pipe_bytt_prosjekt", { p_order_id: "00000000-0000-0000-0000-000000000000", p_project: "x" });
 await stengtForAnon("pipe_endre_annet", { p_line_id: "00000000-0000-0000-0000-000000000000", p_name: "x" });
 await stengtForAnon("pipe_prosjekt_uttak", { p_project_id: "00000000-0000-0000-0000-000000000000" });
+// pipe_finn_ean er open for kundar med vilje – han gir berre QR-koden til ei aktiv vare
 await stengtForAnon("pipe_forbruk_per_vare", { p_dagar: 90 });
 await stengtForAnon("pipe_retur", { p_line_id: "00000000-0000-0000-0000-000000000000", p_quantity: 1 });
 await stengtForAnon("pipe_endre_mengde", { p_line_id: "00000000-0000-0000-0000-000000000000", p_quantity: 1 });

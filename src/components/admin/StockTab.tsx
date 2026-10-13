@@ -7,6 +7,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  BarChart3,
   ClipboardCheck,
   Coins,
   History,
@@ -25,6 +26,7 @@ import {
 } from "lucide-react";
 import { InnkjopPanel } from "@/components/admin/InnkjopPanel";
 import { Prishistorikk } from "@/components/admin/EndringsLogg";
+import { StatistikkPanel } from "@/components/admin/StatistikkPanel";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +131,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
   const [toDelete, setToDelete] = useState<PipeType | null>(null);
   const [logFor, setLogFor] = useState<PipeType | "alle" | null>(null);
   const [innkjop, setInnkjop] = useState(false);
+  const [statistikk, setStatistikk] = useState(false);
 
   // Ny tom array kvar render ville gjort alle useMemo-ane under verdilause
   const rows = useMemo(() => types.data ?? [], [types.data]);
@@ -313,6 +316,10 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" className="h-11" onClick={() => setStatistikk(true)}>
+              <BarChart3 className="h-4 w-4" aria-hidden="true" />
+              Statistikk
+            </Button>
             <Button variant="outline" className="h-11" onClick={() => setInnkjop(true)}>
               <ShoppingBasket className="h-4 w-4" aria-hidden="true" />
               Innkjøpsforslag
@@ -501,6 +508,7 @@ export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: i
 
       {adjust && <AdjustDialog pipe={adjust.pipe} mode={adjust.mode} onClose={() => setAdjust(null)} />}
       {innkjop ? <InnkjopPanel varer={rows} visKostpris={visKostpris} onClose={() => setInnkjop(false)} /> : null}
+      {statistikk ? <StatistikkPanel varer={rows} visKostpris={visKostpris} onClose={() => setStatistikk(false)} /> : null}
 
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
@@ -752,6 +760,7 @@ type PipeForm = {
   name: string;
   dimension: string;
   sku: string;
+  ean: string;
   qr_slug: string;
   unit: string;
   price: string;
@@ -768,6 +777,7 @@ const formFrom = (pipe: PipeType | null): PipeForm => ({
   name: pipe?.name ?? "",
   dimension: pipe?.dimension ?? "",
   sku: pipe?.sku ?? "",
+  ean: pipe?.ean ?? "",
   qr_slug: pipe?.qr_slug ?? "",
   unit: pipe?.unit ?? "m",
   price: pipe?.price === null || pipe?.price === undefined ? "" : String(pipe.price).replace(".", ","),
@@ -825,6 +835,7 @@ export function PipeDialog({
       const name = form.name.trim();
       const slug = form.qr_slug.trim().toLowerCase();
       const sku = form.sku.trim();
+      const ean = form.ean.replace(/\s/g, "");
 
       if (!name) throw new Error("Varen må ha et navn.");
       if (!slug) throw new Error("QR-koden kan ikke være tom.");
@@ -835,6 +846,9 @@ export function PipeDialog({
 
       const skuTaken = sku && allPipes.find((t) => (t.sku ?? "").toLowerCase() === sku.toLowerCase() && t.id !== pipe?.id);
       if (skuTaken) throw new Error(`Varenummeret «${sku}» er allerede i bruk på ${pipeLabel(skuTaken.name, skuTaken.dimension)}.`);
+      if (ean && !/^\d{8,14}$/.test(ean)) throw new Error("Strekkoden må være 8–14 siffer.");
+      const eanTaken = ean && allPipes.find((t) => t.ean === ean && t.id !== pipe?.id);
+      if (eanTaken) throw new Error(`Strekkoden er allerede i bruk på ${pipeLabel(eanTaken.name, eanTaken.dimension)}.`);
 
       const patch: Partial<PipeTypeRow> & { id?: string } = {
         id: pipe?.id,
@@ -842,6 +856,7 @@ export function PipeDialog({
         name,
         dimension: form.dimension.trim() || null,
         sku: sku || null,
+        ean: ean || null,
         qr_slug: slug,
         unit: form.unit,
         price: parseNum(form.price),
@@ -925,6 +940,19 @@ export function PipeDialog({
           <div className="space-y-1.5">
             <Label htmlFor="vare-sku">Varenummer</Label>
             <Input id="vare-sku" className="h-11" value={form.sku} onChange={(e) => set({ sku: e.target.value })} />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="vare-ean">Strekkode (EAN)</Label>
+            <Input
+              id="vare-ean"
+              className="h-11 tabular"
+              inputMode="numeric"
+              placeholder="Fra emballasjen, valgfritt"
+              value={form.ean}
+              onChange={(e) => set({ ean: e.target.value })}
+            />
+            <p className="text-xs text-muted-foreground">Da kjenner skanneren igjen varen på strekkoden fra produsenten.</p>
           </div>
 
           <div className="space-y-1.5">

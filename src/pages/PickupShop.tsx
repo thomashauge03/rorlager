@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { QK, fetchCatalog, fetchCategories } from "@/lib/orders";
+import { QK, fetchCatalog, fetchCategories, finnSlugForEan } from "@/lib/orders";
 import { useOrderSettings, useSettings } from "@/lib/settings";
 import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { finnVare } from "@/lib/scanner";
@@ -203,10 +203,23 @@ export default function PickupShop() {
 
   const onKode = (kode: string): string | null => {
     const vare = finnVare(kode, tilgjengelege);
-    if (!vare) return `Fant ingen vare med koden ${kode}. Prøv søkefeltet.`;
-    setSkannar(false);
-    setValt(vare);
-    return null;
+    if (vare) {
+      setSkannar(false);
+      setValt(vare);
+      return null;
+    }
+    // Ein strekkode frå produsenten står ikkje i katalogen her – han blir slått
+    // opp i basen. Skannaren lukkar seg, og svaret kjem litt etter.
+    if (/^\d{8,14}$/.test(kode.replace(/\s/g, ""))) {
+      setSkannar(false);
+      void finnSlugForEan(kode).then((slug) => {
+        const funnen = slug ? tilgjengelege.find((t) => t.qr_slug === slug) : undefined;
+        if (funnen) setValt(funnen);
+        else toast.error(`Fant ingen vare med strekkoden ${kode}. Prøv søkefeltet.`);
+      });
+      return null;
+    }
+    return `Fant ingen vare med koden ${kode}. Prøv søkefeltet.`;
   };
 
   const lastar = orderSettings.isPlaceholderData || orderSettings.isLoading;

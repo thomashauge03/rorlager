@@ -31,6 +31,8 @@ export type PipeTypeRow = {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  /** Strekkoden frå produsenten. Berre i tabellen, ikkje i pipe_catalog; manglar før 20261014200000. */
+  ean?: string | null;
 };
 
 export type PipeOrderRow = {
@@ -510,6 +512,7 @@ export type Database = {
       pipe_endre_mengde: { Args: { p_line_id: string; p_quantity: number }; Returns: Json };
       pipe_prosjekt_uttak: { Args: { p_project_id: string }; Returns: Json };
       pipe_forbruk_per_vare: { Args: { p_dagar?: number }; Returns: { pipe_type_id: string; forbruk: number }[] };
+      pipe_finn_ean: { Args: { p_ean: string }; Returns: string | null };
       pipe_retur: { Args: { p_line_id: string; p_quantity: number; p_note?: string | null }; Returns: Json };
     };
     Enums: Record<string, never>;
