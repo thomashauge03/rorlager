@@ -23,7 +23,7 @@ export type PickupOrderLine = Pick<
   PipeOrderLineRow,
   "name" | "dimension" | "sku" | "unit" | "quantity" | "unit_price" | "line_total"
 > & {
-  /** Ein førespurnad frå «Annet». Fråverande frå basar utan 20261013100000. */
+  /** Ein førespurnad frå «Annet». Fråverande frå basar utan 20261013110000. */
   annet?: boolean;
 };
 

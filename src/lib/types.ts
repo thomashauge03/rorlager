@@ -128,7 +128,7 @@ export type SubmittedOrder = {
     quantity: number;
     unit_price: number | null;
     line_total: number | null;
-    /** Fråverande frå basar som ikkje har fått 20261013100000 enno. */
+    /** Fråverande frå basar som ikkje har fått 20261013110000 enno. */
     annet?: boolean;
   }[];
 };

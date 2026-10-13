@@ -4,7 +4,7 @@
 // Ho får ein nøkkel med prefikset «annet-» i staden for ein vare-id, slik at to
 // annet-linjer aldri blir slått saman og aldri blir forveksla med ei vare.
 // Basen sjekkar dei same grensene; desse er her så skjemaet kan seie frå med
-// ein gong. Sjå supabase/migrations/20261013100000_annet_forslag.sql.
+// ein gong. Sjå supabase/migrations/20261013110000_annet_forslag.sql.
 
 export const ANNET_GRENSER = {
   namn: 120,

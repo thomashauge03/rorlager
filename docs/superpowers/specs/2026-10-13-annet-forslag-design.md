@@ -64,7 +64,7 @@ e-postene) viser annet-linjer med «Pris kommer» der prisen mangler, i stedet f
 
 ## Databasen
 
-Ny migrasjon `20261013100000_annet_forslag.sql`.
+Ny migrasjon `20261013110000_annet_forslag.sql`.
 
 **`pipe_order_lines.is_annet boolean not null default false`.** Trengs fordi
 `pipe_type_id = null` også betyr «katalogvaren er slettet» (`on delete set
