@@ -5,8 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-
-const MIN_LENGTH = 8;
+import { MIN_LENGDE, norskPassordFeil, sjekkNyttPassord } from "@/lib/passord";
 
 export function ChangePasswordForm({ email }: { email: string | null }) {
   const { toast } = useToast();
@@ -20,12 +19,9 @@ export function ChangePasswordForm({ email }: { email: string | null }) {
     e.preventDefault();
     setError(null);
 
-    if (next.length < MIN_LENGTH) {
-      setError(`Det nye passordet må ha minst ${MIN_LENGTH} tegn.`);
-      return;
-    }
-    if (next !== repeat) {
-      setError("De to nye passordene er ikke like.");
+    const galt = sjekkNyttPassord(next, repeat);
+    if (galt) {
+      setError(galt);
       return;
     }
     if (next === current) {
@@ -50,7 +46,7 @@ export function ChangePasswordForm({ email }: { email: string | null }) {
     const { error: updateError } = await supabase.auth.updateUser({ password: next });
     setBusy(false);
     if (updateError) {
-      setError("Klarte ikke å endre passordet. Prøv igjen.");
+      setError(norskPassordFeil(updateError));
       return;
     }
 
@@ -90,7 +86,7 @@ export function ChangePasswordForm({ email }: { email: string | null }) {
             setError(null);
           }}
         />
-        <p className="text-xs text-muted-foreground">Minst {MIN_LENGTH} tegn.</p>
+        <p className="text-xs text-muted-foreground">Minst {MIN_LENGDE} tegn.</p>
       </div>
 
       <div className="space-y-1.5">

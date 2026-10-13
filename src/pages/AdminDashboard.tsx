@@ -6,6 +6,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import {
   FileText,
   FolderKanban,
+  KeyRound,
   Loader2,
   LogOut,
   Package,
@@ -209,6 +210,15 @@ export default function AdminDashboard() {
                   <span className="hidden sm:inline">Brukere</span>
                 </Link>
               ) : null}
+
+              <Link
+                to="/konto"
+                aria-label="Bytt passord"
+                className="h-11 px-2 sm:px-3 rounded-md flex items-center gap-2 text-sm text-white hover:bg-white/10 transition-colors"
+              >
+                <KeyRound className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Bytt passord</span>
+              </Link>
 
               <Button
                 variant="ghost"

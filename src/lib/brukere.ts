@@ -22,6 +22,8 @@ export type NyBruker = {
    * annan nettopp gjorde.
    */
   barePassord?: boolean;
+  /** Det mellombelse passordet superadmin har valt. Manglar det, lagar funksjonen eitt. */
+  password?: string;
 };
 
 export type OpprettSvar = {
@@ -49,6 +51,7 @@ export async function opprettBruker(input: NyBruker): Promise<OpprettSvar> {
       note: input.note,
       project_ids: input.projectIds,
       bare_passord: input.barePassord === true,
+      password: input.password || undefined,
     },
   });
 

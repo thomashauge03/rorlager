@@ -193,7 +193,17 @@ const stengtForAnon = async (navn, args = undefined) => {
   nei(navn, `uventet svar: ${error.message}`);
 };
 
-for (const fn of ["hm_er_kontor", "hm_rolle", "hm_har_tilgang", "hm_meg", "hm_mitt_namn"]) await stengtForAnon(fn);
+for (const fn of [
+  "hm_er_kontor",
+  "hm_rolle",
+  "hm_har_tilgang",
+  "hm_meg",
+  "hm_mitt_namn",
+  // 20261013100000: eige passord ved første innlogging
+  "hm_ma_bytte_passord",
+  "hm_passord_byttet",
+])
+  await stengtForAnon(fn);
 
 // Ein kunde utan innlogging må skrive noko i e-postfeltet. Sjekka står før
 // handlekurva i funksjonen, så ei tom kurv prøver regelen utan å lage eit uttak.

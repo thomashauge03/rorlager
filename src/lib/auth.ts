@@ -5,6 +5,7 @@
 // ei utlogging i ei anna fane kan gli forbi.
 
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +72,84 @@ export function useMeg(email: string | null) {
   return useQuery({ queryKey: ["hm_meg", email], queryFn: fetchMeg, enabled: Boolean(email), staleTime: Infinity });
 }
 
+/** Sida ein ny brukar blir halden på til han har valt sitt eige passord. */
+export const NYTT_PASSORD = "/nytt-passord";
+
+/**
+ * Må den innlogga velje sitt eige passord før han kjem vidare?
+ *
+ * Eit feila kall blir false. Før 20261013100000 er køyrd finst ikkje
+ * funksjonen, og då skal ingen bli stengde ute av eit krav basen ikkje kjenner.
+ */
+export async function fetchMåByttePassord(): Promise<boolean> {
+  const { data, error } = await supabase.rpc("hm_ma_bytte_passord");
+  return !error && data === true;
+}
+
+export const måByttePassordKey = (email: string | null) => ["hm_ma_bytte_passord", email] as const;
+
+/**
+ * Sender brukaren dit han faktisk høyrer heime.
+ *
+ * Begge stadene gjekk til /admin uansett rolle. Ein prosjektbrukar hamna då i
+ * adminpanelet, såg ein spinnar, og blei kasta vidare av AdminDashboard. Det
+ * virka – men berre så lenge rollekallet lukkast. Feila det, sat han fast på
+ * ein spinnar i eit panel han ikkje har tilgang til.
+ *
+ * Ein som har fått eit mellombels passord, høyrer heime på NYTT_PASSORD først.
+ */
+export async function heimeside({ sjekkPassord = true } = {}): Promise<string> {
+  /*
+   * .rpc() KASTAR ALDRI.
+   *
+   * Han resolverer med { data: null, error }, så ein try/catch her hadde vore
+   * daud kode – og kvar einaste feil ville gitt data === null, altså «/admin»,
+   * som er nøyaktig det ein prosjektbrukar ikkje skal.
+   *
+   * Og han har inga tidsavgrensing. Utan Promise.race ville ein tenar som ikkje
+   * svarar late brukaren stå på ein spinnar utan veg vidare.
+   */
+  if (sjekkPassord) {
+    const måBytte = await Promise.race([
+      fetchMåByttePassord(),
+      new Promise<false>((r) => setTimeout(() => r(false), 8000)),
+    ]);
+    if (måBytte) return NYTT_PASSORD;
+  }
+
+  const svar = await Promise.race([
+    supabase.rpc("hm_rolle"),
+    new Promise<{ data: null; error: true }>((r) => setTimeout(() => r({ data: null, error: true }), 8000)),
+  ]);
+
+  if (svar.error || svar.data == null) {
+    // Vi VEIT ikkje kven han er. Prosjektsida er den trygge gissinga: kjem ein
+    // kontorbrukar dit, ser han prosjekta sine og kan gå vidare sjølv. Kjem ein
+    // prosjektbrukar til /admin, møter han eit panel han ikkje har tilgang til.
+    return "/prosjekt";
+  }
+  return svar.data === "prosjekt" ? "/prosjekt" : "/admin";
+}
+
+/**
+ * Held ein brukar med mellombels passord på NYTT_PASSORD.
+ *
+ * Ligg i useAuth og ikkje berre i innlogginga: ein som har ei gamal økt, eller
+ * skriv /admin rett i adresselinja, skal ikkje kunne gå rundt kravet.
+ */
+export function useKravOmNyttPassord(email: string | null) {
+  const navigate = useNavigate();
+  const { data: måBytte } = useQuery({
+    queryKey: måByttePassordKey(email),
+    queryFn: fetchMåByttePassord,
+    enabled: !!email,
+    staleTime: Infinity,
+  });
+  useEffect(() => {
+    if (måBytte) navigate(NYTT_PASSORD, { replace: true });
+  }, [måBytte, navigate]);
+}
+
 export type Auth = {
   /** Sant til første sesjonssjekk er ferdig. Hindrar at sida blinkar fram. */
   checking: boolean;
@@ -120,6 +199,8 @@ export function useAuth(onSignedOut?: () => void): Auth {
     // å ha han i lista ville rive ned og setje opp lyttaren i eit kjør.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useKravOmNyttPassord(checking ? null : email);
 
   /*
    * Rolla endrar seg ikkje i ei økt, difor eitt kall som blir liggjande.

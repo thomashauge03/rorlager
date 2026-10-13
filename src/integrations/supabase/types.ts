@@ -146,6 +146,8 @@ export type SystemUserRow = {
   role: string;
   note: string | null;
   created_by: string | null;
+  /** Sant til brukaren har valt sitt eige passord. Manglar før 20261013100000. */
+  ma_bytte_passord?: boolean;
 };
 
 // ── Prosjekt, bestilling og mottakskontroll ──
@@ -385,6 +387,8 @@ export type Database = {
       hm_rolle: { Args: Record<string, never>; Returns: string | null };
       /** Den innlogga, slik kassen viser han. Null utan innlogging. */
       hm_meg: { Args: Record<string, never>; Returns: Json };
+      hm_ma_bytte_passord: { Args: Record<string, never>; Returns: boolean };
+      hm_passord_byttet: { Args: Record<string, never>; Returns: undefined };
       hm_er_prosjektmedlem: { Args: { p_project_id: string }; Returns: boolean };
 
       project_mark_ordered: {

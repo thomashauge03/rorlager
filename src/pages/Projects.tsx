@@ -5,7 +5,7 @@
 
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, ClipboardList, FolderOpen, Loader2, LogOut, MapPin, ShieldAlert } from "lucide-react";
+import { AlertTriangle, ClipboardList, FolderOpen, KeyRound, Loader2, LogOut, MapPin, ShieldAlert } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -93,6 +93,16 @@ export default function Projects() {
         title="Prosjekter"
         subtitle={auth.email ?? undefined}
         right={
+          <>
+          <Button
+            variant="ghost"
+            onClick={() => navigate("/konto")}
+            aria-label="Bytt passord"
+            className="h-11 px-2 sm:px-3 text-white hover:bg-white/10 hover:text-white"
+          >
+            <KeyRound className="h-5 w-5 sm:mr-2" aria-hidden="true" />
+            <span className="hidden sm:inline">Bytt passord</span>
+          </Button>
           <Button
             variant="ghost"
             onClick={logout}
@@ -105,6 +115,7 @@ export default function Projects() {
             <LogOut className="h-5 w-5 sm:mr-2" aria-hidden="true" />
             <span className="hidden sm:inline">Logg ut</span>
           </Button>
+          </>
         }
       />
 

@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { ArrowLeft, Eye, EyeOff, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { checkRateLimit } from "@/lib/rate-limiter";
+import { heimeside } from "@/lib/auth";
 import hmLogo from "@/assets/hm-logo.png";
 
 /** Supabase svarar på engelsk – her set vi om dei feila kunden faktisk kan møte. */
@@ -18,40 +19,6 @@ function norwegianAuthError(message: string): string {
   if (m.includes("rate limit") || m.includes("too many")) return "For mange forsøk. Vent litt og prøv igjen.";
   if (m.includes("failed to fetch") || m.includes("network")) return "Fikk ikke kontakt med serveren. Sjekk nettet.";
   return "Klarte ikke å logge inn. Prøv igjen.";
-}
-
-
-/**
- * Sender brukaren dit han faktisk høyrer heime.
- *
- * Begge stadene gjekk til /admin uansett rolle. Ein prosjektbrukar hamna då i
- * adminpanelet, såg ein spinnar, og blei kasta vidare av AdminDashboard. Det
- * virka – men berre så lenge rollekallet lukkast. Feila det, sat han fast på
- * ein spinnar i eit panel han ikkje har tilgang til.
- */
-async function heimeside(): Promise<string> {
-  /*
-   * .rpc() KASTAR ALDRI.
-   *
-   * Han resolverer med { data: null, error }, så ein try/catch her hadde vore
-   * daud kode – og kvar einaste feil ville gitt data === null, altså «/admin»,
-   * som er nøyaktig det ein prosjektbrukar ikkje skal.
-   *
-   * Og han har inga tidsavgrensing. Utan Promise.race ville ein tenar som ikkje
-   * svarar late brukaren stå på ein spinnar utan veg vidare.
-   */
-  const svar = await Promise.race([
-    supabase.rpc("hm_rolle"),
-    new Promise<{ data: null; error: true }>((r) => setTimeout(() => r({ data: null, error: true }), 8000)),
-  ]);
-
-  if (svar.error || svar.data == null) {
-    // Vi VEIT ikkje kven han er. Prosjektsida er den trygge gissinga: kjem ein
-    // kontorbrukar dit, ser han prosjekta sine og kan gå vidare sjølv. Kjem ein
-    // prosjektbrukar til /admin, møter han eit panel han ikkje har tilgang til.
-    return "/prosjekt";
-  }
-  return svar.data === "prosjekt" ? "/prosjekt" : "/admin";
 }
 
 export default function AdminLogin() {

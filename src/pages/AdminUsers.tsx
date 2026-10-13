@@ -30,9 +30,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Check, Copy, FolderKanban, Info, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, UserPlus, Users } from "lucide-react";
+import { Check, Copy, FolderKanban, Info, KeyRound, Loader2, Pencil, ShieldCheck, Trash2, UserPlus, Users, Wand2 } from "lucide-react";
 import { shortDate } from "@/lib/format";
 import { opprettBruker, type OpprettSvar } from "@/lib/brukere";
+import { useKravOmNyttPassord } from "@/lib/auth";
+import { MIN_LENGDE, lagPassord, sjekkPassord } from "@/lib/passord";
 import { fetchMemberProjects, fetchProjects, setMemberProjects } from "@/lib/projects";
 import type { ProjectRow } from "@/lib/types";
 
@@ -52,9 +54,17 @@ const roleLabel = (role: string) => ROLES.find((r) => r.value === role)?.label ?
 /** Rolla som ikkje ser admindelen. Alt anna er kontor. */
 const PROSJEKT = "prosjekt";
 
-type Draft = { email: string; full_name: string; role: string; note: string; projectIds: string[] };
+type Draft = {
+  email: string;
+  full_name: string;
+  role: string;
+  note: string;
+  projectIds: string[];
+  /** Det mellombelse passordet. Berre i opprettingsskjemaet; redigering rører det ikkje. */
+  password: string;
+};
 
-const EMPTY_DRAFT: Draft = { email: "", full_name: "", role: "admin", note: "", projectIds: [] };
+const EMPTY_DRAFT: Draft = { email: "", full_name: "", role: "admin", note: "", projectIds: [], password: "" };
 
 const isEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 
@@ -67,6 +77,8 @@ export default function AdminUsers() {
   /** Oppslaget kom aldri fram. Ikkje det same som eit nei – sjå render under. */
   const [sjekkFeila, setSjekkFeila] = useState(false);
   const [myEmail, setMyEmail] = useState<string | null>(null);
+  // Sida brukar ikkje useAuth, så kravet må hit for seg
+  useKravOmNyttPassord(myEmail);
   const [registryReady, setRegistryReady] = useState(true);
   // Meldinga frå Supabase er ofte det einaste som skil ein manglande migrasjon
   // frå nettverk, utgått økt eller manglande tilgang
@@ -84,6 +96,7 @@ export default function AdminUsers() {
   /** Passordet blir vist éin gong. Det finst ingen stad å hente det frå etterpå. */
   const [nyttPassord, setNyttPassord] = useState<(OpprettSvar & { email: string }) | null>(null);
   const [skalNullstille, setSkalNullstille] = useState<SystemUserRow | null>(null);
+  const [nullstillPassord, setNullstillPassord] = useState("");
   const [prosjekt, setProsjekt] = useState<ProjectRow[]>([]);
 
   /*
@@ -229,6 +242,11 @@ export default function AdminUsers() {
       });
       return;
     }
+    const passordFeil = sjekkPassord(draft.password);
+    if (passordFeil) {
+      toast({ title: "Velg et annet passord", description: passordFeil, variant: "destructive" });
+      return;
+    }
 
     setSaving(true);
     try {
@@ -238,6 +256,7 @@ export default function AdminUsers() {
         role: draft.role,
         note: draft.note.trim() || null,
         projectIds: draft.projectIds,
+        password: draft.password,
       });
       setNyttPassord({ email, ...svar });
       setDraft(EMPTY_DRAFT);
@@ -262,6 +281,11 @@ export default function AdminUsers() {
    * rolleendring nokon annan gjorde for fem minutt sidan.
    */
   const nyttPassordTil = async (user: SystemUserRow) => {
+    const passordFeil = sjekkPassord(nullstillPassord);
+    if (passordFeil) {
+      toast({ title: "Velg et annet passord", description: passordFeil, variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
       const svar = await opprettBruker({
@@ -271,6 +295,7 @@ export default function AdminUsers() {
         note: user.note,
         projectIds: [],
         barePassord: true,
+        password: nullstillPassord,
       });
       setNyttPassord({ email: user.email, ...svar });
       // Lista kan ha endra seg medan dialogen sto open
@@ -296,6 +321,7 @@ export default function AdminUsers() {
       role: user.role,
       note: user.note ?? "",
       projectIds: [],
+      password: "",
     });
   };
 
@@ -445,8 +471,8 @@ export default function AdminUsers() {
           <p className="text-sm text-muted-foreground">
             «Opprett med midlertidig passord» lager{" "}
             <span className="font-medium text-foreground">både påloggingen og tilgangen</span> — du trenger ikke innom
-            Supabase. Passordet vises én gang; personen logger inn med det og bytter det selv nederst på denne siden.
-            Rollen avgjør hva han ser, og avkryssingene hvilke prosjekter.
+            Supabase. Du velger det midlertidige passordet selv. Personen logger inn med det og må velge sitt eget før
+            han kommer videre. Rollen avgjør hva han ser, og avkryssingene hvilke prosjekter.
           </p>
         </div>
 
@@ -526,7 +552,17 @@ export default function AdminUsers() {
               onPrøvIgjen={hentProsjekt}
             />
 
-            <Button className="h-11 w-full sm:w-auto" onClick={addUser} disabled={saving || !draft.email.trim()}>
+            <MidlertidigPassordFelt
+              id="new-user-password"
+              value={draft.password}
+              onChange={(password) => setDraft((d) => ({ ...d, password }))}
+            />
+
+            <Button
+              className="h-11 w-full sm:w-auto"
+              onClick={addUser}
+              disabled={saving || !draft.email.trim() || !draft.password}
+            >
               {saving ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -576,7 +612,10 @@ export default function AdminUsers() {
                         variant="ghost"
                         className="h-11 w-11"
                         aria-label={`Nytt midlertidig passord til ${u.email}`}
-                        onClick={() => setSkalNullstille(u)}
+                        onClick={() => {
+                          setNullstillPassord("");
+                          setSkalNullstille(u);
+                        }}
                       >
                         <KeyRound className="h-4 w-4" aria-hidden="true" />
                       </Button>
@@ -736,26 +775,73 @@ export default function AdminUsers() {
             <AlertDialogTitle>Nytt midlertidig passord?</AlertDialogTitle>
             <AlertDialogDescription>
               Det gamle passordet til {skalNullstille?.email} slutter å virke med det samme, og pågående økter blir
-              stående til de utløper. Du får det nye vist én gang.
+              stående til de utløper. Ved neste innlogging må personen velge sitt eget.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <MidlertidigPassordFelt id="nullstill-passord" value={nullstillPassord} onChange={setNullstillPassord} />
           <AlertDialogFooter>
             <AlertDialogCancel className="h-11">Avbryt</AlertDialogCancel>
             <AlertDialogAction
               className="h-11"
-              disabled={saving}
+              disabled={saving || !nullstillPassord}
               onClick={(e) => {
                 e.preventDefault();
                 if (skalNullstille) nyttPassordTil(skalNullstille);
               }}
             >
-              {saving ? "Lager …" : "Lag nytt passord"}
+              {saving ? "Setter …" : "Sett nytt passord"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {nyttPassord ? <PassordDialog data={nyttPassord} onClose={() => setNyttPassord(null)} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Det mellombelse passordet superadmin vel sjølv.
+ *
+ * Klartekst og ikkje type="password": han skal gi det vidare, ofte munnleg, og
+ * eit passord han ikkje ser, er eit han lett skriv feil. «Lag et for meg» fyller
+ * inn eitt som er lett å lese opp – utan I, O, 0 og 1.
+ */
+function MidlertidigPassordFelt({
+  id,
+  value,
+  onChange,
+}: {
+  id: string;
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const feil = value ? sjekkPassord(value) : null;
+  return (
+    <div className="space-y-1.5">
+      <Label htmlFor={id}>Midlertidig passord</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          className="h-11 font-mono"
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          placeholder={`Minst ${MIN_LENGDE} tegn`}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          aria-invalid={!!feil}
+          aria-describedby={`${id}-hjelp`}
+        />
+        <Button type="button" variant="outline" className="h-11 shrink-0" onClick={() => onChange(lagPassord())}>
+          <Wand2 className="mr-2 h-4 w-4" aria-hidden="true" />
+          Lag et for meg
+        </Button>
+      </div>
+      <p id={`${id}-hjelp`} className={`text-xs ${feil ? "text-destructive" : "text-muted-foreground"}`}>
+        {feil ?? "Personen må bytte det ved første innlogging."}
+      </p>
     </div>
   );
 }
@@ -912,7 +998,7 @@ function PassordDialog({ data, onClose }: { data: OpprettSvar & { email: string 
         <DialogHeader>
           <DialogTitle>{data.existed ? "Nytt passord satt" : "Brukeren er opprettet"}</DialogTitle>
           <DialogDescription>
-            {data.email} kan logge inn med dette nå, og bytte det selv under «Bytt passord».
+            {data.email} kan logge inn med dette nå, og må da velge sitt eget passord før han kommer videre.
           </DialogDescription>
         </DialogHeader>
 
@@ -937,7 +1023,7 @@ function PassordDialog({ data, onClose }: { data: OpprettSvar & { email: string 
         </Button>
 
         <p className="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning-ink dark:text-warning">
-          Skriv det ned nå. Passordet lagres ingen steder, og denne ruten kan ikke åpnes på nytt. Mister du det, lager
+          Gi det videre nå. Passordet lagres ingen steder, og denne ruten kan ikke åpnes på nytt. Mister du det, lager
           du bare et nytt.
         </p>
 

@@ -12,6 +12,8 @@ import Receipt from "./pages/Receipt";
 import AdminLogin from "./pages/AdminLogin";
 import AdminDashboard from "./pages/AdminDashboard";
 import AdminUsers from "./pages/AdminUsers";
+import NyttPassord from "./pages/NyttPassord";
+import Konto from "./pages/Konto";
 import Projects from "./pages/Projects";
 import ProjectPage from "./pages/ProjectPage";
 import ProjectRequest from "./pages/ProjectRequest";
@@ -60,6 +62,8 @@ const App = () => (
             <Route path="/bestill/kasse" element={<PickupCheckout />} />
             <Route path="/bestilling/:id" element={<PickupOrder />} />
             <Route path="/login" element={<AdminLogin />} />
+            <Route path="/nytt-passord" element={<NyttPassord />} />
+            <Route path="/konto" element={<Konto />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/brukere" element={<AdminUsers />} />
             {/* Byggjeplassen: melde behov og kvittere for mottak */}

@@ -137,9 +137,28 @@ Funksjonen sjekker selv at den som kaller er superadmin, og gjør det med
 **kallerens egen økt**, ikke med `service_role`. En sjekk gjort på serveren er
 den eneste som teller; klienten kan lyve om hvem den er.
 
-Passordet vises én gang og lagres ingen steder. Personen logger inn med det og
-bytter det selv under «Bytt passord» på `/admin/brukere`. Mister du det, lager du
-et nytt fra nøkkel-ikonet i brukerlista.
+**Superadmin velger det midlertidige passordet selv**, både ved oppretting og fra
+nøkkelikonet i brukerlista. «Lag et for meg» fyller inn et som er lett å lese
+opp. Passordet vises én gang til og lagres ingen steder.
+
+**Ved første innlogging må personen velge sitt eget.** Funksjonen setter
+`system_users.ma_bytte_passord`, og så lenge den står, sender appen personen til
+`/nytt-passord` uansett hvor han prøver å gå. Der skriver han det nye passordet
+to ganger. Supabase nekter det samme som det midlertidige. Merket fjernes av
+`hm_passord_byttet()`, som bare rører den innloggedes egen rad.
+
+Kravet sitter i appen, ikke i Supabase-innloggingen. En som kaller
+`hm_passord_byttet()` direkte, kan fjerne sitt eget merke uten å bytte — men står
+da igjen med et passord superadmin kjenner. Det skader ingen andre.
+
+**Hver ansatt kan bytte passordet selv** på `/konto` («Bytt passord» øverst i
+adminpanelet og i prosjektlista). Der må det nåværende passordet skrives først.
+
+**Etter endringen 13. oktober 2026 må funksjonen rulles ut på nytt** (samme fire
+steg som over), og `supabase-setup.sql` må kjøres. Rekkefølgen spiller liten
+rolle: en gammel funksjon lager passordet selv og setter ikke merket, og en ny
+funksjon mot en gammel base oppretter brukeren og sier fra om at merket ikke
+kunne settes.
 
 ## Sider
 
@@ -155,6 +174,8 @@ et nytt fra nøkkel-ikonet i brukerlista.
 | `/bestilling/:id` | Status og PDF for én bestilling – samme side som e-posten lenker til |
 | `/vilkar` | Kjøpsvilkår, angrerett og angreskjema |
 | `/login` | Innlogging |
+| `/nytt-passord` | Første innlogging: velg ditt eget passord |
+| `/konto` | Bytt passord, for alle ansatte |
 | `/admin` | Bestillinger, Å bestille, Prosjekt, Lager, QR-koder, Faktura, Innstillinger |
 | `/admin` → **Å bestille** | Fire utsnitt: Å bestille, Underveis, Mottak, Avvik |
 | `/admin/brukere` | Brukerregister (kun superadmin) |

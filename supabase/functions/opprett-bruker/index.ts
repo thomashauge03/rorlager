@@ -1,4 +1,5 @@
 // Oppretter en bruker med et midlertidig passord, og setter ham på prosjekter.
+// Passordet velger superadmin selv; personen må bytte det ved første innlogging.
 //
 // HVORFOR DETTE MÅ LIGGE PÅ SERVEREN
 //
@@ -96,6 +97,8 @@ Deno.serve(async (req) => {
     project_ids?: string[];
     /** Sant når bare passordet skal byttes. Da røres verken register eller prosjekter. */
     bare_passord?: boolean;
+    /** Det midlertidige passordet superadmin har valgt. Mangler det, lager vi et. */
+    password?: string;
   };
   try {
     kropp = await req.json();
@@ -125,8 +128,24 @@ Deno.serve(async (req) => {
   const navn = (kropp.full_name ?? "").trim().slice(0, 200) || null;
   const notat = (kropp.note ?? "").trim().slice(0, 500) || null;
 
+  /*
+   * SUPERADMIN VELGER PASSORDET SELV.
+   *
+   * Han skal gi det videre, ofte muntlig, og et han har valgt selv er lettere å
+   * si enn tre klumper tilfeldige tegn. Det skal uansett byttes ved første
+   * innlogging. En eldre klient sender ingenting, og da lager vi et som før.
+   *
+   * 72 BYTE, ikke tegn: bcrypt kutter resten uten å si fra, så et lengre passord
+   * ville virket med bare begynnelsen. Æ, ø og å er to byte hver.
+   */
+  const ønsket = typeof kropp.password === "string" ? kropp.password : "";
+  if (ønsket) {
+    if (ønsket.length < 8) return svar({ error: "Passordet må ha minst 8 tegn" }, 400);
+    if (new TextEncoder().encode(ønsket).length > 72) return svar({ error: "Passordet er for langt" }, 400);
+  }
+
   const admin = createClient(url, service, { auth: { persistSession: false } });
-  const passord = lagPassord();
+  const passord = ønsket || lagPassord();
 
   // ── 3. Innloggingen ──
   //
@@ -279,6 +298,28 @@ Deno.serve(async (req) => {
           "Innloggingen ble laget, men brukeren kom ikke inn i registeret. Legg den inn på nytt her, ellers får personen ikke tilgang.",
       });
     }
+  }
+
+  // ── 4b. Eget passord ved første innlogging ──
+  //
+  // Både ved oppretting og ved nytt passord: superadmin kjenner det han nettopp
+  // satte, så personen skal velge sitt eget før han kommer videre.
+  //
+  // Egen oppdatering, ikke en del av upserten over. Er ikke migrasjonen
+  // 20261013100000 kjørt, finnes ikke kolonnen — og da skal brukeren likevel
+  // bli opprettet, bare uten kravet, og superadmin skal få vite det.
+  const { error: merkeFeil } = await admin
+    .from("system_users")
+    .update({ ma_bytte_passord: true })
+    .eq("email", epost);
+  if (merkeFeil) {
+    console.error("ma_bytte_passord feilet", { epost, av: kallerEpost, feil: merkeFeil.message });
+    return svar({
+      password: passord,
+      existed: fantesFra,
+      warning:
+        "Passordet er satt, men personen blir ikke bedt om å velge sitt eget ved første innlogging. Er supabase-setup.sql kjørt på nytt?",
+    });
   }
 
   // ── 5. Prosjektene ──
