@@ -25,7 +25,9 @@ import { dateTime, kr, longDate, num, pipeLabel, qtyLabel, shortDate } from "@/l
 import { summer } from "@/lib/mva";
 import { useSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
-import type { OrderWithLines } from "@/lib/types";
+import type { OrderWithLines, PipeOrderLineRow } from "@/lib/types";
+import { AnnetMerke } from "@/components/AnnetDialog";
+import { PriceLineDialog } from "@/components/admin/PriceLineDialog";
 
 type Handling = { type: "godkjenn" | "avvis"; order: OrderWithLines } | null;
 
@@ -75,6 +77,13 @@ function useLagerKart() {
 
 const forLite = (o: OrderWithLines, lager: Map<string, number>) =>
   o.lines.filter((l) => l.pipe_type_id && lager.has(l.pipe_type_id) && l.quantity > (lager.get(l.pipe_type_id) ?? 0));
+
+/**
+ * Annet-linjer som manglar pris. Basen nektar godkjenning så lenge det finst
+ * slike: e-posten om at bestillinga er klar, er der kunden får prisen.
+ */
+const utanPris = (o: OrderWithLines) => o.lines.filter((l) => l.is_annet && l.unit_price === null);
+const settPrisForst = (n: number) => `Sett pris på ${n} annet-${n === 1 ? "linje" : "linjer"} først`;
 
 function Rad({ label, value }: { label: string; value: ReactNode }) {
   if (value === null || value === undefined || value === "") return null;
@@ -238,8 +247,22 @@ export function PickupQueue({ onOpen }: { onOpen: (id: string) => void }) {
                   </span>
                 ) : null}
               </button>
-              <div className="flex gap-2">
-                <Button size="sm" className="h-10" onClick={() => setHandling({ type: "godkjenn", order: o })}>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {utanPris(o).length > 0 ? (
+                  <button
+                    type="button"
+                    onClick={() => onOpen(o.id)}
+                    className="text-xs font-medium text-warning-ink underline-offset-2 hover:underline"
+                  >
+                    {settPrisForst(utanPris(o).length)}
+                  </button>
+                ) : null}
+                <Button
+                  size="sm"
+                  className="h-10"
+                  disabled={utanPris(o).length > 0}
+                  onClick={() => setHandling({ type: "godkjenn", order: o })}
+                >
                   <Check className="mr-1 h-4 w-4" aria-hidden="true" />
                   Godkjenn
                 </Button>
@@ -270,6 +293,7 @@ export function PickupDetails({ order }: { order: OrderWithLines }) {
   const logg = useQuery({ queryKey: QK.orderEmails(order.id), queryFn: () => fetchOrderEmails(order.id) });
   const [handling, setHandling] = useState<Handling>(null);
   const [busy, setBusy] = useState(false);
+  const [prisFor, setPrisFor] = useState<PipeOrderLineRow | null>(null);
 
   const settStatus = async (neste: "levert" | "behandlet") => {
     setBusy(true);
@@ -327,6 +351,27 @@ export function PickupDetails({ order }: { order: OrderWithLines }) {
       {order.status === "ny" ? (
         <ul className="space-y-1 text-sm">
           {order.lines.map((l) => {
+            if (l.is_annet) {
+              return (
+                <li key={l.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                  <span className="min-w-0 break-words">
+                    <AnnetMerke />
+                    {pipeLabel(l.name, l.dimension)}
+                  </span>
+                  <span className="tabular flex shrink-0 items-center gap-2">
+                    {qtyLabel(l.quantity, l.unit)} ·{" "}
+                    {l.unit_price === null ? (
+                      <span className="font-medium text-warning-ink">uten pris</span>
+                    ) : (
+                      `${kr(l.unit_price)} kr/${l.unit}`
+                    )}
+                    <Button size="sm" variant="outline" className="h-8 px-2" onClick={() => setPrisFor(l)}>
+                      {l.unit_price === null ? "Sett pris" : "Endre"}
+                    </Button>
+                  </span>
+                </li>
+              );
+            }
             const s = l.pipe_type_id ? lager.get(l.pipe_type_id) : undefined;
             const kort = s !== undefined && l.quantity > s;
             return (
@@ -341,10 +386,18 @@ export function PickupDetails({ order }: { order: OrderWithLines }) {
         </ul>
       ) : null}
 
+      {order.status === "ny" && utanPris(order).length > 0 ? (
+        <p className="text-sm font-medium text-warning-ink">{settPrisForst(utanPris(order).length)}.</p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
         {order.status === "ny" ? (
           <>
-            <Button className="h-11" onClick={() => setHandling({ type: "godkjenn", order })} disabled={busy}>
+            <Button
+              className="h-11"
+              onClick={() => setHandling({ type: "godkjenn", order })}
+              disabled={busy || utanPris(order).length > 0}
+            >
               <Check className="mr-2 h-4 w-4" aria-hidden="true" />
               Godkjenn
             </Button>
@@ -398,6 +451,7 @@ export function PickupDetails({ order }: { order: OrderWithLines }) {
         handling={handling}
         onClose={() => setHandling(null)}
       />
+      <PriceLineDialog line={prisFor} onClose={() => setPrisFor(null)} />
     </div>
   );
 }

@@ -19,6 +19,8 @@ import { useSettings } from "@/lib/settings";
 import { useNesteFelt } from "@/lib/neste-felt";
 import { checkRateLimit } from "@/lib/rate-limiter";
 import { kr, num, pipeLabel } from "@/lib/format";
+import { ANNET_TEKST } from "@/lib/annet";
+import { AnnetMerke } from "@/components/AnnetDialog";
 
 function Field({
   label,
@@ -136,7 +138,8 @@ export default function Checkout() {
 
     setSending(true);
     try {
-      const lines = cart.lines.map((l) => ({ pipe_type_id: l.pipe_type_id, quantity: l.quantity }));
+      // Heile linja, ikkje berre id og mengd: ei annet-linje har namnet sitt med
+      const lines = cart.lines;
       const order = await submitOrder(
         ansatt
           ? {
@@ -234,6 +237,7 @@ export default function Checkout() {
             {cart.lines.map((line) => (
               <li key={line.pipe_type_id} className="flex items-baseline justify-between gap-3 py-2">
                 <span className="min-w-0 text-sm text-foreground break-words">
+                  {line.annet ? <AnnetMerke /> : null}
                   {pipeLabel(line.name, line.dimension)}
                 </span>
                 <span className="tabular shrink-0 text-sm font-semibold text-foreground">
@@ -243,9 +247,16 @@ export default function Checkout() {
             ))}
           </ul>
           {showPrices && !cart.hasUnpriced ? (
-            <div className="mt-3 flex items-center justify-between border-t border-border pt-3">
-              <span className="text-sm font-semibold text-foreground">Sum</span>
-              <span className="tabular text-lg font-bold text-foreground">{kr(cart.total)} kr</span>
+            <div className="mt-3 border-t border-border pt-3">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold text-foreground">Sum</span>
+                <span className="tabular text-lg font-bold text-foreground">{kr(cart.total)} kr</span>
+              </div>
+              {cart.annetCount > 0 ? (
+                <p className="tabular text-right text-xs text-muted-foreground">
+                  + {cart.annetCount} uten pris – {ANNET_TEKST.uttak.toLowerCase()}
+                </p>
+              ) : null}
             </div>
           ) : null}
           <Link to="/kurv" className="mt-3 inline-block text-sm font-medium text-primary hover:underline">

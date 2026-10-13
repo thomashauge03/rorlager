@@ -108,6 +108,7 @@ const stengde = [
   ["pipe_invoices", null],
   ["pipe_stock_log", null],
   ["pipe_order_emails", "hvem som har fått e-post, og adressene"],
+  ["pipe_suggestions", "forslagene fra «Annet», med navn"],
   ["projects", null],
   ["project_members", null],
   ["project_orders", null],
@@ -194,6 +195,16 @@ const stengtForAnon = async (navn, args = undefined) => {
 };
 
 for (const fn of ["hm_er_kontor", "hm_rolle", "hm_har_tilgang", "hm_meg", "hm_mitt_namn"]) await stengtForAnon(fn);
+
+// Prisen på ei linje er kontoret si. Annet-hjelparen skriv linjer på kva ordre
+// som helst, og skal berre nåast frå innsendingsfunksjonane.
+await stengtForAnon("pipe_price_line", { p_line_id: "00000000-0000-0000-0000-000000000000", p_unit_price: 1 });
+await stengtForAnon("pipe_annet_linje", {
+  p_order_id: "00000000-0000-0000-0000-000000000000",
+  p_line: {},
+  p_sort: 1,
+  p_submitted_by: "Sjekk",
+});
 
 // Ein kunde utan innlogging må skrive noko i e-postfeltet. Sjekka står før
 // handlekurva i funksjonen, så ei tom kurv prøver regelen utan å lage eit uttak.

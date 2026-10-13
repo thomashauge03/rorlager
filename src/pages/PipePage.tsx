@@ -12,7 +12,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { QK, fetchPipeTypeBySlug } from "@/lib/orders";
 import { useSettings } from "@/lib/settings";
 import { stockStatus } from "@/lib/stock";
-import { cartLineFromType, useCart } from "@/lib/cart";
+import { cartLineFromAnnet, cartLineFromType, useCart } from "@/lib/cart";
+import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
 
 /** Ei rad med etikett og verdi. Tomme felt blir hoppa over – "–" seier ingenting. */
@@ -33,6 +34,7 @@ export default function PipePage() {
   const cart = useCart();
 
   const [quantity, setQuantity] = useState<number | null>(null);
+  const [annetOpen, setAnnetOpen] = useState(false);
   const mengdeSpørsmålId = useId();
 
   // Nøkkelen ligg under QK.types med vilje: då treffer invalideringane etter
@@ -136,8 +138,22 @@ export default function PipePage() {
                 Søk i rørlista
               </Link>
             </Button>
+            {/* Ein etikett utan vare er nettopp det kontoret treng å få vite om */}
+            <AnnetKnapp onClick={() => setAnnetOpen(true)} />
           </div>
         </main>
+        <AnnetDialog
+          open={annetOpen}
+          onOpenChange={setAnnetOpen}
+          slag="uttak"
+          forslag={{ note: `Ukjent QR-kode: ${slug}` }}
+          onAdd={(s) => {
+            const linje = cartLineFromAnnet(s);
+            cart.add(linje);
+            toast.success(`${qtyLabel(linje.quantity, linje.unit)} ${pipeLabel(linje.name, linje.dimension)} lagt i kurven`);
+            navigate("/");
+          }}
+        />
         <CartBar />
       </div>
     );

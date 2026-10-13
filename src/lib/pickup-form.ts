@@ -1,6 +1,7 @@
 // Skjemaet i kassen, som reine funksjonar. Same reglar og same ordlyd som
 // pipe_submit_pickup_order: skjemaet seier frå med ein gong, basen avgjer.
 
+import { tilInnsendingslinje } from "@/lib/annet";
 import { gyldigEpost } from "@/lib/epostadresse";
 import { gyldigOrgnr, vaskOrgnr } from "@/lib/orgnr";
 import type { CustomerType, PickupOrderInput } from "@/lib/types";
@@ -104,7 +105,7 @@ export function sjekkSkjema(s: KasseSkjema, o: { kreverTelefon: boolean; iDag: s
 /** Det som blir sendt til basen. Felt som ikkje høyrer til kundetypen, blir null. */
 export function tilInnsending(
   s: KasseSkjema,
-  linjer: { pipe_type_id: string; quantity: number }[],
+  linjer: Parameters<typeof tilInnsendingslinje>[0][],
   iDag: string,
 ): PickupOrderInput {
   const bedrift = s.kundetype === "bedrift";
@@ -119,6 +120,6 @@ export function tilInnsending(
     pickup_now: s.henterNaa === true,
     pickup_date: s.henterNaa ? iDag : s.hentedag || null,
     comment: s.kommentar.trim() || null,
-    lines: linjer.map((l) => ({ pipe_type_id: l.pipe_type_id, quantity: l.quantity })),
+    lines: linjer.map(tilInnsendingslinje),
   };
 }

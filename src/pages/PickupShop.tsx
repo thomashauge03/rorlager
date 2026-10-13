@@ -21,7 +21,9 @@ import { QK, fetchCatalog, fetchCategories } from "@/lib/orders";
 import { useOrderSettings, useSettings } from "@/lib/settings";
 import { filterAndSortPipes, matchesSearch, stockStatus } from "@/lib/stock";
 import { finnVare } from "@/lib/scanner";
-import { pickupLineFromItem, usePickupCart } from "@/lib/pickup-cart";
+import { pickupLineFromAnnet, pickupLineFromItem, usePickupCart } from "@/lib/pickup-cart";
+import { ANNET_GRENSER, ANNET_TEKST, talAnnet } from "@/lib/annet";
+import { AnnetDialog, AnnetKnapp } from "@/components/AnnetDialog";
 import { linjesum, prisInklMva, summer } from "@/lib/mva";
 import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -180,6 +182,8 @@ export default function PickupShop() {
   const [kategori, setKategori] = useState<string | null>(null);
   const [skannar, setSkannar] = useState(false);
   const [valt, setValt] = useState<CatalogItem | null>(null);
+  const [annetOpen, setAnnetOpen] = useState(false);
+  const cart = usePickupCart();
 
   const katalog = useQuery({ queryKey: QK.catalog, queryFn: fetchCatalog });
   const kategoriar = useQuery({ queryKey: QK.categories, queryFn: fetchCategories });
@@ -337,15 +341,38 @@ export default function PickupShop() {
                   <PackageSearch className="h-8 w-8 text-muted-foreground" aria-hidden="true" />
                   <p className="font-semibold text-foreground">Ingen rør passer søket</p>
                   <p className="text-sm text-muted-foreground">Prøv et annet ord, eller skann koden.</p>
+                  <AnnetKnapp className="mt-3" onClick={() => setAnnetOpen(true)} />
                 </div>
               ) : (
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  {synlege.map((vare) => (
-                    <VareKort key={vare.id} vare={vare} vat={vat} onVelg={setValt} />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                    {synlege.map((vare) => (
+                      <VareKort key={vare.id} vare={vare} vat={vat} onVelg={setValt} />
+                    ))}
+                  </div>
+                  <AnnetKnapp className="mt-4" onClick={() => setAnnetOpen(true)} />
+                </>
               )}
             </div>
+
+            <AnnetDialog
+              open={annetOpen}
+              onOpenChange={setAnnetOpen}
+              slag="bestilling"
+              forslag={synlege.length === 0 ? { name: sok.trim() } : undefined}
+              onAdd={(s) => {
+                if (talAnnet(cart.lines) >= ANNET_GRENSER.linjer) {
+                  toast.error(`Høyst ${ANNET_GRENSER.linjer} forespørsler per bestilling`);
+                  return;
+                }
+                const linje = pickupLineFromAnnet(s);
+                cart.add(linje);
+                setAnnetOpen(false);
+                toast.success(`${pipeLabel(linje.name, linje.dimension)} lagt i bestillingen`, {
+                  description: ANNET_TEKST.bestilling,
+                });
+              }}
+            />
 
             <p className="mt-8 text-center text-sm text-muted-foreground">
               Står du ved hylla og tar ut selv?{" "}
