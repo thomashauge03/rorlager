@@ -4,13 +4,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const kall = vi.hoisted(() => ({ byttProsjekt: vi.fn(), endreAnnet: vi.fn(), byttVare: vi.fn() }));
+const kall = vi.hoisted(() => ({ byttProsjekt: vi.fn(), endreAnnet: vi.fn(), byttVare: vi.fn(), endreMengde: vi.fn() }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/suggestions", () => ({
   byttProsjekt: (...a: unknown[]) => kall.byttProsjekt(...a),
   endreAnnet: (...a: unknown[]) => kall.endreAnnet(...a),
   byttVare: (...a: unknown[]) => kall.byttVare(...a),
+  endreMengde: (...a: unknown[]) => kall.endreMengde(...a),
 }));
 vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
@@ -25,7 +26,7 @@ vi.mock("@/lib/orders", async (importOriginal) => ({
   ],
 }));
 
-import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog } from "@/components/admin/RettUttak";
+import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog } from "@/components/admin/RettUttak";
 
 const vis = (el: JSX.Element) =>
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{el}</QueryClientProvider>);
@@ -90,5 +91,20 @@ describe("bytt vare", () => {
     vis(<ByttVareDialog line={pvc} lagerTrekt={false} onClose={() => {}} />);
     fireEvent.click(await screen.findByRole("button", { name: /PE-rør 180 mm/ }));
     expect(screen.getByText(/trekkes når bestillingen godkjennes/)).toBeInTheDocument();
+  });
+});
+
+describe("endre mengde", () => {
+  it("60 m skulle vore 6: seier kor mykje som går tilbake, og sender den nye mengda", async () => {
+    vis(<EndreMengdeDialog line={{ ...pvc, quantity: 60 }} lagerTrekt onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Riktig mengde/), { target: { value: "6" } });
+    expect(screen.getByText(/54 m legges tilbake på lageret/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Lagre mengde" }));
+    await waitFor(() => expect(kall.endreMengde).toHaveBeenCalledWith("l2", 6));
+  });
+
+  it("same mengde kan ikkje lagrast", () => {
+    vis(<EndreMengdeDialog line={pvc} lagerTrekt onClose={() => {}} />);
+    expect(screen.getByRole("button", { name: "Lagre mengde" })).toBeDisabled();
   });
 });

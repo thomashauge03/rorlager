@@ -133,3 +133,20 @@ describe("fakturadetaljar", () => {
     ]);
   });
 });
+
+describe("gruppering etter revisjonen 14.10", () => {
+  it("to frå same firma i kiosken blir éin kunde – og møter bestillinga frå nettet", () => {
+    const a = fakturakunde(uttak({ customer_name: "Per", company: "Firma AS" }));
+    const b = fakturakunde(uttak({ customer_name: "Pål", company: "firma  as" }));
+    expect(a.key).toBe(b.key);
+    expect(a.key).toBe(fakturakunde(bedrift()).key);
+    expect(a.namn).toBe("Firma AS");
+    expect(a.detaljar).toEqual(["Hentet av Per"]);
+  });
+
+  it("ein tilsett med prosjekt frå lista blir samla på prosjektet, ikkje teksten", () => {
+    const før = fakturakunde(uttak({ created_by: "u1", project: "9000123 · Storgata 4", project_id: "p1" }));
+    const etterNyttNamn = fakturakunde(uttak({ created_by: "u2", project: "9000123 · Storgata 4 B", project_id: "p1" }));
+    expect(før.key).toBe(etterNyttNamn.key);
+  });
+});

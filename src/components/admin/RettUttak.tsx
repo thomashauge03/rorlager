@@ -15,10 +15,10 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ProsjektVelger, type ProsjektSvar } from "@/components/ProsjektVelger";
 import { useToast } from "@/hooks/use-toast";
-import { kr, num, pipeLabel, qtyLabel } from "@/lib/format";
+import { kr, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
 import { QK, fetchPipeTypes, fetchProsjektliste } from "@/lib/orders";
 import { matchesSearch } from "@/lib/stock";
-import { byttProsjekt, byttVare, endreAnnet } from "@/lib/suggestions";
+import { byttProsjekt, byttVare, endreAnnet, endreMengde } from "@/lib/suggestions";
 import type { PipeType } from "@/lib/types";
 
 /** Det dialogane treng å vite om ei linje. */
@@ -205,6 +205,100 @@ export function EndreAnnetDialog({
               <Button type="submit" disabled={!namn.trim() || lagre.isPending}>
                 {lagre.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
                 Lagre navn
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Mengda                                                             */
+/* ------------------------------------------------------------------ */
+
+export function EndreMengdeDialog({
+  line,
+  lagerTrekt,
+  onClose,
+}: {
+  line: RettLinje | null;
+  lagerTrekt: boolean;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const etter = useEtterRetting();
+  const [tekst, setTekst] = useState("");
+
+  useEffect(() => {
+    setTekst(line ? String(line.quantity).replace(".", ",") : "");
+  }, [line]);
+
+  const ny = parseNum(tekst);
+  const gyldig = ny !== null && ny > 0;
+  const diff = line && gyldig ? Math.round((ny - line.quantity) * 100) / 100 : 0;
+  const fraLager = Boolean(line?.pipe_type_id) && !line?.is_annet;
+
+  const lagre = useMutation({
+    mutationFn: async () => {
+      if (line && gyldig) await endreMengde(line.id, ny);
+    },
+    onSuccess: () => {
+      etter();
+      toast({ title: "Mengden er endret", description: line && gyldig ? `${pipeLabel(line.name, line.dimension)}: ${qtyLabel(ny, line.unit)}` : undefined });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Mengden ble ikke endret", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={line !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {line ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (gyldig && diff !== 0) lagre.mutate();
+            }}
+            className="space-y-4"
+          >
+            <DialogHeader>
+              <DialogTitle>Endre mengde</DialogTitle>
+              <DialogDescription className="break-words">
+                {pipeLabel(line.name, line.dimension)} · nå {qtyLabel(line.quantity, line.unit)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="ny-mengde">Riktig mengde ({line.unit})</Label>
+              <Input
+                id="ny-mengde"
+                className="h-11 tabular"
+                inputMode="decimal"
+                autoFocus
+                value={tekst}
+                onChange={(e) => setTekst(e.target.value)}
+              />
+              {gyldig && diff !== 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {fraLager && lagerTrekt
+                    ? diff < 0
+                      ? `${qtyLabel(-diff, line.unit)} legges tilbake på lageret.`
+                      : `${qtyLabel(diff, line.unit)} til trekkes fra lageret.`
+                    : fraLager
+                      ? "Lageret trekkes når bestillingen godkjennes."
+                      : "Ingen lagervare – bare linjen og forslaget endres."}{" "}
+                  Summen regnes på nytt.
+                </p>
+              ) : null}
+            </div>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Avbryt
+              </Button>
+              <Button type="submit" disabled={!gyldig || diff === 0 || lagre.isPending}>
+                {lagre.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                Lagre mengde
               </Button>
             </DialogFooter>
           </form>

@@ -108,7 +108,7 @@ const SLUG_OK = /^[a-z0-9-]+$/;
 
 // ------------------------------------------------------------------- fana
 
-export function StockTab() {
+export function StockTab({ visKostpris = true }: { /** Av for rolla «lager»: innkjøpsprisen er kontoret si sak. */ visKostpris?: boolean } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -204,7 +204,10 @@ export function StockTab() {
           value={num(totals.snart, 0)}
           tone={totals.snart > 0 ? "warn" : undefined}
         />
-        <Stat icon={<Coins className="h-4 w-4" />} label="Lagerverdi" value={`${krShort(totals.verdi)} kr`} />
+        {visKostpris ? (
+          <Stat icon={<Coins className="h-4 w-4" />} label="Lagerverdi (kostpris)" value={`${krShort(totals.verdi)} kr`} />
+        ) : null}
+        <Stat icon={<Coins className="h-4 w-4" />} label="Salgsverdi" value={`${krShort(totals.salsverdi)} kr`} />
       </div>
 
       {totals.perUnit.length > 0 && (
@@ -344,7 +347,7 @@ export function StockTab() {
                   <TableHead className="text-right">Beholdning</TableHead>
                   <TableHead className="text-right">Varselgrense</TableHead>
                   <TableHead className="text-right">Pris</TableHead>
-                  <TableHead className="text-right">Kostpris</TableHead>
+                  {visKostpris ? <TableHead className="text-right">Kostpris</TableHead> : null}
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">Aktiv</TableHead>
                   <TableHead className="text-right">Handling</TableHead>
@@ -372,9 +375,11 @@ export function StockTab() {
                         {t.low_stock_threshold > 0 ? num(t.low_stock_threshold) : "–"}
                       </TableCell>
                       <TableCell className="tabular text-right text-sm">{t.price === null ? "–" : kr(t.price)}</TableCell>
-                      <TableCell className="tabular text-right text-sm text-muted-foreground">
-                        {t.cost_price === null ? "–" : kr(t.cost_price)}
-                      </TableCell>
+                      {visKostpris ? (
+                        <TableCell className="tabular text-right text-sm text-muted-foreground">
+                          {t.cost_price === null ? "–" : kr(t.cost_price)}
+                        </TableCell>
+                      ) : null}
                       <TableCell>
                         <StockBadge status={stockStatus(t)} />
                       </TableCell>
@@ -479,6 +484,7 @@ export function StockTab() {
       {editing && (
         <PipeDialog
           pipe={editing.pipe}
+          visKostpris={visKostpris}
           allPipes={rows}
           categories={categories.data ?? []}
           onClose={() => setEditing(null)}
@@ -775,6 +781,7 @@ export function PipeDialog({
   onClose,
   initial,
   onSaved,
+  visKostpris = true,
 }: {
   pipe: PipeType | null;
   allPipes: PipeType[];
@@ -782,6 +789,8 @@ export function PipeDialog({
   onClose: () => void;
   initial?: Partial<Pick<PipeForm, "name" | "dimension" | "unit">>;
   onSaved?: (row: PipeTypeRow) => void | Promise<void>;
+  /** Av for rolla «lager». Feltet blir ikkje vist, og verdien står urørt. */
+  visKostpris?: boolean;
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -959,17 +968,19 @@ export function PipeDialog({
             />
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="vare-kostpris">Kostpris per {form.unit} (kr)</Label>
-            <Input
-              id="vare-kostpris"
-              className="h-11 tabular"
-              inputMode="decimal"
-              placeholder="Ingen kostpris"
-              value={form.cost_price}
-              onChange={(e) => set({ cost_price: e.target.value })}
-            />
-          </div>
+          {visKostpris ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="vare-kostpris">Kostpris per {form.unit} (kr)</Label>
+              <Input
+                id="vare-kostpris"
+                className="h-11 tabular"
+                inputMode="decimal"
+                placeholder="Ingen kostpris"
+                value={form.cost_price}
+                onChange={(e) => set({ cost_price: e.target.value })}
+              />
+            </div>
+          ) : null}
 
           {!pipe && (
             <div className="space-y-1.5">

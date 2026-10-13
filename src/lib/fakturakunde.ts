@@ -14,7 +14,8 @@ export type Fakturakunde = { key: string; namn: string; detaljar: string[] };
 type Ordre = Pick<
   PipeOrderRow,
   "kind" | "customer_type" | "customer_name" | "company" | "org_number" | "billing_address" | "project" | "created_by"
->;
+> &
+  Partial<Pick<PipeOrderRow, "project_id">>;
 
 /** Eit uttak frå ein tilsett som var logga inn. Før migrasjonen finst ikkje created_by, og då er det ingen. */
 export const erAnsattUttak = (o: Pick<PipeOrderRow, "kind" | "created_by">): boolean =>
@@ -26,11 +27,21 @@ export function fakturakunde(o: Ordre): Fakturakunde {
   // nøkkelen held jobben skild frå ein kiosk-kunde som tilfeldigvis heiter det same.
   if (erAnsattUttak(o)) {
     const jobb = o.project?.trim() || o.customer_name;
+    // Eit prosjekt frå lista blir samla på prosjektet, ikkje på teksten: får
+    // prosjektet nytt namn i SmartDok, skal jobben framleis vere éin.
+    if (o.project_id) return { key: `prosjekt:${o.project_id}`, namn: jobb, detaljar: [`Tatt ut av ${o.customer_name}`] };
     return { key: `jobb:${nameKey(jobb)}`, namn: jobb, detaljar: [`Tatt ut av ${o.customer_name}`] };
   }
 
   // Før migrasjonen er kind undefined, og då er alt uttak.
-  if (o.kind !== "bestilling") return { key: nameKey(o.customer_name), namn: o.customer_name, detaljar: [] };
+  if (o.kind !== "bestilling") {
+    // Står det eit firma, er det firmaet som skal ha fakturaen – ikkje den som
+    // henta. To frå same firma blir då éin kunde, og møter bestillingane frå
+    // nettet til same firma (same nøkkel som bedrift under).
+    const firma = o.company?.trim();
+    if (firma) return { key: nameKey(firma), namn: firma, detaljar: [`Hentet av ${o.customer_name}`] };
+    return { key: nameKey(o.customer_name), namn: o.customer_name, detaljar: [] };
+  }
 
   if (o.customer_type === "bedrift") {
     // Firmaet, ikkje kontaktpersonen: då møtest bestillingar frå nettet og uttak

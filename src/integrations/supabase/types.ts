@@ -487,6 +487,7 @@ export type Database = {
       };
       pipe_endre_annet: { Args: { p_line_id: string; p_name: string; p_dimension?: string | null }; Returns: Json };
       pipe_bytt_vare: { Args: { p_line_id: string; p_pipe_type_id: string }; Returns: Json };
+      pipe_endre_mengde: { Args: { p_line_id: string; p_quantity: number }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;

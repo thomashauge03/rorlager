@@ -51,6 +51,18 @@ const TABS = [
 
 const DEFAULT_TAB = TABS[0].value;
 
+/*
+ * Lagermannen sitt panel: det han treng for å drive lageret – uttak og henting,
+ * mottak, beholdning, forslag og etikettar. Ikkje faktura, prosjektstyring
+ * eller innstillingar med påslag og firmaopplysningar, og ikkje innkjøpsprisar
+ * i lagerlista.
+ *
+ * NB: dette er panelet, ikkje tilgangen. hm_er_kontor() gjeld framleis for
+ * «lager», så basen ville svart på dei same spørjingane. Skal lagermannen
+ * stengjast ute frå innkjøpsprisar i basen òg, må rolla ut av kvitlista der.
+ */
+const LAGER_FANER: readonly string[] = ["bestillinger", "abestille", "lager", "forslag", "qr"];
+
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
@@ -109,11 +121,11 @@ export default function AdminDashboard() {
   // En dyplenke fra Innboks bestemmer fanen selv, se faneFor.
   const dyplenke = lesDyplenke(params);
   const requested = params.get("fane");
-  const tab = dyplenke
-    ? faneFor(dyplenke)
-    : TABS.some((t) => t.value === requested)
-      ? (requested as string)
-      : DEFAULT_TAB;
+  const erLager = role === "lager";
+  const faner = erLager ? TABS.filter((t) => LAGER_FANER.includes(t.value)) : TABS;
+  const ønskt = dyplenke ? faneFor(dyplenke) : requested;
+  // Ei fane rolla ikkje har – frå ei lenkje eller ein dyplenke – blir startfana
+  const tab = faner.some((t) => t.value === ønskt) ? (ønskt as string) : DEFAULT_TAB;
   const nr = (type: Dyplenke["type"]) => (dyplenke?.type === type ? dyplenke.nummer : null);
 
   // Fana ligg i URL-en så ei oppdatering av sida hamnar same stad. replace,
@@ -270,7 +282,7 @@ export default function AdminDashboard() {
           {/* Rullbar fanelinje: på telefon får ikkje fem faner plass ved sida av kvarandre */}
           <div className="-mx-3 sm:-mx-4 px-3 sm:px-4 mb-4 overflow-x-auto">
             <TabsList className="h-auto w-max gap-1 bg-muted p-1">
-              {TABS.map(({ value, label, Icon }) => (
+              {faner.map(({ value, label, Icon }) => (
                 <TabsTrigger
                   key={value}
                   value={value}
@@ -305,10 +317,10 @@ export default function AdminDashboard() {
             <ProjectsTab />
           </TabsContent>
           <TabsContent value="lager" className="animate-fade-in">
-            <StockTab />
+            <StockTab visKostpris={!erLager} />
           </TabsContent>
           <TabsContent value="forslag" className="animate-fade-in">
-            <SuggestionsTab />
+            <SuggestionsTab visKostpris={!erLager} />
           </TabsContent>
           <TabsContent value="qr" className="animate-fade-in">
             <QrTab />

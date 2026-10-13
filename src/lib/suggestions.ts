@@ -94,6 +94,12 @@ export async function endreForslag(s: Suggestion, name: string, dimension: strin
   if (error) throw new Error(`Klarte ikke å endre navnet: ${error.message}`);
 }
 
+/** Ny mengde på linja. Lageret får differansen når ordren har trekt det. */
+export async function endreMengde(lineId: string, quantity: number) {
+  const { error } = await supabase.rpc("pipe_endre_mengde", { p_line_id: lineId, p_quantity: quantity });
+  if (error) throw new Error(error.message || "Klarte ikke å endre mengden");
+}
+
 /** Anna vare på linja. Lageret følgjer med når ordren har trekt det. */
 export async function byttVare(lineId: string, pipeTypeId: string) {
   const { error } = await supabase.rpc("pipe_bytt_vare", { p_line_id: lineId, p_pipe_type_id: pipeTypeId });

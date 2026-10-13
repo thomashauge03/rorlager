@@ -49,7 +49,7 @@ import {
 } from "@/lib/types";
 import { AnnetMerke } from "@/components/AnnetDialog";
 import { PriceLineDialog } from "@/components/admin/PriceLineDialog";
-import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog } from "@/components/admin/RettUttak";
+import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog } from "@/components/admin/RettUttak";
 
 const STATUS_OPTIONS: (OrderStatus | "alle")[] = ["alle", "ny", "behandlet", "levert", "avvist"];
 
@@ -130,6 +130,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
   const [prosjektFor, setProsjektFor] = useState<OrderWithLines | null>(null);
   const [namnFor, setNamnFor] = useState<PipeOrderLineRow | null>(null);
   const [vareFor, setVareFor] = useState<PipeOrderLineRow | null>(null);
+  const [mengdeFor, setMengdeFor] = useState<PipeOrderLineRow | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -418,7 +419,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
               <Input
                 id="ordre-sok"
                 className="pl-9"
-                placeholder="Navn, firma, org.nr. eller nr."
+                placeholder="Navn, firma, vare, org.nr. eller nr."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -675,6 +676,13 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                               ) : null}
                               <button
                                 type="button"
+                                onClick={() => setMengdeFor(line)}
+                                className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                              >
+                                Endre mengde
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => setVareFor(line)}
                                 className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
                               >
@@ -823,6 +831,11 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
         line={vareFor}
         lagerTrekt={Boolean(open?.stock_drawn_at) || (open ? !erBestilling(open) : false)}
         onClose={() => setVareFor(null)}
+      />
+      <EndreMengdeDialog
+        line={mengdeFor}
+        lagerTrekt={Boolean(open?.stock_drawn_at) || (open ? !erBestilling(open) : false)}
+        onClose={() => setMengdeFor(null)}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

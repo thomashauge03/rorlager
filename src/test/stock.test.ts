@@ -79,17 +79,27 @@ describe("filterAndSortPipes", () => {
 });
 
 describe("stockTotals", () => {
-  it("summerer per enhet og regner lagerverdi uten negative beholdninger", () => {
+  it("summerer per enhet og regner lagerverdi med kostpris, uten negative beholdninger", () => {
     const totals = stockTotals([
-      pipe({ id: "a", stock: 10, price: 100, unit: "m" }),
-      pipe({ id: "b", stock: -5, price: 100, unit: "m" }),
-      pipe({ id: "c", stock: 2, price: null, unit: "stk" }),
+      pipe({ id: "a", stock: 10, price: 100, cost_price: 80, unit: "m" }),
+      pipe({ id: "b", stock: -5, price: 100, cost_price: 80, unit: "m" }),
+      pipe({ id: "c", stock: 2, price: null, cost_price: null, unit: "stk" }),
     ]);
-    expect(totals.verdi).toBe(1000);
+    expect(totals.verdi).toBe(800);
+    expect(totals.salsverdi).toBe(1000);
     expect(totals.perUnit).toEqual([
       { unit: "m", qty: 5 },
       { unit: "stk", qty: 2 },
     ]);
     expect(totals.tomme).toBe(1);
+  });
+
+  it("tel ikkje varer som aldri blir førte på lager som tomme", () => {
+    const totals = stockTotals([
+      pipe({ id: "dahl", stock: 0, low_stock_threshold: 0 }),
+      pipe({ id: "ført", stock: 0, low_stock_threshold: 10 }),
+      pipe({ id: "minus", stock: -2, low_stock_threshold: 0 }),
+    ]);
+    expect(totals.tomme).toBe(2);
   });
 });

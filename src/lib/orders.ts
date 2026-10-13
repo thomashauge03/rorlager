@@ -294,10 +294,13 @@ const startOfDayIso = (day: string) => new Date(`${day}T00:00:00`).toISOString()
 const endOfDayIso = (day: string) => new Date(`${day}T23:59:59.999`).toISOString();
 
 /** Alt ein kan søkje etter i ei bestilling, samla i éin streng. */
-function orderHaystack(order: PipeOrderRow): string {
+function orderHaystack(order: PipeOrderRow & { lines?: PipeOrderLineRow[] }): string {
   const phone = (order.customer_phone ?? "").replace(/\D/g, "");
+  // Varene òg: «kven tok 110 PVC» skal finne uttaket, ikkje berre namnet på
+  // den som tok det.
+  const varer = (order.lines ?? []).flatMap((l) => [l.name, l.dimension, l.sku]);
   return searchKey(
-    [order.customer_name, order.company, order.project, order.customer_phone, phone, order.org_number, `#${order.order_number}`, order.order_number]
+    [order.customer_name, order.company, order.project, order.customer_phone, phone, order.org_number, `#${order.order_number}`, order.order_number, ...varer]
       .filter(Boolean)
       .join(" "),
   );

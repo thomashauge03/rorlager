@@ -125,6 +125,22 @@ const løyst = await en(`select status, pipe_type_id, handled_at is not null as 
 sjekk("forslaget er løyst og peikar på vara", [løyst.status, løyst.pipe_type_id, løyst.handtert], ["opprettet", pe, true]);
 sjekk("summen på uttaket er rekna på nytt", tal((await en(`select total from public.pipe_orders where id = $1`, [uttak.id])).total), 1750);
 
+console.log("\n── Feil mengde: 5 stk bend skulle vore 2 ──\n");
+
+await som(db, OLA, () =>
+  avvist("Ola kan ikkje endre mengda", `select public.pipe_endre_mengde($1, 2)`, [pvcLinje.id], /Ingen tilgang/),
+);
+await som(db, KONTOR, async () => {
+  await db.query(`select public.pipe_endre_mengde($1, 2)`, [pvcLinje.id]);
+  await avvist("null blir avvist", `select public.pipe_endre_mengde($1, 0)`, [pvcLinje.id], /over null/);
+});
+sjekk("tre bend er lagde tilbake", await lager(bend), 8);
+const nyMengde = await en(`select quantity, line_total from public.pipe_order_lines where id = $1`, [pvcLinje.id]);
+sjekk("linja er 2 stk til 100 kr", [tal(nyMengde.quantity), tal(nyMengde.line_total)], [2, 100]);
+sjekk("summen er rekna på nytt", tal((await en(`select total from public.pipe_orders where id = $1`, [uttak.id])).total), 1600);
+const mengdeLogg = await en(`select change, note from public.pipe_stock_log where reason = 'retting' and pipe_name = 'Bend' order by created_at desc limit 1`);
+sjekk("lagerloggen seier kva som skjedde", [tal(mengdeLogg.change), mengdeLogg.note], [3, `#${uttak.order_number}: mengde 5 → 2 stk`]);
+
 console.log("\n── Ei bestilling som ikkje er godkjend ──\n");
 
 await db.exec(`
@@ -164,6 +180,7 @@ await som(db, KONTOR, async () => {
   ]);
   await avvist("fakturert: prosjekt", `select public.pipe_bytt_prosjekt($1, $2)`, [uttak.id, storgata.id], /fakturert/);
   await avvist("fakturert: vare", `select public.pipe_bytt_vare($1, $2)`, [pvcLinje.id, pvc], /fakturert/);
+  await avvist("fakturert: mengde", `select public.pipe_endre_mengde($1, 3)`, [pvcLinje.id], /fakturert/);
 });
 
 console.log(

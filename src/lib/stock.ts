@@ -84,10 +84,21 @@ export function stockTotals(rows: PipeType[]) {
   rows.forEach((t) => perUnit.set(t.unit, (perUnit.get(t.unit) || 0) + t.stock));
   return {
     varer: rows.length,
-    tomme: rows.filter((t) => stockStatus(t) === "tomt").length,
+    /*
+     * Tomme VARER SOM BLIR FØRTE PÅ LAGER: varselgrensa over null, eller ei
+     * beholdning under null (nokon har teke meir enn lageret viste – det er
+     * reell informasjon). Dei 156 varene frå Dahl-lista som aldri er tekne inn,
+     * står på 0 med grense 0, og gav «156 tomme» – støy som skjulte dei ekte.
+     */
+    tomme: rows.filter((t) => t.stock < 0 || (stockStatus(t) === "tomt" && (t.low_stock_threshold ?? 0) > 0)).length,
     snart: rows.filter((t) => stockStatus(t) === "snart").length,
-    // Lagerverdien er berre meiningsfull der prisen er sett
-    verdi: rows.reduce((sum, t) => (t.price === null ? sum : sum + t.price * Math.max(t.stock, 0)), 0),
+    /*
+     * Lagerverdien er det lageret kosta – innkjøpsprisen. Rekneskapen bruker
+     * den, og salsprisen gav ein verdi rundt 25 % for høg. Salsverdien står ved
+     * sida av. Berre der prisen er sett, og aldri for negativ beholdning.
+     */
+    verdi: rows.reduce((sum, t) => (t.cost_price == null ? sum : sum + t.cost_price * Math.max(t.stock, 0)), 0),
+    salsverdi: rows.reduce((sum, t) => (t.price === null ? sum : sum + t.price * Math.max(t.stock, 0)), 0),
     perUnit: [...perUnit.entries()].map(([unit, qty]) => ({ unit, qty: Math.round(qty * 100) / 100 })),
   };
 }

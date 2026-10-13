@@ -29,7 +29,7 @@ import { EndreAnnetDialog } from "@/components/admin/RettUttak";
 
 type Utsnitt = "nye" | "behandlet";
 
-export function SuggestionsTab() {
+export function SuggestionsTab({ visKostpris = true }: { visKostpris?: boolean } = {}) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [utsnitt, setUtsnitt] = useState<Utsnitt>("nye");
@@ -189,6 +189,7 @@ export function SuggestionsTab() {
       {opprett && types.data && categories.data ? (
         <PipeDialog
           pipe={null}
+          visKostpris={visKostpris}
           allPipes={types.data}
           categories={categories.data}
           initial={{ name: opprett.name, dimension: opprett.dimension ?? "", unit: opprett.unit }}
