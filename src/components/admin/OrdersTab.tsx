@@ -49,7 +49,7 @@ import {
 } from "@/lib/types";
 import { AnnetMerke } from "@/components/AnnetDialog";
 import { PriceLineDialog } from "@/components/admin/PriceLineDialog";
-import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog } from "@/components/admin/RettUttak";
+import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog, ReturDialog } from "@/components/admin/RettUttak";
 
 const STATUS_OPTIONS: (OrderStatus | "alle")[] = ["alle", "ny", "behandlet", "levert", "avvist"];
 
@@ -131,6 +131,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
   const [namnFor, setNamnFor] = useState<PipeOrderLineRow | null>(null);
   const [vareFor, setVareFor] = useState<PipeOrderLineRow | null>(null);
   const [mengdeFor, setMengdeFor] = useState<PipeOrderLineRow | null>(null);
+  const [returFor, setReturFor] = useState<PipeOrderLineRow | null>(null);
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -499,7 +500,11 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                 <span className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-foreground tabular">
                     #{o.order_number}
-                    {erBestilling(o) ? <span className="ml-2 text-xs font-medium text-primary">Bestilling</span> : null}
+                    {o.retur_av ? (
+                      <span className="ml-2 text-xs font-medium text-success-ink">Retur</span>
+                    ) : erBestilling(o) ? (
+                      <span className="ml-2 text-xs font-medium text-primary">Bestilling</span>
+                    ) : null}
                   </span>
                   <StatusBadge status={o.status} kind={o.kind} />
                 </span>
@@ -550,7 +555,11 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                   </TableCell>
                   <TableCell className="font-semibold tabular">
                     {o.order_number}
-                    {erBestilling(o) ? <span className="block text-xs font-medium text-primary">Bestilling</span> : null}
+                    {o.retur_av ? (
+                      <span className="block text-xs font-medium text-success-ink">Retur</span>
+                    ) : erBestilling(o) ? (
+                      <span className="block text-xs font-medium text-primary">Bestilling</span>
+                    ) : null}
                   </TableCell>
                   <TableCell className="tabular whitespace-nowrap">{dateTime(o.created_at)}</TableCell>
                   <TableCell>
@@ -582,7 +591,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
               <SheetHeader className="text-left">
                 <SheetTitle className="flex items-center gap-3">
                   <span className="tabular">
-                    {erBestilling(open) ? "Bestilling" : "Uttak"} #{open.order_number}
+                    {open.retur_av ? "Retur" : erBestilling(open) ? "Bestilling" : "Uttak"} #{open.order_number}
                   </span>
                   <StatusBadge status={open.status} kind={open.kind} />
                 </SheetTitle>
@@ -663,31 +672,46 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                             {pipeLabel(line.name, line.dimension)}
                           </p>
                           {line.sku ? <p className="text-xs text-muted-foreground">{line.sku}</p> : null}
-                          {!open.invoice_id ? (
+                          {/* Ein retur blir ikkje retta eller returnert (basen nektar). Eit
+                              fakturert uttak kan berre returnerast – det gir ein kreditering. */}
+                          {!open.retur_av && (!open.invoice_id || open.stock_drawn_at) ? (
                             <div className="mt-0.5 flex flex-wrap gap-x-3">
-                              {line.is_annet ? (
+                              {!open.invoice_id ? (
+                                <>
+                                  {line.is_annet ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => setNamnFor(line)}
+                                      className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                    >
+                                      Endre navn
+                                    </button>
+                                  ) : null}
+                                  <button
+                                    type="button"
+                                    onClick={() => setMengdeFor(line)}
+                                    className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                  >
+                                    Endre mengde
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => setVareFor(line)}
+                                    className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
+                                  >
+                                    Bytt vare
+                                  </button>
+                                </>
+                              ) : null}
+                              {open.stock_drawn_at ? (
                                 <button
                                   type="button"
-                                  onClick={() => setNamnFor(line)}
+                                  onClick={() => setReturFor(line)}
                                   className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
                                 >
-                                  Endre navn
+                                  Retur
                                 </button>
                               ) : null}
-                              <button
-                                type="button"
-                                onClick={() => setMengdeFor(line)}
-                                className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
-                              >
-                                Endre mengde
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setVareFor(line)}
-                                className="min-h-8 text-xs font-medium text-primary underline-offset-2 hover:underline"
-                              >
-                                Bytt vare
-                              </button>
                             </div>
                           ) : null}
                         </div>
@@ -836,6 +860,25 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
         line={mengdeFor}
         lagerTrekt={Boolean(open?.stock_drawn_at) || (open ? !erBestilling(open) : false)}
         onClose={() => setMengdeFor(null)}
+      />
+      <ReturDialog
+        line={returFor}
+        fakturert={Boolean(open?.invoice_id)}
+        // Det som alt er kreditert, trekt frå – av dei returane lista har henta.
+        // Basen sjekkar uansett, med alle returane.
+        igjen={
+          returFor
+            ? Math.round(
+                (returFor.quantity -
+                  alle
+                    .flatMap((o) => o.lines)
+                    .filter((l) => l.retur_av_linje === returFor.id)
+                    .reduce((s, l) => s + Number(l.quantity), 0)) *
+                  100,
+              ) / 100
+            : 0
+        }
+        onClose={() => setReturFor(null)}
       />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>

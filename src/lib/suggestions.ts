@@ -100,6 +100,20 @@ export async function endreMengde(lineId: string, quantity: number) {
   if (error) throw new Error(error.message || "Klarte ikke å endre mengden");
 }
 
+/**
+ * Retur til lager. Basen avgjer korleis: før faktura blir linja mindre, etter
+ * faktura blir det ein returordre som krediterer på neste grunnlag.
+ */
+export async function registrerRetur(
+  lineId: string,
+  quantity: number,
+  note: string | null,
+): Promise<{ fort: "redusert" | "kreditert"; order_id: string; order_number?: number }> {
+  const { data, error } = await supabase.rpc("pipe_retur", { p_line_id: lineId, p_quantity: quantity, p_note: note });
+  if (error) throw new Error(error.message || "Klarte ikke å registrere returen");
+  return data as unknown as { fort: "redusert" | "kreditert"; order_id: string; order_number?: number };
+}
+
 /** Anna vare på linja. Lageret følgjer med når ordren har trekt det. */
 export async function byttVare(lineId: string, pipeTypeId: string) {
   const { error } = await supabase.rpc("pipe_bytt_vare", { p_line_id: lineId, p_pipe_type_id: pipeTypeId });

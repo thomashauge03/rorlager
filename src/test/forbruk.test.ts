@@ -66,3 +66,17 @@ describe("forbrukCsv", () => {
     expect(rad).toContain(";12,5;m;60,4;755;");
   });
 });
+
+describe("retur i forbruket", () => {
+  it("ein retur trekkjer mengd, kost og sal frå jobben", () => {
+    const rader = forbrukLinjer(
+      [
+        ordre({ lines: [linje({})] as never }),
+        ordre({ id: "r1", order_number: 8, retur_av: "o1", lines: [linje({ quantity: 3, unit_price: -100, line_total: -300 })] as never }),
+      ],
+      prosjekt,
+    );
+    expect(rader[1]).toMatchObject({ mengde: -3, kostSum: -180, salgSum: -300 });
+    expect(summerForbruk(rader)).toMatchObject({ kost: 420, salg: 700 });
+  });
+});

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-const kall = vi.hoisted(() => ({ byttProsjekt: vi.fn(), endreAnnet: vi.fn(), byttVare: vi.fn(), endreMengde: vi.fn() }));
+const kall = vi.hoisted(() => ({ byttProsjekt: vi.fn(), endreAnnet: vi.fn(), byttVare: vi.fn(), endreMengde: vi.fn(), registrerRetur: vi.fn() }));
 
 vi.mock("@/hooks/use-toast", () => ({ useToast: () => ({ toast: vi.fn() }) }));
 vi.mock("@/lib/suggestions", () => ({
@@ -12,6 +12,7 @@ vi.mock("@/lib/suggestions", () => ({
   endreAnnet: (...a: unknown[]) => kall.endreAnnet(...a),
   byttVare: (...a: unknown[]) => kall.byttVare(...a),
   endreMengde: (...a: unknown[]) => kall.endreMengde(...a),
+  registrerRetur: (...a: unknown[]) => kall.registrerRetur(...a),
 }));
 vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
@@ -26,7 +27,7 @@ vi.mock("@/lib/orders", async (importOriginal) => ({
   ],
 }));
 
-import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog } from "@/components/admin/RettUttak";
+import { ByttProsjektDialog, ByttVareDialog, EndreAnnetDialog, EndreMengdeDialog, ReturDialog } from "@/components/admin/RettUttak";
 
 const vis = (el: JSX.Element) =>
   render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>{el}</QueryClientProvider>);
@@ -106,5 +107,24 @@ describe("endre mengde", () => {
   it("same mengde kan ikkje lagrast", () => {
     vis(<EndreMengdeDialog line={pvc} lagerTrekt onClose={() => {}} />);
     expect(screen.getByRole("button", { name: "Lagre mengde" })).toBeDisabled();
+  });
+});
+
+describe("retur", () => {
+  it("fakturert: seier at det blir ein kreditering, og sender mengd og merknad", async () => {
+    kall.registrerRetur.mockResolvedValue({ fort: "kreditert", order_id: "r1", order_number: 9 });
+    vis(<ReturDialog line={pvc} fakturert igjen={3} onClose={() => {}} />);
+    expect(screen.getByText(/kreditering på neste fakturagrunnlag/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Hvor mye kommer tilbake/), { target: { value: "2" } });
+    fireEvent.change(screen.getByLabelText("Merknad"), { target: { value: "Overskudd" } });
+    fireEvent.click(screen.getByRole("button", { name: "Registrer retur" }));
+    await waitFor(() => expect(kall.registrerRetur).toHaveBeenCalledWith("l2", 2, "Overskudd"));
+  });
+
+  it("meir enn det som er igjen, kan ikkje sendast", () => {
+    vis(<ReturDialog line={pvc} fakturert={false} igjen={3} onClose={() => {}} />);
+    fireEvent.change(screen.getByLabelText(/Hvor mye kommer tilbake/), { target: { value: "4" } });
+    expect(screen.getByRole("button", { name: "Registrer retur" })).toBeDisabled();
+    expect(screen.getByText(/rettes direkte/)).toBeInTheDocument();
   });
 });

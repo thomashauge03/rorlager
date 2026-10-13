@@ -34,6 +34,10 @@ export function forbrukLinjer(ordrar: OrderWithLines[], prosjekt: Map<string, Pr
     .filter((o) => o.project_id && o.kind !== "bestilling")
     .flatMap((o) => {
       const p = prosjekt.get(o.project_id as string);
+      // Ein retur trekkjer frå: mengda og kosten er positive på returlinja
+      // (lageret får røra tilbake), men forbruket på jobben blir mindre.
+      // Salet er alt negativt (line_total på ein retur er minus).
+      const forteikn = o.retur_av ? -1 : 1;
       return o.lines.map((l) => ({
         prosjektnr: p?.project_number ?? null,
         prosjekt: p?.name ?? o.project ?? "",
@@ -42,10 +46,10 @@ export function forbrukLinjer(ordrar: OrderWithLines[], prosjekt: Map<string, Pr
         tattUtAv: o.customer_name,
         varenr: l.sku ?? "",
         vare: [l.name, l.dimension].filter(Boolean).join(" "),
-        mengde: Number(l.quantity),
+        mengde: forteikn * Number(l.quantity),
         enhet: l.unit,
         kostpris: l.unit_cost ?? null,
-        kostSum: l.unit_cost == null ? null : rund(l.unit_cost * Number(l.quantity)),
+        kostSum: l.unit_cost == null ? null : rund(forteikn * l.unit_cost * Number(l.quantity)),
         salgspris: l.unit_price ?? null,
         salgSum: l.line_total ?? null,
       }));

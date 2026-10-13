@@ -18,7 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { kr, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
 import { QK, fetchPipeTypes, fetchProsjektliste } from "@/lib/orders";
 import { matchesSearch } from "@/lib/stock";
-import { byttProsjekt, byttVare, endreAnnet, endreMengde } from "@/lib/suggestions";
+import { byttProsjekt, byttVare, endreAnnet, endreMengde, registrerRetur } from "@/lib/suggestions";
 import type { PipeType } from "@/lib/types";
 
 /** Det dialogane treng å vite om ei linje. */
@@ -299,6 +299,119 @@ export function EndreMengdeDialog({
               <Button type="submit" disabled={!gyldig || diff === 0 || lagre.isPending}>
                 {lagre.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
                 Lagre mengde
+              </Button>
+            </DialogFooter>
+          </form>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Retur til lager                                                    */
+/* ------------------------------------------------------------------ */
+
+export function ReturDialog({
+  line,
+  fakturert,
+  igjen,
+  onClose,
+}: {
+  line: RettLinje | null;
+  /** Er uttaket fakturert? Då blir returen ein kreditering, ikkje ei endring. */
+  fakturert: boolean;
+  /** Kor mykje som kan returnerast – mengda minus det som alt er kreditert. */
+  igjen: number;
+  onClose: () => void;
+}) {
+  const { toast } = useToast();
+  const etter = useEtterRetting();
+  const [tekst, setTekst] = useState("");
+  const [merknad, setMerknad] = useState("");
+
+  useEffect(() => {
+    setTekst("");
+    setMerknad("");
+  }, [line]);
+
+  const mengde = parseNum(tekst);
+  const gyldig = mengde !== null && mengde > 0 && mengde <= igjen;
+  const fraLager = Boolean(line?.pipe_type_id) && !line?.is_annet;
+
+  const lagre = useMutation({
+    mutationFn: async () => {
+      if (!line || !gyldig) return null;
+      return registrerRetur(line.id, mengde, merknad.trim() || null);
+    },
+    onSuccess: (r) => {
+      etter();
+      toast({
+        title: "Returen er registrert",
+        description:
+          r?.fort === "kreditert"
+            ? `Kreditering på retur #${r.order_number ?? ""} – kommer med på neste fakturagrunnlag.`
+            : "Linjen og summen er rettet.",
+      });
+      onClose();
+    },
+    onError: (e: Error) => toast({ title: "Returen ble ikke registrert", description: e.message, variant: "destructive" }),
+  });
+
+  return (
+    <Dialog open={line !== null} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        {line ? (
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (gyldig) lagre.mutate();
+            }}
+            className="space-y-4"
+          >
+            <DialogHeader>
+              <DialogTitle>Retur til lager</DialogTitle>
+              <DialogDescription className="break-words">
+                {pipeLabel(line.name, line.dimension)} · kan returnere inntil {qtyLabel(igjen, line.unit)}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label htmlFor="retur-mengde">Hvor mye kommer tilbake ({line.unit})</Label>
+              <Input
+                id="retur-mengde"
+                className="h-11 tabular"
+                inputMode="decimal"
+                autoFocus
+                value={tekst}
+                onChange={(e) => setTekst(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="retur-merknad">Merknad</Label>
+              <Input
+                id="retur-merknad"
+                className="h-11"
+                maxLength={300}
+                placeholder="Valgfritt, f.eks. «overskudd fra plassen»"
+                value={merknad}
+                onChange={(e) => setMerknad(e.target.value)}
+              />
+            </div>
+            <ul className="space-y-1 text-sm text-muted-foreground">
+              {fraLager ? <li>Rørene legges tilbake på lageret og står i lagerloggen som retur.</li> : null}
+              <li>
+                {fakturert
+                  ? "Uttaket er fakturert, så det lages en retur med minusbeløp på samme kunde eller jobb. Den kommer med som kreditering på neste fakturagrunnlag."
+                  : "Uttaket er ikke fakturert, så linjen og summen rettes direkte."}
+              </li>
+            </ul>
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button type="button" variant="ghost" onClick={onClose}>
+                Avbryt
+              </Button>
+              <Button type="submit" disabled={!gyldig || lagre.isPending}>
+                {lagre.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+                Registrer retur
               </Button>
             </DialogFooter>
           </form>

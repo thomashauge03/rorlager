@@ -47,6 +47,8 @@ export type PipeOrderRow = {
   project_id?: string | null;
   /** Lagerprosjektet varene kom frå. Set av basen; manglar før 20261014120000. */
   stock_project_id?: string | null;
+  /** Uttaket denne returen krediterer. Null for alt anna. */
+  retur_av?: string | null;
   comment: string | null;
   signature: string | null;
   status: "ny" | "behandlet" | "levert" | "avvist";
@@ -93,6 +95,8 @@ export type PipeOrderLineRow = {
   is_annet: boolean;
   /** Kostprisen då linja blei skriven. Berre for kontoret; manglar før 20261014160000. */
   unit_cost?: number | null;
+  /** Linja denne returlinja krediterer. */
+  retur_av_linje?: string | null;
 };
 
 export type PipeStockLogRow = {
@@ -491,6 +495,7 @@ export type Database = {
       pipe_bytt_vare: { Args: { p_line_id: string; p_pipe_type_id: string }; Returns: Json };
       pipe_endre_mengde: { Args: { p_line_id: string; p_quantity: number }; Returns: Json };
       pipe_prosjekt_uttak: { Args: { p_project_id: string }; Returns: Json };
+      pipe_retur: { Args: { p_line_id: string; p_quantity: number; p_note?: string | null }; Returns: Json };
     };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
