@@ -21,7 +21,14 @@ export function AnnetMerke() {
 /** Knappen som opnar skjemaet. Står under lista og i tomt søk. */
 export function AnnetKnapp({ onClick, className }: { onClick: () => void; className?: string }) {
   return (
-    <Button type="button" variant="outline" className={cn("h-12 w-full text-base [&_svg]:size-5", className)} onClick={onClick}>
+    // Teksten får bryte: på ein 320 px-telefon er han breiare enn knappen, og
+    // med nowrap frå Button blei heile sida 18 px for brei og kunne zoomast ut.
+    <Button
+      type="button"
+      variant="outline"
+      className={cn("h-auto min-h-12 w-full whitespace-normal py-2 text-base leading-snug [&_svg]:size-5", className)}
+      onClick={onClick}
+    >
       <PackagePlus aria-hidden="true" />
       Finner du ikke det du skal ha? Legg til annet
     </Button>

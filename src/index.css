@@ -104,9 +104,46 @@
     @apply border-border;
   }
 
+  /*
+   * APP OG IKKJE NETTSIDE.
+   *
+   * Det som gjer at ei nettside kjennest som ei app på telefonen: sida rikkar
+   * seg ikkje sidelengs, eit dobbelttrykk på ein knapp zoomar ikkje inn, og
+   * ein dra forbi toppen eller botnen strekkjer ikkje heile flata.
+   *
+   * KNIPE-ZOOM ER MED VILJE IGJEN. Universell utforming (WCAG 1.4.4, som
+   * gjeld for nettløysingar retta mot allmenta i Noreg) krev at teksten kan
+   * forstørrast, og ein med dårleg syn i eit mørkt lager treng det. Det som
+   * forsvinn, er dei tilfeldige zoomane: dobbelttrykk (touch-action), zoom ved
+   * trykk i eit felt (alle felt har minst 16 px) og zoom UT, som berre er
+   * mogleg når noko er breiare enn skjermen.
+   */
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
   body {
     @apply bg-background text-foreground font-sans;
     font-family: 'DM Sans', system-ui, sans-serif;
+    /* Siste skanse: eitt element som blir for breitt, skal ikkje gjere heile
+       sida mogleg å zoome ut og dra sidelengs. clip, ikkje hidden: hidden lagar
+       ein rullebehaldar og øydelegg den klistra toppen. */
+    overflow-x: clip;
+  }
+
+  /* Eit langt trykk på ein knapp skal trykke han, ikkje markere teksten i han
+     eller opne iOS-menyen for lenkjer. Vanleg tekst kan framleis markerast. */
+  button,
+  [role="button"],
+  [role="tab"],
+  [role="radio"] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
 
   /* Søkefelta har ein eigen «Tøm søket»-knapp. Nettlesaren sin eigen
