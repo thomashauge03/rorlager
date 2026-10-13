@@ -415,10 +415,57 @@ registrert feil på lageret, så lenge uttaket ikke er fakturert:
 | Bytt prosjekt | «Endre» ved Prosjekt | Velg fra prosjektlista (teksten skrives fra prosjektet, og `project_id` settes) eller skriv fritt. |
 | Endre navn | Under en annet-linje | Navn og dimensjon på linja – og på forslaget, så «Opprett vare» blir riktig utfylt. |
 | Bytt vare | Under hver linje | Linja får varens navn, varenummer, enhet og pris; mengden står. Har ordren trukket lageret, legges den gamle varen tilbake og den nye trekkes, begge med grunnen `retting` i lagerloggen. En annet-linje blir en vanlig linje, og forslaget merkes `opprettet`. |
+| Endre mengde | Under hver linje | Lageret får differansen (`retting`), og summen regnes på nytt (`pipe_endre_mengde`). |
+| Retur | Under hver linje, også på fakturerte uttak | Rørene tilbake på lageret (`retur`). Ikke fakturert: linja blir mindre. Fakturert: en returordre (`retur_av`) med minusbeløp på samme kunde eller jobb, som krediteres på neste fakturagrunnlag (`pipe_retur`). |
 
-Alle tre går gjennom en databasefunksjon (`pipe_bytt_prosjekt`,
-`pipe_endre_annet`, `pipe_bytt_vare`) som sjekker kontoret, nekter en fakturert
-ordre og skriver lager, sum og forslag i én transaksjon.
+Alle går gjennom en databasefunksjon (`pipe_bytt_prosjekt`,
+`pipe_endre_annet`, `pipe_bytt_vare`, `pipe_endre_mengde`, `pipe_retur`) som
+sjekker kontoret og skriver lager, sum og forslag i én transaksjon. En
+returlinje kan ikke rettes – en trigger stopper det, så lageret aldri går feil vei.
+
+## Lager: inventur, innkjøp og statistikk
+
+Admin → Lager har fire verktøy i tillegg til lista:
+
+- **Inventur** – varene i hylleorden; tast eller skann, se avvikene og lagre
+  alt på én gang (`pipe_inventur`, alt eller ingenting). Tellingen ligger som
+  utkast på enheten til den er lagret.
+- **Innkjøpsforslag** – varer på eller under varselgrensen, og varer uten grense
+  som går tom innen 14 dager, med forslag til antall ut fra netto forbruk
+  (`pipe_forbruk_per_vare`). CSV, tekst eller e-post til Dahl.
+- **Statistikk** – mest tatt ut, salg per måned, største kunder og jobber, og
+  varer som står uten å gå.
+- **Strekkode** – produsentens EAN kan legges på varen, og skanneren kjenner den
+  igjen (`pipe_finn_ean`).
+
+Lagerverdien regnes med kostpris. «Tomme» teller bare varer som føres på lager
+(varselgrense over null) og negativ beholdning.
+
+## Forbruk per prosjekt
+
+Hver uttakslinje tar vare på kostprisen da røret gikk ut (`unit_cost`, satt av en
+trigger). Admin → Prosjekt → «Forbruk» viser uttakene på et prosjekt med kost og
+salg, og «Forbruk fra lageret – alle prosjekter» lager én CSV for en periode
+(semikolon, desimalkomma, BOM – åpnes rett i norsk Excel; kolonnene må kobles
+første gang i SmartDok eller Tripletex). Byggeplassen ser «Tatt fra lageret» på
+prosjektsiden, uten priser (`pipe_prosjekt_uttak`).
+
+Alt som går ut av lageret, føres på lagerprosjektet «Lagervarer Rør» (2014131,
+`pipe_settings.stock_project_id`, satt på hver ordre av en trigger). Kontoret ser
+det som «Tas fra» i ordrevinduet; kunden ser det ingen steder.
+
+## Endringslogg og rydding
+
+`pipe_revisjon` skrives av triggere: pris og kostpris, påslag og innstillinger,
+prosjekt/status/faktura og sletting av ordrer, mengde/vare/pris på linjer,
+fakturagrunnlag og roller. Admin → Innstillinger → Endringslogg, og
+prishistorikken i vare-dialogen. Sporet kan bare leses, og kundens
+personopplysninger er ikke med.
+
+Hver natt (pg_cron) rydder `pipe_rydd_persondata()`: avviste bestillinger slettes
+etter 90 dager, ufakturerte ordrer anonymiseres etter 2 år og fakturerte etter 6,
+e-postloggen slettes etter 1 år. Endringsloggen ryddes etter 6 år. Fristene står
+også i personvernerklæringen – endres de ett sted, må de endres begge steder.
 
 ## Priser og avanse
 
