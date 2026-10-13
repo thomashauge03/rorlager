@@ -509,7 +509,7 @@ export default function ProjectReceipt() {
         <main className="mx-auto w-full max-w-2xl px-3 pt-4 sm:px-4">
           <div className="hm-card flex flex-col items-center justify-center gap-2 py-14 text-center">
             <div className="rounded-full bg-success/10 p-4 ring-8 ring-success/5">
-              <CheckCheck className="h-7 w-7 text-success" aria-hidden="true" />
+              <CheckCheck className="h-7 w-7 text-success-ink" aria-hidden="true" />
             </div>
             <p className="mt-1 font-semibold text-foreground">Alt er mottatt</p>
             <p className="max-w-xs text-sm text-muted-foreground">
@@ -552,7 +552,7 @@ export default function ProjectReceipt() {
             linjer ville det elles ligge langt nede medan sjåføren ventar. */}
         <div className="hm-card mt-4 space-y-1.5 p-3">
           <Label htmlFor="mottak-navn">
-            Ditt navn <span className="text-destructive">*</span>
+            Ditt navn <span className="text-destructive-ink">*</span>
           </Label>
           <Input
             id="mottak-navn"
@@ -673,10 +673,10 @@ export default function ProjectReceipt() {
         <section className="hm-card mt-4 space-y-3 p-3" aria-labelledby="bilder">
           <div className="flex items-center justify-between gap-2">
             <h2 id="bilder" className="text-sm font-semibold text-foreground">
-              Bilde av leveransen <span className="text-destructive">*</span>
+              Bilde av leveransen <span className="text-destructive-ink">*</span>
             </h2>
             {bilder.length > 0 ? (
-              <span className="hm-chip border border-success/30 bg-success/15 text-success">
+              <span className="hm-chip border border-success/30 bg-success/15 text-success-ink">
                 {bilder.length} av {MAKS_BILETE}
               </span>
             ) : null}
@@ -717,7 +717,7 @@ export default function ProjectReceipt() {
                      * h-9 var 36 px – den minste og trongaste flata på skjermen,
                      * treft med hanskar, og eit bomtrykk slettar dokumentasjonen
                      * med det same og utan spørsmål. */
-                    className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-destructive shadow md:h-9 md:w-9"
+                    className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-full bg-background/90 text-destructive-ink shadow md:h-9 md:w-9"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>

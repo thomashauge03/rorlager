@@ -139,7 +139,7 @@ export function SignaturePad({ value, onChange, label = "Signatur" }: SignatureP
           size="sm"
           onClick={clear}
           disabled={!hasInk}
-          className="h-9 text-muted-foreground"
+          className="h-11 text-muted-foreground"
         >
           <Eraser className="h-4 w-4" aria-hidden="true" />
           Tøm
@@ -159,7 +159,7 @@ export function SignaturePad({ value, onChange, label = "Signatur" }: SignatureP
           onPointerCancel={onUp}
         />
         {!hasInk && (
-          <span className="pointer-events-none absolute inset-x-0 bottom-6 text-center text-sm text-neutral-400">
+          <span className="pointer-events-none absolute inset-x-0 bottom-6 text-center text-sm text-neutral-500">
             Skriv signaturen her
           </span>
         )}

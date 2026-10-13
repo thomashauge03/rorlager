@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { AlertTriangle, ArrowRight, Home, Plus, Search, ShoppingCart, WifiOff } from "lucide-react";
+import { AlertTriangle, ArrowRight, Home, Plus, Search, Send, WifiOff } from "lucide-react";
 import { TopBar } from "@/components/TopBar";
 import { CartBar } from "@/components/CartBar";
 import { StockBadge } from "@/components/StatusBadge";
@@ -71,8 +71,10 @@ export default function PipePage() {
     }
     cart.add(cartLineFromType(pipe, quantity));
     toast.success(`${qtyLabel(quantity, pipe.unit)} ${pipeLabel(pipe.name, pipe.dimension)} lagt i kurven`);
-    // Rett tilbake til framsida: neste hylle er som regel eitt skann unna
-    navigate(thenGoToCart ? "/kurv" : "/");
+    // Rett tilbake til framsida: neste hylle er som regel eitt skann unna.
+    // Den andre knappen går rett til kassen, ikkje til kurva: kassen viser alt
+    // som er i kurva og har «Endre handlekurven», så kurva var eit trykk for mykje.
+    navigate(thenGoToCart ? "/kasse" : "/");
   };
 
   /* ---------- Lastar ---------- */
@@ -262,8 +264,8 @@ export default function PipePage() {
               disabled={quantity === null || quantity <= 0}
               onClick={() => addToCart(true)}
             >
-              <ShoppingCart aria-hidden="true" />
-              Legg til og gå til kurv
+              <Send aria-hidden="true" />
+              Legg til og send inn
               <ArrowRight aria-hidden="true" />
             </Button>
             <Button asChild variant="ghost" className="h-12 w-full text-base text-muted-foreground [&_svg]:size-5">

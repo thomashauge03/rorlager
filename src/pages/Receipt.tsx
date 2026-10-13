@@ -133,7 +133,7 @@ export default function Receipt() {
 
       <main className="mx-auto max-w-2xl px-3 pt-4 pb-10 sm:px-4">
         <div className="animate-scale-in rounded-lg border border-success/30 bg-success/10 p-6 text-center">
-          <CheckCircle2 className="mx-auto h-12 w-12 text-success" aria-hidden="true" />
+          <CheckCircle2 className="mx-auto h-12 w-12 text-success-ink" aria-hidden="true" />
           <h2 className="mt-3 text-2xl font-bold text-foreground">Uttaket er registrert</h2>
           <p className="tabular mt-1 text-sm text-muted-foreground">
             Uttak nr. <span className="font-semibold text-foreground">{order.order_number}</span> ·{" "}

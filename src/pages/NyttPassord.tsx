@@ -193,7 +193,7 @@ export default function NyttPassord() {
                 </div>
 
                 {feil ? (
-                  <p className="text-sm text-destructive" role="alert">
+                  <p className="text-sm text-destructive-ink" role="alert">
                     {feil}
                   </p>
                 ) : null}

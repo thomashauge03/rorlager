@@ -73,7 +73,7 @@ function unitSummary(lines: { unit: string; quantity: number }[]): string {
 function ProsjektEllerHenting({ o }: { o: OrderWithLines }) {
   if (!erBestilling(o)) return <>{o.project || "–"}</>;
   return o.pickup_now ? (
-    <span className="font-semibold text-destructive">Henter nå</span>
+    <span className="font-semibold text-destructive-ink">Henter nå</span>
   ) : (
     <span>Hentes {shortDate(o.pickup_date)}</span>
   );
@@ -463,7 +463,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
       {/* ------------------------------------------------------------- liste */}
       {isError && (
         <div className="rounded-lg border border-destructive/60 bg-destructive/10 px-4 py-3">
-          <p className="text-sm font-semibold text-destructive">Bestillingene kunne ikke hentes</p>
+          <p className="text-sm font-semibold text-destructive-ink">Bestillingene kunne ikke hentes</p>
           <p className="text-sm text-foreground mt-1">{error instanceof Error ? error.message : "Ukjent feil"}</p>
           <Button size="sm" variant="outline" className="mt-2" onClick={() => refetch()}>
             Prøv igjen
@@ -605,7 +605,7 @@ export function OrdersTab({ ordre = null }: { ordre?: number | null } = {}) {
                             type="button"
                             onClick={() => setProsjektFor(open)}
                             className="shrink-0 min-h-9 px-1 text-xs font-medium text-primary underline-offset-2 hover:underline"
-                            aria-label="Bytt prosjekt"
+                            aria-label="Endre prosjekt"
                           >
                             Endre
                           </button>

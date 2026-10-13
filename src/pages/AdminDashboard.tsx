@@ -234,6 +234,7 @@ export default function AdminDashboard() {
               {isSuperAdmin ? (
                 <Link
                   to="/admin/brukere"
+                  aria-label="Brukere"
                   className="h-11 px-2 sm:px-3 rounded-md flex items-center gap-2 text-sm text-white hover:bg-white/10 transition-colors"
                 >
                   <Users className="h-5 w-5" aria-hidden="true" />
@@ -253,6 +254,7 @@ export default function AdminDashboard() {
               <Button
                 variant="ghost"
                 onClick={logout}
+                aria-label="Logg ut"
                 className="h-11 px-2 sm:px-3 text-white hover:bg-white/10 hover:text-white"
               >
                 <LogOut className="h-5 w-5 sm:mr-2" aria-hidden="true" />

@@ -26,6 +26,8 @@ import PickupOrder from "./pages/PickupOrder";
 import NotFound from "./pages/NotFound";
 import { InstallPrompt } from "@/components/InstallPrompt";
 import { SetupBanner } from "@/components/SetupBanner";
+import { SideTittel } from "@/components/SideTittel";
+import { FeilGrense } from "@/components/FeilGrense";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -47,6 +49,8 @@ const App = () => (
         <Toaster />
         <Sonner />
         <BrowserRouter>
+          <SideTittel />
+          <FeilGrense>
           <Routes>
             <Route path="/" element={<Index />} />
             {/* Måladressa for QR-kodane på hyllene */}
@@ -73,6 +77,7 @@ const App = () => (
             <Route path="/prosjekt/:id/mottak/:ordreId" element={<ProjectReceipt />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </FeilGrense>
           {/* Ligg utanfor Routes, så dei overlever navigering mellom sidene */}
           <InstallPrompt />
           <SetupBanner />

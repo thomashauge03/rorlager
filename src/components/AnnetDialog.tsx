@@ -188,7 +188,7 @@ export function AnnetDialog({
           </div>
 
           {feil ? (
-            <p role="alert" className="text-sm font-medium text-destructive">
+            <p role="alert" className="text-sm font-medium text-destructive-ink">
               {feil}
             </p>
           ) : null}

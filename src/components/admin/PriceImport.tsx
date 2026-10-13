@@ -346,9 +346,9 @@ export function PriceImport() {
         {parseError && (
           <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4">
             <div className="flex gap-2">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-destructive-ink" aria-hidden="true" />
               <div className="space-y-2">
-                <p className="text-sm font-semibold text-destructive">Klarte ikke å lese filen</p>
+                <p className="text-sm font-semibold text-destructive-ink">Klarte ikke å lese filen</p>
                 <p className="text-sm text-muted-foreground">{parseError}</p>
                 <Button variant="outline" size="sm" className="h-9" onClick={() => inputRef.current?.click()}>
                   Velg en annen fil
@@ -378,7 +378,7 @@ export function PriceImport() {
                     innstillingene.
                   </p>
                 ) : (
-                  <p className="text-xs text-destructive">Påslaget må være et tall mellom 0 og {MAX_MARKUP}.</p>
+                  <p className="text-xs text-destructive-ink">Påslaget må være et tall mellom 0 og {MAX_MARKUP}.</p>
                 )}
               </div>
 

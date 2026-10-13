@@ -421,7 +421,7 @@ export function SettingsTab() {
                 aria-invalid={markupText.trim() !== "" && !markupOk}
               />
               {markupText.trim() !== "" && !markupOk ? (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive-ink">
                   Påslaget må være et tall mellom 0 og {MAX_MARKUP}.
                 </p>
               ) : (

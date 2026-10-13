@@ -439,7 +439,7 @@ export default function AdminUsers() {
         <Card className="max-w-sm w-full animate-fade-in">
           <CardContent className="pt-6 text-center space-y-3">
             <div className="mx-auto rounded-full bg-destructive/10 p-3 w-fit">
-              <ShieldCheck className="h-6 w-6 text-destructive" aria-hidden="true" />
+              <ShieldCheck className="h-6 w-6 text-destructive-ink" aria-hidden="true" />
             </div>
             <p className="font-semibold text-foreground">Du har ikke tilgang</p>
             <p className="text-sm text-muted-foreground">
@@ -640,7 +640,7 @@ export default function AdminUsers() {
                         aria-label={`Fjern ${u.email} fra registeret`}
                         onClick={() => setToDelete(u)}
                       >
-                        <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        <Trash2 className="h-4 w-4 text-destructive-ink" aria-hidden="true" />
                       </Button>
                     </div>
                   </div>
@@ -844,7 +844,7 @@ function MidlertidigPassordFelt({
           Lag et for meg
         </Button>
       </div>
-      <p id={`${id}-hjelp`} className={`text-xs ${feil ? "text-destructive" : "text-muted-foreground"}`}>
+      <p id={`${id}-hjelp`} className={`text-xs ${feil ? "text-destructive-ink" : "text-muted-foreground"}`}>
         {feil ?? "Personen må bytte det ved første innlogging."}
       </p>
     </div>
@@ -888,7 +888,7 @@ function ProsjektVelger({
   if (status === "feil") {
     return (
       <div className="rounded-lg border border-destructive/60 bg-destructive/10 p-3">
-        <p className="text-sm font-semibold text-destructive">Prosjekttilgangen kunne ikke hentes</p>
+        <p className="text-sm font-semibold text-destructive-ink">Prosjekttilgangen kunne ikke hentes</p>
         <p className="mt-1 text-sm text-foreground">
           Lagring er stengt til den er lest — ellers ville et trykk på Lagre fjernet alle prosjektene hans.
         </p>
@@ -911,7 +911,7 @@ function ProsjektVelger({
       <div className="flex items-center gap-2">
         <FolderKanban className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
         <span className="text-sm font-medium text-foreground">
-          Prosjekttilgang {paakrevd ? <span className="text-destructive">*</span> : null}
+          Prosjekttilgang {paakrevd ? <span className="text-destructive-ink">*</span> : null}
         </span>
         {valgte.length > 0 ? (
           <span className="hm-chip border border-primary/25 bg-primary/10 text-primary">{valgte.length} valgt</span>
@@ -1057,7 +1057,7 @@ function PassordDialog({ data, onClose }: { data: OpprettSvar & { email: string 
           du bare et nytt.
         </p>
 
-        {data.warning ? <p className="text-sm text-destructive">{data.warning}</p> : null}
+        {data.warning ? <p className="text-sm text-destructive-ink">{data.warning}</p> : null}
 
         <DialogFooter>
           <Button className="h-11" onClick={onClose}>

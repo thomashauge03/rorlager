@@ -178,7 +178,7 @@ export function StockTab() {
   if (types.isError) {
     return (
       <div className="hm-card p-6">
-        <p className="text-sm text-destructive">Klarte ikke å hente lageret.</p>
+        <p className="text-sm text-destructive-ink">Klarte ikke å hente lageret.</p>
         <p className="text-sm text-muted-foreground mt-1">{(types.error as Error)?.message}</p>
         <Button className="mt-4 h-11" variant="outline" onClick={() => types.refetch()}>
           Prøv igjen
@@ -365,7 +365,7 @@ export function StockTab() {
                       <TableCell className="text-sm text-muted-foreground">{t.sku || "–"}</TableCell>
                       <TableCell className="text-sm text-muted-foreground">{t.location || "–"}</TableCell>
                       <TableCell className="text-right">
-                        <span className={cn("tabular font-semibold", t.stock < 0 && "text-destructive")}>{num(t.stock)}</span>
+                        <span className={cn("tabular font-semibold", t.stock < 0 && "text-destructive-ink")}>{num(t.stock)}</span>
                         <span className="ml-1 text-xs text-muted-foreground">{t.unit}</span>
                       </TableCell>
                       <TableCell className="tabular text-right text-sm text-muted-foreground">
@@ -424,7 +424,7 @@ export function StockTab() {
 
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
                     <p>
-                      <span className={cn("tabular text-xl font-bold", t.stock < 0 && "text-destructive")}>{num(t.stock)}</span>
+                      <span className={cn("tabular text-xl font-bold", t.stock < 0 && "text-destructive-ink")}>{num(t.stock)}</span>
                       <span className="ml-1 text-sm text-muted-foreground">{t.unit}</span>
                     </p>
                     <p className="tabular text-sm text-muted-foreground">
@@ -556,7 +556,7 @@ function Stat({
       <p
         className={cn(
           "tabular text-xl font-bold text-foreground",
-          tone === "bad" && "text-destructive",
+          tone === "bad" && "text-destructive-ink",
           tone === "warn" && "text-warning-ink",
         )}
       >
@@ -620,7 +620,7 @@ function RowActions({
             Rediger
           </DropdownMenuItem>
           <DropdownMenuSeparator />
-          <DropdownMenuItem className="text-destructive focus:text-destructive" onSelect={onDelete}>
+          <DropdownMenuItem className="text-destructive-ink focus:text-destructive-ink" onSelect={onDelete}>
             <Trash2 className="h-4 w-4" aria-hidden="true" />
             Slett
           </DropdownMenuItem>
@@ -700,7 +700,7 @@ function AdjustDialog({
 
           <p className="tabular text-sm text-muted-foreground">
             Etter {mode === "count" ? "opptelling" : "endring"}:{" "}
-            <span className={cn("font-semibold text-foreground", etter < 0 && "text-destructive")}>
+            <span className={cn("font-semibold text-foreground", etter < 0 && "text-destructive-ink")}>
               {qtyLabel(Math.round(etter * 100) / 100, pipe.unit)}
             </span>
           </p>
@@ -1164,7 +1164,7 @@ function CategorySection({ categories, pipes }: { categories: PipeCategoryRow[];
                   aria-label={`Slett kategorien ${c.name}`}
                   onClick={() => setToDelete(c)}
                 >
-                  <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
+                  <Trash2 className="h-4 w-4 text-destructive-ink" aria-hidden="true" />
                 </Button>
               </div>
             );
@@ -1268,7 +1268,7 @@ function StockLogSheet({ target, onClose }: { target: PipeType | "alle" | null; 
         <div className="mt-4 space-y-2">
           {log.isLoading && [0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-14 w-full rounded-lg" />)}
 
-          {log.isError && <p className="text-sm text-destructive">{(log.error as Error)?.message}</p>}
+          {log.isError && <p className="text-sm text-destructive-ink">{(log.error as Error)?.message}</p>}
 
           {log.data?.length === 0 && <p className="text-sm text-muted-foreground">Ingen endringer er logget ennå.</p>}
 
@@ -1278,7 +1278,7 @@ function StockLogSheet({ target, onClose }: { target: PipeType | "alle" | null; 
                 <span
                   className={cn(
                     "tabular font-semibold",
-                    rad.change < 0 ? "text-destructive" : "text-success",
+                    rad.change < 0 ? "text-destructive-ink" : "text-success-ink",
                   )}
                 >
                   {rad.change > 0 ? "+" : ""}

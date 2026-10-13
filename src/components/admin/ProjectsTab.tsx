@@ -150,7 +150,7 @@ export function ProjectsTab() {
         </div>
       ) : projects.isError ? (
         <div className="hm-card p-6">
-          <p className="text-sm font-semibold text-destructive">Prosjektene kunne ikke hentes</p>
+          <p className="text-sm font-semibold text-destructive-ink">Prosjektene kunne ikke hentes</p>
           <p className="mt-1 text-sm text-foreground">
             {projects.error instanceof Error ? projects.error.message : "Ukjent feil"}
           </p>
@@ -341,7 +341,7 @@ function MedlemsPanel({ project, onClose }: { project: ProjectRow; onClose: () =
              * å lyge her er dyrt.
              */
             <div className="rounded-md border border-destructive/60 bg-destructive/10 px-3 py-3">
-              <p className="text-sm font-semibold text-destructive">Medlemmene kunne ikke hentes</p>
+              <p className="text-sm font-semibold text-destructive-ink">Medlemmene kunne ikke hentes</p>
               <p className="mt-1 text-sm text-foreground">
                 {members.error instanceof Error ? members.error.message : "Ukjent feil"}
               </p>
@@ -361,7 +361,7 @@ function MedlemsPanel({ project, onClose }: { project: ProjectRow; onClose: () =
                     disabled={fjern.isPending}
                     onClick={() => setSkalFjerne(m)}
                     aria-label={`Fjern ${m.email} fra prosjektet`}
-                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive disabled:opacity-50"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive-ink disabled:opacity-50"
                   >
                     <Trash2 className="h-4 w-4" aria-hidden="true" />
                   </button>

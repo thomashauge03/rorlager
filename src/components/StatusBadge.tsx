@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
 const ORDER_STYLE: Record<OrderStatus, string> = {
   ny: "bg-primary/10 text-primary border border-primary/25",
   behandlet: "bg-warning/15 text-warning-ink border border-warning/30",
-  levert: "bg-success/15 text-success border border-success/30",
+  levert: "bg-success/15 text-success-ink border border-success/30",
   avvist: "bg-muted text-muted-foreground border border-border",
 };
 
@@ -26,9 +26,9 @@ export function StatusBadge({ status, kind }: { status: OrderStatus; kind?: Orde
 }
 
 const STOCK_STYLE: Record<StockStatus, string> = {
-  tomt: "bg-destructive/15 text-destructive border border-destructive/30",
+  tomt: "bg-destructive/15 text-destructive-ink border border-destructive/30",
   snart: "bg-warning/15 text-warning-ink border border-warning/30",
-  pa_lager: "bg-success/15 text-success border border-success/30",
+  pa_lager: "bg-success/15 text-success-ink border border-success/30",
 };
 
 export function StockBadge({ status }: { status: StockStatus }) {
@@ -41,7 +41,7 @@ const PROJECT_STYLE: Record<ProjectOrderStatus, string> = {
   meldt: "bg-primary/10 text-primary border border-primary/25",
   bestilt: "bg-warning/15 text-warning-ink border border-warning/30",
   delvis: "bg-warning/15 text-warning-ink border border-warning/30",
-  mottatt: "bg-success/15 text-success border border-success/30",
+  mottatt: "bg-success/15 text-success-ink border border-success/30",
   avvist: "bg-muted text-muted-foreground border border-border",
 };
 
@@ -54,10 +54,10 @@ export function ProjectStatusBadge({ status }: { status: ProjectOrderStatus }) {
 }
 
 const DEVIATION_STYLE: Record<Deviation, string> = {
-  ingen: "bg-success/15 text-success border border-success/30",
-  mangler: "bg-destructive/15 text-destructive border border-destructive/30",
-  skadet: "bg-destructive/15 text-destructive border border-destructive/30",
-  feil_vare: "bg-destructive/15 text-destructive border border-destructive/30",
+  ingen: "bg-success/15 text-success-ink border border-success/30",
+  mangler: "bg-destructive/15 text-destructive-ink border border-destructive/30",
+  skadet: "bg-destructive/15 text-destructive-ink border border-destructive/30",
+  feil_vare: "bg-destructive/15 text-destructive-ink border border-destructive/30",
   for_mye: "bg-warning/15 text-warning-ink border border-warning/30",
 };
 

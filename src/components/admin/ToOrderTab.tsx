@@ -261,7 +261,7 @@ export function ToOrderTab({ behov = null, mottak: mottakNr = null }: { behov?: 
         </div>
       ) : orders.isError || projects.isError ? (
         <div className="hm-card p-6">
-          <p className="text-sm font-semibold text-destructive">
+          <p className="text-sm font-semibold text-destructive-ink">
             {orders.isError ? "Bestillingene" : "Prosjektene"} kunne ikke hentes
           </p>
           <p className="mt-1 text-sm text-foreground">
@@ -311,11 +311,11 @@ export function ToOrderTab({ behov = null, mottak: mottakNr = null }: { behov?: 
                       </span>
                     ) : null}
                     {avvikPaa > 0 ? (
-                      <span className="hm-chip shrink-0 border border-destructive/30 bg-destructive/15 text-destructive">
+                      <span className="hm-chip shrink-0 border border-destructive/30 bg-destructive/15 text-destructive-ink">
                         {avvikPaa} avvik
                       </span>
                     ) : (
-                      <span className="hm-chip shrink-0 border border-success/30 bg-success/15 text-success">
+                      <span className="hm-chip shrink-0 border border-success/30 bg-success/15 text-success-ink">
                         Uten avvik
                       </span>
                     )}
@@ -791,7 +791,7 @@ function BestillPanel({
 
             <div className="space-y-1.5">
               <Label htmlFor="avvis-grunn">
-                Begrunnelse <span className="text-destructive">*</span>
+                Begrunnelse <span className="text-destructive-ink">*</span>
               </Label>
               <Textarea
                 id="avvis-grunn"

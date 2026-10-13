@@ -82,7 +82,7 @@ export default function Cart() {
                   type="button"
                   onClick={() => cart.remove(line.pipe_type_id)}
                   aria-label={`Fjern ${pipeLabel(line.name, line.dimension)} fra kurven`}
-                  className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                  className="-mr-1 -mt-1 flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive-ink"
                 >
                   <Trash2 className="h-5 w-5" aria-hidden="true" />
                 </button>

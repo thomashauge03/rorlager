@@ -28,24 +28,43 @@ function Field({
   htmlFor,
   required,
   hint,
+  feil,
   children,
 }: {
   label: string;
   htmlFor: string;
   required?: boolean;
   hint?: string;
+  /** Står under feltet, ikkje berre i ein toast som forsvinn (WCAG 3.3.1). */
+  feil?: string | null;
   children: React.ReactNode;
 }) {
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-        {label} {required && <span className="text-destructive">*</span>}
+        {label} {required && <span className="text-destructive-ink">*</span>}
       </Label>
       {children}
+      {feil ? (
+        <p id={`${htmlFor}-feil`} className="text-sm font-medium text-destructive-ink">
+          {feil}
+        </p>
+      ) : null}
       {hint ? <p className="text-xs text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
+
+/** Feltet som stoppa innsendinga, og kvifor. */
+type Feltfeil = { felt: string; melding: string };
+
+/** Kva felt-id ein nøkkel i skjemaet høyrer til – så feilen forsvinn når han blir retta. */
+const FELT_FOR: Partial<Record<keyof SavedCustomer, string>> = {
+  customer_name: "navn",
+  customer_phone: "telefon",
+  customer_email: "epost",
+  project: "prosjekt",
+};
 
 export default function Checkout() {
   const navigate = useNavigate();
@@ -107,41 +126,57 @@ export default function Checkout() {
     if (cart.count === 0 && !submitted.current) navigate("/kurv", { replace: true });
   }, [cart.count, navigate]);
 
-  const set = (key: keyof SavedCustomer, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  const [feltFeil, setFeltFeil] = useState<Feltfeil | null>(null);
+  const feilFor = (felt: string) => (feltFeil?.felt === felt ? feltFeil.melding : null);
+  /** aria-attributta eit felt treng for at skjermlesaren skal seie kva som er gale. */
+  const ariaFor = (felt: string) => ({
+    "aria-invalid": feltFeil?.felt === felt || undefined,
+    "aria-describedby": feltFeil?.felt === felt ? `${felt}-feil` : undefined,
+  });
+
+  const set = (key: keyof SavedCustomer, value: string) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setFeltFeil((f) => (f && f.felt === FELT_FOR[key] ? null : f));
+  };
+
+  /** Stoppar innsendinga: feilen ved feltet, fokus dit, og ein toast for den som ser opp. */
+  const stopp = (felt: string, melding: string, fokus = felt) => {
+    setFeltFeil({ felt, melding });
+    toast({ title: melding, variant: "destructive" });
+    document.getElementById(fokus)?.focus();
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (sending) return;
+    setFeltFeil(null);
 
     const name = form.customer_name.trim();
     if (ansatt) {
       if (medListe && !prosjektValg) {
-        toast({ title: "Velg hvilket prosjekt varene skal på", variant: "destructive" });
-        document.getElementById("prosjekt-sok")?.focus();
+        stopp("prosjekt-sok", "Velg hvilket prosjekt varene skal på");
         return;
       }
       if ((!medListe || prosjektValg?.kind === "annet") && !form.project.trim()) {
-        toast({ title: "Skriv hvilken jobb eller hvilket prosjekt varene skal til", variant: "destructive" });
-        document.getElementById("prosjekt")?.focus();
+        stopp(medListe ? "prosjekt-sok" : "prosjekt", "Skriv hvilken jobb eller hvilket prosjekt varene skal til", "prosjekt");
         return;
       }
     } else {
       if (!name) {
-        toast({ title: "Skriv inn navnet ditt", variant: "destructive" });
+        stopp("navn", "Skriv inn navnet ditt");
         return;
       }
       if (requirePhone && !form.customer_phone.trim()) {
-        toast({ title: "Telefonnummer mangler", description: "Vi trenger et nummer for å nå deg.", variant: "destructive" });
+        stopp("telefon", "Skriv inn telefonnummeret ditt, så vi kan nå deg");
         return;
       }
       // Påkravd, men utan formatsjekk med vilje: har kunden ingen e-post, skriv han «ingen»
       if (!form.customer_email.trim()) {
-        toast({ title: "Skriv inn e-post", description: "Har du ikke e-post, skriv «ingen».", variant: "destructive" });
-        document.getElementById("epost")?.focus();
+        stopp("epost", "Skriv inn e-post. Har du ikke e-post, skriv «ingen».");
         return;
       }
       if (requireSignature && !signature) {
-        toast({ title: "Signatur mangler", description: "Skriv signaturen din i ruta nederst.", variant: "destructive" });
+        stopp("signatur", "Skriv signaturen din i ruta nederst", "signatur-felt");
         return;
       }
     }
@@ -288,7 +323,7 @@ export default function Checkout() {
               ) : null}
             </div>
           ) : null}
-          <Link to="/kurv" className="mt-3 inline-block text-sm font-medium text-primary hover:underline">
+          <Link to="/kurv" className="mt-2 inline-flex min-h-11 items-center text-sm font-medium text-primary hover:underline">
             Endre handlekurven
           </Link>
         </section>
@@ -326,7 +361,7 @@ export default function Checkout() {
               {prosjektliste.isLoading ? (
                 <Skeleton className="h-40 w-full rounded-lg" />
               ) : medListe ? (
-                <Field label="Hvilket prosjekt skal varene på?" htmlFor="prosjekt-sok" required>
+                <Field label="Hvilket prosjekt skal varene på?" htmlFor="prosjekt-sok" required feil={feilFor("prosjekt-sok")}>
                   <ProsjektVelger
                     prosjekter={prosjektliste.data}
                     valgt={prosjektValg}
@@ -336,9 +371,10 @@ export default function Checkout() {
                   />
                 </Field>
               ) : (
-                <Field label="Jobb eller prosjekt" htmlFor="prosjekt" required hint="Hvor skal rørene brukes?">
+                <Field label="Jobb eller prosjekt" htmlFor="prosjekt" required hint="Hvor skal rørene brukes?" feil={feilFor("prosjekt")}>
                   <Input
                     id="prosjekt"
+                    {...ariaFor("prosjekt")}
                     value={form.project}
                     onChange={(e) => set("project", e.target.value)}
                     placeholder="Byggefelt Vest, tomt 4"
@@ -351,9 +387,10 @@ export default function Checkout() {
             </section>
           ) : (
             <section className="hm-card space-y-4 p-4">
-              <Field label="Navn" htmlFor="navn" required>
+              <Field label="Navn" htmlFor="navn" required feil={feilFor("navn")}>
                 <Input
                   id="navn"
+                  {...ariaFor("navn")}
                   name="name"
                   autoComplete="name"
                   value={form.customer_name}
@@ -363,9 +400,10 @@ export default function Checkout() {
                 />
               </Field>
 
-              <Field label="Telefon" htmlFor="telefon" required={requirePhone}>
+              <Field label="Telefon" htmlFor="telefon" required={requirePhone} feil={feilFor("telefon")}>
                 <Input
                   id="telefon"
+                  {...ariaFor("telefon")}
                   name="tel"
                   type="tel"
                   inputMode="tel"
@@ -381,10 +419,12 @@ export default function Checkout() {
                 label="E-post"
                 htmlFor="epost"
                 required
+                feil={feilFor("epost")}
                 hint="Brukes hvis vi må sende deg dokumentasjon. Har du ikke e-post, skriv «ingen»."
               >
                 <Input
                   id="epost"
+                  {...ariaFor("epost")}
                   name="email"
                   type="email"
                   inputMode="email"
@@ -423,8 +463,19 @@ export default function Checkout() {
           )}
 
           {!ansatt && requireSignature ? (
-            <section className="hm-card p-4">
-              <SignaturePad value={signature} onChange={setSignature} label="Signatur (påkrevd)" />
+            // tabIndex -1: teikneflata kan ikkje få fokus, så seksjonen tek det når signaturen manglar
+            <section id="signatur-felt" tabIndex={-1} className="hm-card p-4 focus:outline-none">
+              <SignaturePad
+                value={signature}
+                onChange={(s) => {
+                  setSignature(s);
+                  if (s) setFeltFeil((f) => (f?.felt === "signatur" ? null : f));
+                }}
+                label="Signatur (påkrevd)"
+              />
+              {feilFor("signatur") ? (
+                <p className="mt-2 text-sm font-medium text-destructive-ink">{feilFor("signatur")}</p>
+              ) : null}
             </section>
           ) : null}
 

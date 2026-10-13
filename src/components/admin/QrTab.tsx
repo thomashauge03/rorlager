@@ -495,7 +495,7 @@ export function QrTab() {
 
                 {typesQuery.isError && (
                   <TableRow>
-                    <TableCell colSpan={6} className="py-8 text-center text-sm text-destructive">
+                    <TableCell colSpan={6} className="py-8 text-center text-sm text-destructive-ink">
                       Klarte ikke å hente rørtypene. Last siden på nytt.
                     </TableCell>
                   </TableRow>
@@ -591,7 +591,7 @@ export function QrTab() {
                     className="h-full w-full object-contain animate-scale-in"
                   />
                 ) : previewFeila ? (
-                  <span className="px-3 text-center text-xs text-destructive">
+                  <span className="px-3 text-center text-xs text-destructive-ink">
                     Klarte ikke å lage QR-koden for denne varen
                   </span>
                 ) : (
@@ -634,7 +634,7 @@ export function QrTab() {
                 inputMode="url"
               />
               {lokalAdresse ? (
-                <p className="flex items-start gap-1.5 text-xs text-destructive">
+                <p className="flex items-start gap-1.5 text-xs text-destructive-ink">
                   <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   Adressen peker på denne maskinen. Skriv inn den ekte nettadressen før du skriver ut, ellers virker
                   ikke kodene på hyllen.
@@ -703,7 +703,7 @@ export function QrTab() {
                   : `${num(valgte.length)} etiketter · ${num(ark)} ark A4`}
               </p>
               {utenSlug > 0 && (
-                <p className="text-xs text-destructive">
+                <p className="text-xs text-destructive-ink">
                   {num(utenSlug)} av de valgte varene mangler QR-kode og får tom rute på arket.
                 </p>
               )}
@@ -789,7 +789,7 @@ export function QrTab() {
                     : `${num(valgte.length)} rør. Lim inn i QR Admin under menyen → «Importer fra Lagersystem».`}
                 </p>
               ) : (
-                <p className="flex items-start gap-1.5 text-xs text-destructive">
+                <p className="flex items-start gap-1.5 text-xs text-destructive-ink">
                   <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   QR Admin godtar bare lenker til https://{QR_ADMIN_VERT}. Sett «Adresse appen ligger på» til den.
                 </p>

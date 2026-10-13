@@ -30,6 +30,9 @@
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
+    /* Tekst i raudt: --destructive er laga for flater (knappar). Som tekst på
+       kvitt og i dei farga merka er han for lys – sjå --warning-ink. */
+    --destructive-ink: 0 72% 40%;
 
     --border: 0 0% 87%;
     --input: 0 0% 87%;
@@ -48,6 +51,7 @@
 
     --success: 160 60% 40%;
     --success-foreground: 0 0% 100%;
+    --success-ink: 160 70% 24%;
     --warning: 35 90% 55%;
     --warning-foreground: 0 0% 100%;
     /* Mørk gulbrun for tekst – gul på kvitt gir for låg kontrast */
@@ -75,8 +79,10 @@
     --muted-foreground: 0 0% 55%;
     --accent: 0 0% 20%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 30%;
+    /* 30 % lyshet gav 1,7:1 mot korta – raud tekst og «Tomt» var nesten usynlege. */
+    --destructive: 0 72% 45%;
     --destructive-foreground: 0 0% 100%;
+    --destructive-ink: 0 85% 70%;
     --border: 0 0% 18%;
     --input: 0 0% 18%;
     --ring: 0 75% 50%;
@@ -90,6 +96,7 @@
     --sidebar-ring: 0 75% 50%;
     --success: 160 55% 45%;
     --success-foreground: 0 0% 100%;
+    --success-ink: 155 60% 58%;
     --warning: 40 90% 60%;
     --warning-foreground: 0 0% 10%;
     --warning-ink: 40 95% 72%;

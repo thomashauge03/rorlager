@@ -227,7 +227,7 @@ export function PickupQueue({ onOpen }: { onOpen: (id: string) => void }) {
                 <span className="flex flex-wrap items-center gap-2">
                   <span className="tabular font-semibold text-foreground">#{o.order_number}</span>
                   {o.pickup_now ? (
-                    <span className="hm-chip border border-destructive/30 bg-destructive/15 text-destructive">HENTER NÅ</span>
+                    <span className="hm-chip border border-destructive/30 bg-destructive/15 text-destructive-ink">HENTER NÅ</span>
                   ) : (
                     <span className="text-sm text-muted-foreground">Hentes {longDate(o.pickup_date)}</span>
                   )}

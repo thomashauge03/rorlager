@@ -393,7 +393,7 @@ export function InvoiceTab() {
             </div>
           ) : uninvoiced.isError ? (
             <div className="rounded-lg border border-destructive/50 bg-destructive/10 px-3 py-3">
-              <p className="text-sm text-destructive">
+              <p className="text-sm text-destructive-ink">
                 {uninvoiced.error instanceof Error
                   ? uninvoiced.error.message
                   : "Klarte ikke å hente bestillingene."}
@@ -451,7 +451,7 @@ export function InvoiceTab() {
                   size="sm"
                   className="shrink-0 px-2"
                   onClick={resetCustomer}
-                  aria-label="Velg en annen kunde"
+                  aria-label="Bytt kunde"
                 >
                   <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" />
                   Bytt kunde
@@ -652,7 +652,7 @@ export function InvoiceTab() {
               <Skeleton className="h-12 w-full" />
             </div>
           ) : invoices.isError ? (
-            <p className="text-sm text-destructive">
+            <p className="text-sm text-destructive-ink">
               {invoices.error instanceof Error ? invoices.error.message : "Klarte ikke å hente grunnlagene."}
             </p>
           ) : (invoices.data ?? []).length === 0 ? (
@@ -697,7 +697,7 @@ export function InvoiceTab() {
                         className="shrink-0"
                         aria-label={`Angre grunnlag nummer ${inv.invoice_number}`}
                       >
-                        <RotateCcw className="h-4 w-4 text-destructive" aria-hidden="true" />
+                        <RotateCcw className="h-4 w-4 text-destructive-ink" aria-hidden="true" />
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent>

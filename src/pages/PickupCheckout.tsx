@@ -66,11 +66,11 @@ function Felt({
   return (
     <div className="space-y-1.5">
       <Label htmlFor={htmlFor} className="text-sm font-medium text-foreground">
-        {label} {required ? <span className="text-destructive">*</span> : null}
+        {label} {required ? <span className="text-destructive-ink">*</span> : null}
       </Label>
       {children}
       {feil ? (
-        <p id={`${htmlFor}-feil`} className="text-xs font-medium text-destructive">
+        <p id={`${htmlFor}-feil`} className="text-xs font-medium text-destructive-ink">
           {feil}
         </p>
       ) : hint ? (
@@ -313,14 +313,14 @@ export default function PickupCheckout() {
                         type="button"
                         onClick={() => cart.remove(l.pipe_type_id)}
                         aria-label={`Fjern ${pipeLabel(l.name, l.dimension)}`}
-                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                        className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive-ink"
                       >
                         <Trash2 className="h-5 w-5" aria-hidden="true" />
                       </button>
                     </div>
 
                     {l.problem ? (
-                      <p className="mt-2 text-sm font-medium text-destructive">{l.problem}. Fjern den for å gå videre.</p>
+                      <p className="mt-2 text-sm font-medium text-destructive-ink">{l.problem}. Fjern den for å gå videre.</p>
                     ) : (
                       <>
                         <div className="mt-2">
@@ -374,7 +374,7 @@ export default function PickupCheckout() {
                 tittel="Velg dag"
               />
             </div>
-            {feilFor("henterNaa") ? <p className="text-xs font-medium text-destructive">{feilFor("henterNaa")}</p> : null}
+            {feilFor("henterNaa") ? <p className="text-xs font-medium text-destructive-ink">{feilFor("henterNaa")}</p> : null}
             {skjema.henterNaa === true ? (
               <p className="rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
                 I dag, så snart kontoret har godkjent.{settings?.pickup_note ? ` ${settings.pickup_note}` : ""}
@@ -423,7 +423,7 @@ export default function PickupCheckout() {
                 tittel="Bedrift"
               />
             </div>
-            {feilFor("kundetype") ? <p className="text-xs font-medium text-destructive">{feilFor("kundetype")}</p> : null}
+            {feilFor("kundetype") ? <p className="text-xs font-medium text-destructive-ink">{feilFor("kundetype")}</p> : null}
 
             {skjema.kundetype === "bedrift" ? (
               <>

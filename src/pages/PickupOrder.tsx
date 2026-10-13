@@ -26,13 +26,13 @@ import { cn } from "@/lib/utils";
 
 const STATUS = {
   ny: { Ikon: Clock, tittel: "Venter på godkjenning", ramme: "border-primary/30 bg-primary/10", farge: "text-primary" },
-  behandlet: { Ikon: PackageCheck, tittel: "Klar til henting", ramme: "border-success/30 bg-success/10", farge: "text-success" },
-  levert: { Ikon: CheckCircle2, tittel: "Hentet", ramme: "border-success/30 bg-success/10", farge: "text-success" },
+  behandlet: { Ikon: PackageCheck, tittel: "Klar til henting", ramme: "border-success/30 bg-success/10", farge: "text-success-ink" },
+  levert: { Ikon: CheckCircle2, tittel: "Hentet", ramme: "border-success/30 bg-success/10", farge: "text-success-ink" },
   avvist: {
     Ikon: Ban,
     tittel: "Bestillingen ble avvist",
     ramme: "border-destructive/30 bg-destructive/10",
-    farge: "text-destructive",
+    farge: "text-destructive-ink",
   },
 } as const;
 

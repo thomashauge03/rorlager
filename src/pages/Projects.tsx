@@ -158,7 +158,7 @@ export default function Projects() {
           </div>
         ) : projects.isError ? (
           <div className="hm-card p-6">
-            <p className="text-sm font-semibold text-destructive">Prosjektene kunne ikke hentes</p>
+            <p className="text-sm font-semibold text-destructive-ink">Prosjektene kunne ikke hentes</p>
             <p className="mt-1 text-sm text-foreground">
               {projects.error instanceof Error ? projects.error.message : "Ukjent feil"}
             </p>

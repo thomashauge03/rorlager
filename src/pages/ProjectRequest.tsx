@@ -259,7 +259,7 @@ export default function ProjectRequest() {
              * ingen visste kvifor.
              */
             <div className="mt-3 rounded-md border border-destructive/60 bg-destructive/10 px-3 py-3">
-              <p className="text-sm font-semibold text-destructive">Varelista kunne ikke hentes</p>
+              <p className="text-sm font-semibold text-destructive-ink">Varelista kunne ikke hentes</p>
               <p className="mt-1 text-sm text-foreground">
                 Sjekk at du har dekning, og prøv igjen. Haster det, kan du skrive varene for hånd under.
               </p>
@@ -291,7 +291,7 @@ export default function ProjectRequest() {
                       <span className="min-w-0 truncate text-sm">{pipeLabel(t.name, t.dimension)}</span>
                       <span className="flex shrink-0 items-center gap-2">
                         {antalIListe > 0 ? (
-                          <span className="hm-chip border border-success/30 bg-success/15 text-success">
+                          <span className="hm-chip border border-success/30 bg-success/15 text-success-ink">
                             {antalIListe} i lista
                           </span>
                         ) : null}
@@ -375,7 +375,7 @@ export default function ProjectRequest() {
                       type="button"
                       onClick={() => fjern(l.key)}
                       aria-label={`Fjern ${l.name}`}
-                      className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive"
+                      className="flex h-11 w-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-destructive-ink"
                     >
                       <Trash2 className="h-4 w-4" aria-hidden="true" />
                     </button>
@@ -394,7 +394,7 @@ export default function ProjectRequest() {
 
           <div className="space-y-1.5">
             <Label htmlFor="behov-navn">
-              Ditt navn <span className="text-destructive">*</span>
+              Ditt navn <span className="text-destructive-ink">*</span>
             </Label>
             <Input
               id="behov-navn"
