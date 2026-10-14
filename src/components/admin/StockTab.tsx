@@ -20,6 +20,7 @@ import {
   PackageX,
   Pencil,
   Plus,
+  ScanLine,
   Search,
   ShoppingBasket,
   Trash2,
@@ -28,6 +29,7 @@ import { InnkjopPanel } from "@/components/admin/InnkjopPanel";
 import { Prishistorikk } from "@/components/admin/EndringsLogg";
 import { StatistikkPanel } from "@/components/admin/StatistikkPanel";
 import { InventurPanel } from "@/components/admin/InventurPanel";
+import { SkannVare } from "@/components/admin/SkannVare";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -143,6 +145,7 @@ export function StockTab({
   const [innkjop, setInnkjop] = useState(false);
   const [statistikk, setStatistikk] = useState(false);
   const [inventur, setInventur] = useState(false);
+  const [skannVare, setSkannVare] = useState(false);
 
   // Ny tom array kvar render ville gjort alle useMemo-ane under verdilause
   const rows = useMemo(() => types.data ?? [], [types.data]);
@@ -355,6 +358,10 @@ export function StockTab({
           )}
 
           <div className="ml-auto flex flex-wrap gap-2">
+            <Button variant="outline" className="h-11" onClick={() => setSkannVare(true)}>
+              <ScanLine className="h-4 w-4" aria-hidden="true" />
+              Skann vare
+            </Button>
             <Button variant="outline" className="h-11" onClick={() => setInventur(true)}>
               <ClipboardCheck className="h-4 w-4" aria-hidden="true" />
               Inventur
@@ -553,6 +560,16 @@ export function StockTab({
       {innkjop ? <InnkjopPanel varer={rows} visKostpris={visKostpris} onClose={() => setInnkjop(false)} /> : null}
       {statistikk ? <StatistikkPanel varer={rows} visKostpris={visKostpris} onClose={() => setStatistikk(false)} /> : null}
       {inventur ? <InventurPanel varer={rows} visKostpris={visKostpris} onClose={() => setInventur(false)} /> : null}
+      {skannVare ? (
+        <SkannVare
+          varer={rows}
+          onClose={() => setSkannVare(false)}
+          onJuster={(pipe, mode) => {
+            setSkannVare(false);
+            setAdjust({ pipe, mode });
+          }}
+        />
+      ) : null}
 
       <AlertDialog open={!!toDelete} onOpenChange={(open) => !open && setToDelete(null)}>
         <AlertDialogContent>
