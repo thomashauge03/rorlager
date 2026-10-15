@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finnVare, kodeFraSkann, kodeFraSkannMedOppslag } from "@/lib/scanner";
+import { finnVare, hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn } from "@/lib/scanner";
 
 describe("kodeFraSkann", () => {
   it("les QR-lenkja frå hylla, uansett vertsnamn", () => {
@@ -84,5 +84,35 @@ describe("kodeFraSkannMedOppslag", () => {
     expect(await kodeFraSkannMedOppslag(etikett, async () => "https://stock-smart-pi.vercel.app/h/a3")).toEqual({ kode: null });
     // Ein QR Admin-kode som peikar på ein annan blir ikkje følgd vidare
     expect(await kodeFraSkannMedOppslag(etikett, async () => etikett)).toEqual({ kode: null });
+  });
+});
+
+describe("hovudkamera", () => {
+  const eining = (deviceId: string, label: string, kind = "videoinput") => ({ deviceId, label, kind });
+
+  it("vel hovudkameraet bak, ikkje vidvinkelen", () => {
+    expect(
+      hovudkamera([
+        eining("framme", "camera2 1, facing front"),
+        eining("vid", "camera2 2, facing back"),
+        eining("hovud", "camera2 0, facing back"),
+        eining("tele", "camera2 3, facing back"),
+        eining("mikro", "Standard", "audioinput"),
+      ]),
+    ).toBe("hovud");
+  });
+
+  it("rører ikkje kamera med andre namn, som på iPhone", () => {
+    expect(hovudkamera([eining("a", "Back Camera"), eining("b", "Back Ultra Wide Camera")])).toBeNull();
+    expect(hovudkamera([])).toBeNull();
+  });
+});
+
+describe("zoomTrinn", () => {
+  it("1× og oppover, innanfor det kameraet kan", () => {
+    expect(zoomTrinn({ min: 1, max: 8 })).toEqual([1, 2, 3, 4]);
+    expect(zoomTrinn({ min: 1, max: 2.5 })).toEqual([1, 2]);
+    expect(zoomTrinn({ min: 1, max: 1 })).toEqual([]);
+    expect(zoomTrinn(undefined)).toEqual([]);
   });
 });

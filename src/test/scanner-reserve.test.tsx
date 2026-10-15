@@ -110,3 +110,65 @@ describe("skriv varenummeret", () => {
     expect(await screen.findByText("Fant ingen vare med koden 123.")).toBeInTheDocument();
   });
 });
+
+describe("zoom", () => {
+  it("startar på 2× og byter når ein trykkjer", async () => {
+    const applyConstraints = vi.fn().mockResolvedValue(undefined);
+    const spor = {
+      stop: vi.fn(),
+      getSettings: () => ({ deviceId: "x" }),
+      getCapabilities: () => ({ zoom: { min: 1, max: 5 }, focusMode: ["continuous", "single-shot"] }),
+      applyConstraints,
+    };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [spor], getVideoTracks: () => [spor] }),
+        enumerateDevices: vi.fn().mockResolvedValue([]),
+      },
+    });
+    innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
+    render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
+
+    const to = await screen.findByRole("button", { name: "Zoom 2×" });
+    await waitFor(() => expect(to).toHaveAttribute("aria-pressed", "true"));
+    expect(screen.getByRole("button", { name: "Zoom 4×" })).toBeInTheDocument();
+    expect(screen.getByText(/Trykk på bildet for å fokusere/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Zoom 3×" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Zoom 3×" })).toHaveAttribute("aria-pressed", "true"));
+    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 3 }] });
+  });
+
+  it("byter til hovudkameraet når telefonen gav vidvinkelen", async () => {
+    const lag = (id: string) => ({
+      stop: vi.fn(),
+      getSettings: () => ({ deviceId: id }),
+      getCapabilities: () => ({}),
+      applyConstraints: vi.fn(),
+    });
+    const vid = lag("vid");
+    const hovud = lag("hovud");
+    const getUserMedia = vi
+      .fn()
+      .mockResolvedValueOnce({ getTracks: () => [vid], getVideoTracks: () => [vid] })
+      .mockResolvedValueOnce({ getTracks: () => [hovud], getVideoTracks: () => [hovud] });
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia,
+        enumerateDevices: vi.fn().mockResolvedValue([
+          { deviceId: "vid", label: "camera2 2, facing back", kind: "videoinput" },
+          { deviceId: "hovud", label: "camera2 0, facing back", kind: "videoinput" },
+        ]),
+      },
+    });
+    innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
+    render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
+
+    await waitFor(() => expect(getUserMedia).toHaveBeenCalledTimes(2));
+    expect(getUserMedia.mock.calls[1][0].video.deviceId).toEqual({ exact: "hovud" });
+    expect(vid.stop).toHaveBeenCalled();
+  });
+});
+

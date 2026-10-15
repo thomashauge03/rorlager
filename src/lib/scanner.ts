@@ -108,3 +108,30 @@ export async function kodeFraSkannMedOppslag(
   const kode = kodeFraSkann(lenke);
   return { kode: /\/(?:r|vare)\//i.test(lenke) ? kode : null };
 }
+
+export type Kameraevne = {
+  focusMode?: string[];
+  zoom?: { min: number; max: number; step?: number };
+};
+
+/**
+ * Hovudkameraet bak på ein Android-telefon. Nettlesaren vel av og til
+ * vidvinkelen når han får «environment», og han har fast fokus: ein QR-kode på
+ * 22 mm blir uskarp same kor nær ein held telefonen, medan kameraappen – som
+ * brukar hovudkameraet – les han med ein gong. Chrome kallar kamera «camera2 N,
+ * facing back», og N = 0 er hovudkameraet. Andre namn (iPhone) blir ikkje rørte.
+ */
+export function hovudkamera(einingar: { deviceId: string; label: string; kind: string }[]): string | null {
+  const bak = einingar
+    .filter((e) => e.kind === "videoinput")
+    .map((e) => ({ id: e.deviceId, nr: /camera2 (\d+), facing back/i.exec(e.label)?.[1] }))
+    .filter((e): e is { id: string; nr: string } => e.nr !== undefined)
+    .sort((a, b) => Number(a.nr) - Number(b.nr));
+  return bak[0]?.id ?? null;
+}
+
+/** Zoomtrinna kameraet kan, frå 1× og oppover */
+export function zoomTrinn(evne: Kameraevne["zoom"]): number[] {
+  if (!evne || evne.max <= evne.min) return [];
+  return [1, 2, 3, 4].filter((z) => z >= evne.min && z <= evne.max);
+}

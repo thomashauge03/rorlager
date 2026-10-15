@@ -3,7 +3,7 @@ import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { kodeFraSkann, kodeFraSkannMedOppslag, type Skannsvar } from "@/lib/scanner";
+import { hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn, type Kameraevne, type Skannsvar } from "@/lib/scanner";
 
 type Detektor = { detect: (kjelde: HTMLVideoElement) => Promise<{ rawValue?: string }[]> };
 
@@ -54,6 +54,9 @@ async function lesarINettlesaren(): Promise<Detektor> {
 
 /** Kor lenge den innebygde får prøve åleine før lesaren i nettlesaren hjelper til */
 const RESERVE_ETTER_MS = 2000;
+
+const VIDEO_ØNSKE = { width: { ideal: 1920 }, height: { ideal: 1080 } } as const;
+
 
 type Ponyfill = typeof import("barcode-detector/ponyfill");
 
@@ -112,6 +115,11 @@ export function Scanner({
   // Kva skannaren held på med, synleg under biletet. Når kameraappen les ein
   // kode som appen ikkje les, er dette det einaste som seier kvar det stoppar.
   const [status, setStatus] = useState<{ lesar: string; storleik: string; kamera: string; bilete: number; oppslag: boolean } | null>(null);
+  // Sporet kameraet gir, så zoomknappane og trykk-for-fokus når det
+  const sporRef = useRef<MediaStreamTrack | null>(null);
+  const [zoomar, setZoomar] = useState<number[]>([]);
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [kanFokusere, setKanFokusere] = useState(false);
 
   // Treffet skal ikkje starte kameraet på nytt, difor ein ref og ikkje ei avhengigheit
   const onCodeRef = useRef(onCode);
@@ -125,6 +133,10 @@ export function Scanner({
     setHint(null);
     setSkrive("");
     setStatus(null);
+    setZoomar([]);
+    setZoom(null);
+    setKanFokusere(false);
+    sporRef.current = null;
     setStarting(true);
 
     let stream: MediaStream | null = null;
@@ -169,17 +181,48 @@ export function Scanner({
         // pikslar, og ingenting blir lese. «ideal» er eit ønske: ein telefon som
         // ikkje har full HD, gir det beste han har.
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: { facingMode: { ideal: "environment" }, ...VIDEO_ØNSKE },
           audio: false,
         });
+        // Kameranamna er tomme før løyvet er gitt, så hovudkameraet kan først
+        // veljast no. Er det eit anna enn det vi fekk, blir straumen bytt.
+        const einingar = (await navigator.mediaDevices.enumerateDevices?.().catch(() => [])) ?? [];
+        const hovud = hovudkamera(einingar);
+        if (hovud && hovud !== stream.getVideoTracks()[0]?.getSettings?.().deviceId && !stopped) {
+          try {
+            const ny = await navigator.mediaDevices.getUserMedia({
+              video: { deviceId: { exact: hovud }, ...VIDEO_ØNSKE },
+              audio: false,
+            });
+            stream.getTracks().forEach((t) => t.stop());
+            stream = ny;
+          } catch {
+            /* held fram med kameraet vi fekk */
+          }
+        }
+
+        const spor = stream.getVideoTracks()[0];
+        sporRef.current = spor ?? null;
+        const kan = (spor?.getCapabilities?.() ?? {}) as Kameraevne;
         // Kontinuerleg autofokus der kameraet kan det, så ein etikett på kort hald
         // blir skarp. Ikkje alle nettlesarar kjenner valet – då går det utan.
-        const spor = stream.getVideoTracks()[0];
-        const kan = (spor?.getCapabilities?.() ?? {}) as { focusMode?: string[] };
         if (kan.focusMode?.includes("continuous")) {
           void spor
             .applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
             .catch(() => {});
+        }
+        setKanFokusere(!!kan.focusMode?.includes("single-shot"));
+        // Zoom: ein liten etikett kan haldast 20–30 cm unna, der fokus verkar,
+        // og likevel fylle biletet. 2× frå start der kameraet kan zoome.
+        const trinn = zoomTrinn(kan.zoom);
+        setZoomar(trinn);
+        if (trinn.includes(2)) {
+          void spor
+            .applyConstraints({ advanced: [{ zoom: 2 } as MediaTrackConstraintSet] })
+            .then(() => setZoom(2))
+            .catch(() => {});
+        } else if (trinn.length) {
+          setZoom(trinn[0]);
         }
       } catch {
         setStarting(false);
@@ -284,6 +327,29 @@ export function Scanner({
     return stop;
   }, [open]);
 
+  const brukZoom = (z: number) => {
+    const spor = sporRef.current;
+    if (!spor) return;
+    void spor
+      .applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] })
+      .then(() => setZoom(z))
+      .catch(() => {});
+  };
+
+  // Trykk på biletet: fokuser på nytt éin gong, så tilbake til kontinuerleg
+  const fokuser = () => {
+    const spor = sporRef.current;
+    if (!spor || !kanFokusere) return;
+    void spor
+      .applyConstraints({ advanced: [{ focusMode: "single-shot" } as MediaTrackConstraintSet] })
+      .then(() =>
+        setTimeout(() => {
+          void spor.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] }).catch(() => {});
+        }, 1500),
+      )
+      .catch(() => {});
+  };
+
   // Når kameraet ikkje vil: varenummeret står trykt på etiketten
   const finnSkrive = (e: FormEvent) => {
     e.preventDefault();
@@ -314,7 +380,26 @@ export function Scanner({
               playsInline
               aria-label="Kamerabilde for skanning"
               className="h-full w-full object-cover"
+              onClick={fokuser}
             />
+            {zoomar.length > 1 ? (
+              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/55 p-1">
+                {zoomar.map((z) => (
+                  <button
+                    key={z}
+                    type="button"
+                    onClick={() => brukZoom(z)}
+                    aria-pressed={zoom === z}
+                    aria-label={`Zoom ${z}×`}
+                    className={`h-10 min-w-10 rounded-full px-3 text-sm font-semibold ${
+                      zoom === z ? "bg-white text-black" : "text-white hover:bg-white/15"
+                    }`}
+                  >
+                    {z}×
+                  </button>
+                ))}
+              </div>
+            ) : null}
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="h-48 w-48 rounded-xl border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
             </div>
@@ -326,6 +411,13 @@ export function Scanner({
             ) : null}
           </div>
         )}
+
+        {!error && !starting ? (
+          <p className="-mb-2 text-xs text-muted-foreground">
+            Små etiketter: hold telefonen 20–30 cm unna{zoomar.length > 1 ? " og zoom inn" : ""}
+            {kanFokusere ? ". Trykk på bildet for å fokusere." : "."}
+          </p>
+        ) : null}
 
         <p aria-live="polite" className="min-h-[1.25rem] text-sm text-warning-ink">
           {hint ?? ""}
