@@ -30,16 +30,19 @@ describe("namnHarDimensjon", () => {
   });
 });
 
-describe("migrasjonen 20261015120000_dimensjon_fra_namnet", () => {
-  it("kvar dimensjon blir kjend att i namnet sitt, så ingen etikett får henne to gonger i overskrifta", async () => {
+describe("migrasjonane som legg dimensjonen frå namnet i eige felt", () => {
+  it.each([
+    ["20261015120000_dimensjon_fra_namnet.sql", 225],
+    ["20261015140000_dimensjon_resten.sql", 8],
+  ])("%s: kvar dimensjon blir kjend att i namnet sitt, så ingen etikett får henne to gonger", async (fil, antal) => {
     const { readFileSync } = await import("node:fs");
-    const sql = readFileSync("supabase/migrations/20261015120000_dimensjon_fra_namnet.sql", "utf8");
+    const sql = readFileSync(`supabase/migrations/${fil}`, "utf8");
     const rader = [...sql.matchAll(/\('(\d+)', '((?:[^']|'')*)'\),? -- (.*)/g)].map((m) => ({
       sku: m[1],
       dim: m[2].replace(/''/g, "'"),
       namn: m[3],
     }));
-    expect(rader.length).toBe(225);
+    expect(rader.length).toBe(antal);
     expect(rader.filter((r) => !namnHarDimensjon(r.namn, r.dim))).toEqual([]);
   });
 });
