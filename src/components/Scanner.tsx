@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { kodeFraSkannMedOppslag, type Skannsvar } from "@/lib/scanner";
+import { kodeFraSkann, kodeFraSkannMedOppslag, type Skannsvar } from "@/lib/scanner";
 
 type Detektor = { detect: (kjelde: HTMLVideoElement) => Promise<{ rawValue?: string }[]> };
 
@@ -22,22 +23,37 @@ const FORMATER = ["qr_code", "ean_13", "ean_8", "code_128", "code_39"] as const;
  * Standardoppsettet hentar henne frå jsDelivr, og då ville kvar iPhone som opna
  * kameraet sendt eit kall til ein tredjepart. Ho blir berre lasta når den
  * innebygde manglar, så Android betaler ingenting.
+ *
+ * Den innebygde blir berre brukt når han seier at han kan lese QR. På ein del
+ * Android-telefonar finst klassen, men strekkodemodulen frå Google er ikkje
+ * lasta ned: getSupportedFormats gir ei tom liste, og detect svarar «ingenting»
+ * på kvart bilete utan ein einaste feil. Før blei han brukt likevel, og då stod
+ * kameraet og såg på QR-koden utan at noko skjedde.
  */
-async function lagDetektor(): Promise<Detektor> {
+async function lagDetektor(): Promise<{ detektor: Detektor; innebygd: boolean }> {
   const Innebygd = (window as unknown as { BarcodeDetector?: InnebygdKlasse }).BarcodeDetector;
   if (Innebygd) {
     try {
-      const støtta = (await Innebygd.getSupportedFormats?.()) ?? [...FORMATER];
-      const formats = FORMATER.filter((f) => støtta.includes(f));
-      return new Innebygd({ formats: formats.length ? formats : ["qr_code"] });
+      const støtta = (await Innebygd.getSupportedFormats?.()) ?? [];
+      if (støtta.includes("qr_code")) {
+        const formats = FORMATER.filter((f) => støtta.includes(f));
+        return { detektor: new Innebygd({ formats }), innebygd: true };
+      }
     } catch {
       /* fell gjennom til lesaren i nettlesaren */
     }
   }
 
+  return { detektor: await lesarINettlesaren(), innebygd: false };
+}
+
+async function lesarINettlesaren(): Promise<Detektor> {
   const BarcodeDetector = await lesarIKlienten();
   return new BarcodeDetector({ formats: [...FORMATER] }) as unknown as Detektor;
 }
+
+/** Kor lenge den innebygde får prøve åleine før lesaren i nettlesaren hjelper til */
+const RESERVE_ETTER_MS = 2000;
 
 type Ponyfill = typeof import("barcode-detector/ponyfill");
 
@@ -92,6 +108,7 @@ export function Scanner({
   const [error, setError] = useState<string | null>(null);
   const [hint, setHint] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [skrive, setSkrive] = useState("");
 
   // Treffet skal ikkje starte kameraet på nytt, difor ein ref og ikkje ei avhengigheit
   const onCodeRef = useRef(onCode);
@@ -103,6 +120,7 @@ export function Scanner({
     if (!open) return;
     setError(null);
     setHint(null);
+    setSkrive("");
     setStarting(true);
 
     let stream: MediaStream | null = null;
@@ -131,8 +149,9 @@ export function Scanner({
       }
 
       let detektor: Detektor;
+      let innebygd: boolean;
       try {
-        detektor = await lagDetektor();
+        ({ detektor, innebygd } = await lagDetektor());
       } catch {
         setStarting(false);
         setError("Klarte ikke å starte kodelesingen. Bruk søkefeltet i stedet.");
@@ -192,10 +211,29 @@ export function Scanner({
         return svar;
       };
 
+      /*
+       * Reserve for den innebygde. Han kan seie at han kan lese QR og likevel
+       * aldri finne noko. Har han ikkje funne ein einaste kode på to sekund,
+       * blir lesaren i nettlesaren lasta, og dei to prøver annankvart bilete.
+       * Ein telefon der den innebygde virkar, finn koden før reserven trengst.
+       */
+      const start = performance.now();
+      let reserve: Detektor | null = null;
+      let lastarReserve = false;
+      let teljar = 0;
+
       const tick = async () => {
         if (stopped) return;
         try {
-          const funn = await detektor.detect(video);
+          if (innebygd && !reserve && !lastarReserve && performance.now() - start > RESERVE_ETTER_MS) {
+            lastarReserve = true;
+            lesarINettlesaren()
+              .then((d) => (reserve = d))
+              .catch(() => {});
+          }
+          teljar += 1;
+          const lesar = reserve && teljar % 2 === 0 ? reserve : detektor;
+          const funn = await lesar.detect(video);
           const verdi = funn?.[0]?.rawValue;
           if (verdi) {
             const { kode, grunn } = await tolk(verdi);
@@ -223,6 +261,18 @@ export function Scanner({
 
     return stop;
   }, [open]);
+
+  // Når kameraet ikkje vil: varenummeret står trykt på etiketten
+  const finnSkrive = (e: FormEvent) => {
+    e.preventDefault();
+    const kode = kodeFraSkann(skrive);
+    if (!kode) {
+      setHint("Skriv varenummeret eller koden som står på etiketten.");
+      return;
+    }
+    const svar = onCodeRef.current(kode);
+    if (svar !== null) setHint(svar);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -258,6 +308,21 @@ export function Scanner({
         <p aria-live="polite" className="min-h-[1.25rem] text-sm text-warning-ink">
           {hint ?? ""}
         </p>
+
+        <form onSubmit={finnSkrive} className="flex gap-2">
+          <Input
+            aria-label="Varenummer eller kode"
+            placeholder="Eller skriv varenummer"
+            inputMode="text"
+            autoComplete="off"
+            className="h-12 text-base"
+            value={skrive}
+            onChange={(e) => setSkrive(e.target.value)}
+          />
+          <Button type="submit" variant="secondary" className="h-12 shrink-0 px-5 text-base">
+            Finn
+          </Button>
+        </form>
 
         <Button variant="outline" className="h-12 w-full text-base" onClick={() => onOpenChange(false)}>
           <X className="h-5 w-5" aria-hidden="true" />
