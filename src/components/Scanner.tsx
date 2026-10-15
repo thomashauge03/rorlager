@@ -121,9 +121,8 @@ export function Scanner({
   const [hint, setHint] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [skrive, setSkrive] = useState("");
-  // Kva skannaren held på med, synleg under biletet. Når kameraappen les ein
-  // kode som appen ikkje les, er dette det einaste som seier kvar det stoppar.
-  const [status, setStatus] = useState<{ lesar: string; storleik: string; kamera: string; bilete: number; oppslag: boolean } | null>(null);
+  // Ein QR Admin-kode blir slått opp på nettet, og det kan ta litt tid
+  const [slaarOpp, setSlaarOpp] = useState(false);
   // Sporet kameraet gir, så zoomknappane og trykk-for-fokus når det
   const sporRef = useRef<MediaStreamTrack | null>(null);
   const [zoomar, setZoomar] = useState<number[]>([]);
@@ -144,7 +143,7 @@ export function Scanner({
     setError(null);
     setHint(null);
     setSkrive("");
-    setStatus(null);
+    setSlaarOpp(false);
     setZoomar([]);
     setZoom(null);
     setFokusModusar([]);
@@ -281,16 +280,6 @@ export function Scanner({
       let reserve: Detektor | null = null;
       let lastarReserve = false;
       let teljar = 0;
-      let sistVist = 0;
-      const lesarNamn = () => (innebygd ? (reserve ? "innebygd + nettleser" : "innebygd") : "nettleser");
-      const vis = (oppslag = false) =>
-        setStatus({
-          lesar: lesarNamn(),
-          storleik: `${video.videoWidth}×${video.videoHeight}`,
-          kamera: stream?.getVideoTracks()[0]?.label ?? "",
-          bilete: teljar,
-          oppslag,
-        });
 
       const tick = async () => {
         if (stopped) return;
@@ -305,16 +294,10 @@ export function Scanner({
           const lesar = reserve && teljar % 2 === 0 ? reserve : detektor;
           const funn = await lesar.detect(video);
           const verdi = funn?.[0]?.rawValue;
-          // Oppdatert to gonger i sekundet, ikkje for kvart bilete
-          const no = performance.now();
-          if (no - sistVist > 500) {
-            sistVist = no;
-            vis();
-          }
           if (verdi) {
-            vis(true);
+            setSlaarOpp(true);
             const { kode, grunn } = await tolk(verdi);
-            vis(false);
+            setSlaarOpp(false);
             if (stopped) return;
             if (!kode) {
               setHint(grunn ?? "Denne koden hører ikke til rørlageret. Prøv en annen.");
@@ -397,22 +380,25 @@ export function Scanner({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      {/* Fast høgd på telefon, utan rulling: kamerabiletet tek det som er att.
+          Med fast 3:4 blei vindauget høgare enn skjermen og måtte rullast. */}
+      <DialogContent className="flex h-[calc(100dvh-2rem)] max-w-md flex-col gap-3 overflow-hidden p-4 sm:h-auto sm:p-6">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{description}</DialogDescription>
+          {/* På telefonen tar teksten plass frå kamerabiletet */}
+          <DialogDescription className="sr-only sm:not-sr-only">{description}</DialogDescription>
         </DialogHeader>
 
         {error ? (
           <p className="text-sm text-muted-foreground">{error}</p>
         ) : (
-          <div className="relative aspect-[3/4] overflow-hidden rounded-lg bg-black">
+          <div className="relative min-h-0 flex-1 overflow-hidden rounded-lg bg-black sm:aspect-[3/4] sm:flex-none">
             <video
               ref={videoRef}
               muted
               playsInline
               aria-label="Kamerabilde for skanning"
-              className="h-full w-full cursor-crosshair object-cover"
+              className="h-full w-full cursor-crosshair touch-none object-cover"
               onPointerDown={fokuser}
             />
             {ring ? (
@@ -464,12 +450,8 @@ export function Scanner({
           {hint ?? ""}
         </p>
 
-        {status && !error ? (
-          <p className="-mt-2 text-xs text-muted-foreground tabular break-all">
-            {status.oppslag
-              ? "Fant en kode – slår den opp …"
-              : `Leser med ${status.lesar} · ${status.storleik} · ${status.bilete} bilder${status.kamera ? ` · ${status.kamera}` : ""}`}
-          </p>
+        {slaarOpp && !error ? (
+          <p className="-mt-2 text-xs text-muted-foreground">Fant en kode – slår den opp …</p>
         ) : null}
 
         <form onSubmit={finnSkrive} className="flex gap-2">
