@@ -141,10 +141,23 @@ export function Scanner({
       if (stopped) return;
 
       try {
+        // Utan ønskt oppløysing gir mange Android-telefonar 640 × 480. Då blir
+        // rutene i ein QR-kode på 22 mm frå dei små lageretikettane berre eit par
+        // pikslar, og ingenting blir lese. «ideal» er eit ønske: ein telefon som
+        // ikkje har full HD, gir det beste han har.
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "environment" } },
+          video: { facingMode: { ideal: "environment" }, width: { ideal: 1920 }, height: { ideal: 1080 } },
           audio: false,
         });
+        // Kontinuerleg autofokus der kameraet kan det, så ein etikett på kort hald
+        // blir skarp. Ikkje alle nettlesarar kjenner valet – då går det utan.
+        const spor = stream.getVideoTracks()[0];
+        const kan = (spor?.getCapabilities?.() ?? {}) as { focusMode?: string[] };
+        if (kan.focusMode?.includes("continuous")) {
+          void spor
+            .applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
+            .catch(() => {});
+        }
       } catch {
         setStarting(false);
         setError("Fikk ikke tilgang til kameraet. Tillat kamera for denne siden, eller bruk søkefeltet.");

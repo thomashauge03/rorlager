@@ -13,6 +13,7 @@ import {
   Package,
   Palette,
   QrCode,
+  ScanLine,
   Settings,
   ShieldAlert,
   ShoppingBag,
@@ -228,6 +229,18 @@ export default function AdminDashboard() {
             </div>
 
             <div className="shrink-0 flex items-center gap-1">
+              {/* Uttak som dei tilsette gjer det: skann eller søk, kurv og kasse. Kassen
+                  ser at nokon er innlogga og fører uttaket på brukaren, med prosjektliste
+                  i staden for kundeskjemaet. Utan denne kom kontoret aldri dit. */}
+              <Link
+                to="/"
+                aria-label="Ta ut rør"
+                className="h-11 px-2 sm:px-3 rounded-md flex items-center gap-2 text-sm font-semibold text-white bg-white/10 hover:bg-white/20 transition-colors"
+              >
+                <ScanLine className="h-5 w-5" aria-hidden="true" />
+                <span className="hidden sm:inline">Ta ut rør</span>
+              </Link>
+
               <Popover>
                 <PopoverTrigger asChild>
                   <button
