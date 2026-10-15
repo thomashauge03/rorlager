@@ -23,6 +23,7 @@ import {
   ScanLine,
   Search,
   ShoppingBasket,
+  Tag,
   Trash2,
 } from "lucide-react";
 import { InnkjopPanel } from "@/components/admin/InnkjopPanel";
@@ -137,6 +138,8 @@ export function StockTab({
   const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<PipeSort>({ key: "name", dir: "asc" });
   const [onlyLow, setOnlyLow] = useState(false);
+  // Varer uten salgspris: kunden ser «–», og kassen kan ikke regne ut noe
+  const [onlyNoPrice, setOnlyNoPrice] = useState(false);
 
   const [editing, setEditing] = useState<{ pipe: PipeType | null } | null>(null);
   const [adjust, setAdjust] = useState<{ pipe: PipeType; mode: "add" | "remove" | "count" } | null>(null);
@@ -163,8 +166,11 @@ export function StockTab({
       onlyActive: !showInactive,
       sort,
     });
+    if (onlyNoPrice) return list.filter((t) => t.price === null);
     return onlyLow ? list.filter((t) => stockStatus(t) !== "pa_lager") : list;
-  }, [rows, search, categoryId, showInactive, sort, onlyLow]);
+  }, [rows, search, categoryId, showInactive, sort, onlyLow, onlyNoPrice]);
+
+  const utenPris = useMemo(() => base.filter((t) => t.price === null).length, [base]);
 
   /*
    * Dyplenke fra Innboks: nullstill filtrene så varen kommer med, og rull fram
@@ -184,6 +190,7 @@ export function StockTab({
     setSearch("");
     setCategoryId(ALLE);
     setOnlyLow(false);
+    setOnlyNoPrice(false);
     if (!t.active) setShowInactive(true);
     setDypMål(t.id);
   }, [vare, types.data, toast]);
@@ -257,6 +264,12 @@ export function StockTab({
           <Stat icon={<Coins className="h-4 w-4" />} label="Lagerverdi (kostpris)" value={`${krShort(totals.verdi)} kr`} />
         ) : null}
         <Stat icon={<Coins className="h-4 w-4" />} label="Salgsverdi" value={`${krShort(totals.salsverdi)} kr`} />
+        <Stat
+          icon={<Tag className="h-4 w-4" />}
+          label="Uten pris"
+          value={num(utenPris, 0)}
+          tone={utenPris > 0 ? "warn" : undefined}
+        />
       </div>
 
       {totals.perUnit.length > 0 && (
@@ -275,8 +288,35 @@ export function StockTab({
             {totals.snart > 0 && `${totals.snart} ${totals.snart === 1 ? "vare er" : "varer er"} snart tom`}
             . Fyll på lageret eller sett varen inaktiv.
           </p>
-          <Button size="sm" variant="outline" onClick={() => setOnlyLow((v) => !v)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setOnlyNoPrice(false);
+              setOnlyLow((v) => !v);
+            }}
+          >
             {onlyLow ? "Vis alle varer" : "Vis bare disse"}
+          </Button>
+        </div>
+      )}
+
+      {utenPris > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+          <Tag className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="min-w-[12rem] flex-1 text-sm text-foreground">
+            {utenPris} {utenPris === 1 ? "vare mangler" : "varer mangler"} salgspris. Kunden ser «–» i stedet for en pris
+            — legg den inn på varen, eller kjør en prisimport fra Dahl.
+          </p>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setOnlyLow(false);
+              setOnlyNoPrice((v) => !v);
+            }}
+          >
+            {onlyNoPrice ? "Vis alle varer" : "Vis bare disse"}
           </Button>
         </div>
       )}
@@ -354,6 +394,11 @@ export function StockTab({
           {onlyLow && (
             <Button size="sm" variant="ghost" onClick={() => setOnlyLow(false)}>
               Fjern varselfilter
+            </Button>
+          )}
+          {onlyNoPrice && (
+            <Button size="sm" variant="ghost" onClick={() => setOnlyNoPrice(false)}>
+              Fjern prisfilter
             </Button>
           )}
 
