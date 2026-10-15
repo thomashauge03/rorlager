@@ -1,3 +1,4 @@
+import { pipeLabel } from "@/lib/format";
 import { pipeUrl } from "@/lib/qr-labels";
 
 /*
@@ -57,7 +58,8 @@ export function byggQrAdminRader(ror: EksportRor[], baseUrl: string): { rader: Q
     const hylle = tekst(r.location);
 
     rader.push({
-      name: [tekst(r.name), dim].filter(Boolean).join(" "),
+      // Same namn som i appen: dimensjonen bak, men ikkje når namnet alt har henne
+      name: pipeLabel(tekst(r.name), dim || null),
       // Påkravd i QR Admin. Hylla er det naturlege svaret; manglar ho, står
       // varenummeret eller koden der framfor ein strek som ikkje seier noko.
       shelf_number: hylle || sku || slug,

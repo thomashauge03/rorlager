@@ -51,8 +51,26 @@ export const longDate = (d: string | Date | null | undefined) => {
 export const isoDate = (d: Date = new Date()) => format(d, "yyyy-MM-dd");
 
 /** "110 mm" bak namnet, men berre om dimensjonen finst */
+/**
+ * Står dimensjonen alt i namnet? «Bend 250 mm 45° PP» med dimensjon «250 mm»
+ * – slik varene frå tellelista og hylleetikettane er namngitte. Mellomrom,
+ * «mm», Ø og * mot x tel ikkje; eit tal må stå for seg sjølv, så «15°» ikkje
+ * blir lese som «150 mm».
+ */
+export function namnHarDimensjon(name: string, dimension: string): boolean {
+  // Mellomrom blir borte berre rundt skiljeteikna: «160 x 125» er «160x125», men
+  // «F910 110» skal ikkje bli «f910110» og gøyme 110-en.
+  const norm = (s: string) =>
+    s.toLowerCase().replace(/ø/g, "").replace(/\*/g, "x").replace(/\s*([x/-])\s*/g, "$1").replace(/\s+/g, " ").trim();
+  const kjerne = norm(dimension).replace(/\s*mm$/, "");
+  if (!kjerne) return false;
+  const trygg = kjerne.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+  return new RegExp(`(?<!\\d)${trygg}(?!\\d)`).test(norm(name));
+}
+
+/** Namn med dimensjonen bak – med mindre namnet alt har henne, så ho ikkje står to gonger */
 export const pipeLabel = (name: string, dimension?: string | null) =>
-  dimension ? `${name} ${dimension}` : name;
+  dimension && !namnHarDimensjon(name, dimension) ? `${name} ${dimension}` : name;
 
 /** Mengde med eining: "12,5 m" / "3 stk" */
 export const qtyLabel = (quantity: number, unit: string) => `${num(quantity)} ${unit}`;
