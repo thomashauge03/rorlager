@@ -109,6 +109,9 @@ export function Scanner({
   const [hint, setHint] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
   const [skrive, setSkrive] = useState("");
+  // Kva skannaren held på med, synleg under biletet. Når kameraappen les ein
+  // kode som appen ikkje les, er dette det einaste som seier kvar det stoppar.
+  const [status, setStatus] = useState<{ lesar: string; storleik: string; kamera: string; bilete: number; oppslag: boolean } | null>(null);
 
   // Treffet skal ikkje starte kameraet på nytt, difor ein ref og ikkje ei avhengigheit
   const onCodeRef = useRef(onCode);
@@ -121,6 +124,7 @@ export function Scanner({
     setError(null);
     setHint(null);
     setSkrive("");
+    setStatus(null);
     setStarting(true);
 
     let stream: MediaStream | null = null;
@@ -221,6 +225,16 @@ export function Scanner({
       let reserve: Detektor | null = null;
       let lastarReserve = false;
       let teljar = 0;
+      let sistVist = 0;
+      const lesarNamn = () => (innebygd ? (reserve ? "innebygd + nettleser" : "innebygd") : "nettleser");
+      const vis = (oppslag = false) =>
+        setStatus({
+          lesar: lesarNamn(),
+          storleik: `${video.videoWidth}×${video.videoHeight}`,
+          kamera: stream?.getVideoTracks()[0]?.label ?? "",
+          bilete: teljar,
+          oppslag,
+        });
 
       const tick = async () => {
         if (stopped) return;
@@ -235,8 +249,16 @@ export function Scanner({
           const lesar = reserve && teljar % 2 === 0 ? reserve : detektor;
           const funn = await lesar.detect(video);
           const verdi = funn?.[0]?.rawValue;
+          // Oppdatert to gonger i sekundet, ikkje for kvart bilete
+          const no = performance.now();
+          if (no - sistVist > 500) {
+            sistVist = no;
+            vis();
+          }
           if (verdi) {
+            vis(true);
             const { kode, grunn } = await tolk(verdi);
+            vis(false);
             if (stopped) return;
             if (!kode) {
               setHint(grunn ?? "Denne koden hører ikke til rørlageret. Prøv en annen.");
@@ -308,6 +330,14 @@ export function Scanner({
         <p aria-live="polite" className="min-h-[1.25rem] text-sm text-warning-ink">
           {hint ?? ""}
         </p>
+
+        {status && !error ? (
+          <p className="-mt-2 text-xs text-muted-foreground tabular break-all">
+            {status.oppslag
+              ? "Fant en kode – slår den opp …"
+              : `Leser med ${status.lesar} · ${status.storleik} · ${status.bilete} bilder${status.kamera ? ` · ${status.kamera}` : ""}`}
+          </p>
+        ) : null}
 
         <form onSubmit={finnSkrive} className="flex gap-2">
           <Input
