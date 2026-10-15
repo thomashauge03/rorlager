@@ -135,3 +135,55 @@ export function zoomTrinn(evne: Kameraevne["zoom"]): number[] {
   if (!evne || evne.max <= evne.min) return [];
   return [1, 2, 3, 4].filter((z) => z >= evne.min && z <= evne.max);
 }
+
+/**
+ * Punktet ein trykte på i kamerabiletet, som 0–1 i sjølve kamerabiletet.
+ * Biletet er «object-cover»: skalert til å fylle ruta og skore av på
+ * langsidene, så eit trykk i ruta må reknast om til punktet i originalen.
+ */
+export function fokuspunkt(
+  trykk: { x: number; y: number },
+  rute: { w: number; h: number },
+  bilete: { w: number; h: number },
+): { x: number; y: number } {
+  if (!bilete.w || !bilete.h || !rute.w || !rute.h) return { x: 0.5, y: 0.5 };
+  const skala = Math.max(rute.w / bilete.w, rute.h / bilete.h);
+  const visteW = bilete.w * skala;
+  const visteH = bilete.h * skala;
+  const x = (trykk.x - (rute.w - visteW) / 2) / visteW;
+  const y = (trykk.y - (rute.h - visteH) / 2) / visteH;
+  const klem = (v: number) => Math.min(1, Math.max(0, v));
+  return { x: klem(x), y: klem(y) };
+}
+
+/**
+ * Stega for å fokusere på nytt når ein trykkjer, ut frå kva kameraet kan.
+ *
+ * Mange Android-kamera kan berre «continuous» og ikkje «single-shot». Då gjorde
+ * eit trykk ingenting. Kontinuerleg fokus blir sett i gang på nytt ved å gå
+ * innom «manual» – det er det som får linsa til å søkje att.
+ */
+/** Fokusvala frå Image Capture-utvidinga. TypeScript sine DOM-typar kjenner dei ikkje. */
+export type Fokusval = { focusMode?: string; pointsOfInterest?: { x: number; y: number }[] };
+
+export function fokussteg(
+  modusar: string[] | undefined,
+  punkt: { x: number; y: number } | null,
+): { steg: Fokusval[]; tilbakeTilKontinuerleg: boolean } {
+  const m = modusar ?? [];
+  const poi: Fokusval = punkt ? { pointsOfInterest: [punkt] } : {};
+  if (m.includes("single-shot")) {
+    return {
+      steg: [{ ...poi, focusMode: "single-shot" }],
+      tilbakeTilKontinuerleg: m.includes("continuous"),
+    };
+  }
+  if (m.includes("continuous")) {
+    const steg: Fokusval[] = [];
+    if (m.includes("manual")) steg.push({ focusMode: "manual" });
+    steg.push({ ...poi, focusMode: "continuous" });
+    return { steg, tilbakeTilKontinuerleg: false };
+  }
+  // Ingen fokusmodusar å styre, men punktet kan likevel hjelpe der det er støtta
+  return { steg: punkt ? [poi] : [], tilbakeTilKontinuerleg: false };
+}

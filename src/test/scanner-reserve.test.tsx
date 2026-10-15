@@ -172,3 +172,41 @@ describe("zoom", () => {
   });
 });
 
+describe("trykk for fokus", () => {
+  it("set kontinuerleg fokus i gang på nytt når kameraet ikkje kan éin-gongs-fokus", async () => {
+    const applyConstraints = vi.fn().mockResolvedValue(undefined);
+    const spor = {
+      stop: vi.fn(),
+      getSettings: () => ({ deviceId: "x" }),
+      getCapabilities: () => ({ focusMode: ["manual", "continuous"] }),
+      applyConstraints,
+    };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [spor], getVideoTracks: () => [spor] }),
+        enumerateDevices: vi.fn().mockResolvedValue([]),
+        getSupportedConstraints: () => ({}),
+      },
+    });
+    innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
+    render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
+
+    expect(await screen.findByText(/Trykk på bildet for å fokusere/)).toBeInTheDocument();
+    applyConstraints.mockClear();
+    fireEvent.pointerDown(screen.getByLabelText("Kamerabilde for skanning"), { clientX: 10, clientY: 10 });
+
+    await waitFor(() => expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ focusMode: "continuous" }] }));
+    expect(applyConstraints.mock.calls[0][0]).toEqual({ advanced: [{ focusMode: "manual" }] });
+  });
+
+  it("seier frå når kameraet ikkje lar appen styre fokus", async () => {
+    innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
+    render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
+    await screen.findByText(/hold telefonen 20–30 cm unna/);
+
+    fireEvent.pointerDown(screen.getByLabelText("Kamerabilde for skanning"), { clientX: 10, clientY: 10 });
+    expect(await screen.findByText(/Kameraet lar ikke appen styre fokus/)).toBeInTheDocument();
+  });
+});
+

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finnVare, hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn } from "@/lib/scanner";
+import { finnVare, fokuspunkt, fokussteg, hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn } from "@/lib/scanner";
 
 describe("kodeFraSkann", () => {
   it("les QR-lenkja frå hylla, uansett vertsnamn", () => {
@@ -114,5 +114,39 @@ describe("zoomTrinn", () => {
     expect(zoomTrinn({ min: 1, max: 2.5 })).toEqual([1, 2]);
     expect(zoomTrinn({ min: 1, max: 1 })).toEqual([]);
     expect(zoomTrinn(undefined)).toEqual([]);
+  });
+});
+
+describe("fokuspunkt", () => {
+  it("reknar om trykket i ruta til punktet i kamerabiletet når biletet er skore av", () => {
+    // Liggjande 1920×1080 i ei ståande rute 300×400: skalert til 400 høgt, 711 breitt
+    expect(fokuspunkt({ x: 150, y: 200 }, { w: 300, h: 400 }, { w: 1920, h: 1080 })).toEqual({ x: 0.5, y: 0.5 });
+    const venstre = fokuspunkt({ x: 0, y: 200 }, { w: 300, h: 400 }, { w: 1920, h: 1080 });
+    expect(venstre.x).toBeCloseTo((711.11 - 300) / 2 / 711.11, 2);
+    expect(fokuspunkt({ x: 10, y: 10 }, { w: 300, h: 400 }, { w: 0, h: 0 })).toEqual({ x: 0.5, y: 0.5 });
+  });
+});
+
+describe("fokussteg", () => {
+  const p = { x: 0.3, y: 0.6 };
+
+  it("fokuserer éin gong på punktet, og går tilbake til kontinuerleg", () => {
+    expect(fokussteg(["manual", "single-shot", "continuous"], p)).toEqual({
+      steg: [{ pointsOfInterest: [p], focusMode: "single-shot" }],
+      tilbakeTilKontinuerleg: true,
+    });
+  });
+
+  it("set kontinuerleg fokus i gang på nytt når kameraet berre kan det", () => {
+    expect(fokussteg(["manual", "continuous"], p).steg).toEqual([
+      { focusMode: "manual" },
+      { pointsOfInterest: [p], focusMode: "continuous" },
+    ]);
+    expect(fokussteg(["continuous"], null).steg).toEqual([{ focusMode: "continuous" }]);
+  });
+
+  it("gir ingen steg når kameraet ikkje kan styrast", () => {
+    expect(fokussteg([], null).steg).toEqual([]);
+    expect(fokussteg(undefined, p).steg).toEqual([{ pointsOfInterest: [p] }]);
   });
 });

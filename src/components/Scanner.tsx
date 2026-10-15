@@ -1,9 +1,18 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn, type Kameraevne, type Skannsvar } from "@/lib/scanner";
+import {
+  fokuspunkt,
+  fokussteg,
+  hovudkamera,
+  kodeFraSkann,
+  kodeFraSkannMedOppslag,
+  zoomTrinn,
+  type Kameraevne,
+  type Skannsvar,
+} from "@/lib/scanner";
 
 type Detektor = { detect: (kjelde: HTMLVideoElement) => Promise<{ rawValue?: string }[]> };
 
@@ -119,7 +128,10 @@ export function Scanner({
   const sporRef = useRef<MediaStreamTrack | null>(null);
   const [zoomar, setZoomar] = useState<number[]>([]);
   const [zoom, setZoom] = useState<number | null>(null);
-  const [kanFokusere, setKanFokusere] = useState(false);
+  // Fokusmodusane kameraet seier det kan. Tom = appen kan ikkje styre fokus.
+  const [fokusModusar, setFokusModusar] = useState<string[]>([]);
+  // Ringen som viser kvar ein trykte, så ein ser at trykket blei teke imot
+  const [ring, setRing] = useState<{ x: number; y: number; n: number } | null>(null);
 
   // Treffet skal ikkje starte kameraet på nytt, difor ein ref og ikkje ei avhengigheit
   const onCodeRef = useRef(onCode);
@@ -135,7 +147,8 @@ export function Scanner({
     setStatus(null);
     setZoomar([]);
     setZoom(null);
-    setKanFokusere(false);
+    setFokusModusar([]);
+    setRing(null);
     sporRef.current = null;
     setStarting(true);
 
@@ -211,7 +224,7 @@ export function Scanner({
             .applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] })
             .catch(() => {});
         }
-        setKanFokusere(!!kan.focusMode?.includes("single-shot"));
+        setFokusModusar(kan.focusMode ?? []);
         // Zoom: ein liten etikett kan haldast 20–30 cm unna, der fokus verkar,
         // og likevel fylle biletet. 2× frå start der kameraet kan zoome.
         const trinn = zoomTrinn(kan.zoom);
@@ -336,18 +349,38 @@ export function Scanner({
       .catch(() => {});
   };
 
-  // Trykk på biletet: fokuser på nytt éin gong, så tilbake til kontinuerleg
-  const fokuser = () => {
+  const kanFokusere = fokusModusar.includes("single-shot") || fokusModusar.includes("continuous");
+
+  // Trykk på biletet: fokuser på punktet. Sjå fokussteg for kva som blir gjort
+  // ut frå kva kameraet kan.
+  const fokuser = (e: ReactPointerEvent<HTMLVideoElement>) => {
+    const video = e.currentTarget;
+    const boks = video.getBoundingClientRect();
+    const trykk = { x: e.clientX - boks.left, y: e.clientY - boks.top };
+    setRing({ ...trykk, n: Date.now() });
+    setTimeout(() => setRing((r) => (r && Date.now() - r.n >= 900 ? null : r)), 950);
+
     const spor = sporRef.current;
-    if (!spor || !kanFokusere) return;
-    void spor
-      .applyConstraints({ advanced: [{ focusMode: "single-shot" } as MediaTrackConstraintSet] })
-      .then(() =>
+    if (!spor) return;
+    const punktStøtta = !!(
+      navigator.mediaDevices?.getSupportedConstraints?.() as Record<string, boolean> | undefined
+    )?.pointsOfInterest;
+    const punkt = punktStøtta
+      ? fokuspunkt(trykk, { w: boks.width, h: boks.height }, { w: video.videoWidth, h: video.videoHeight })
+      : null;
+    const { steg, tilbakeTilKontinuerleg } = fokussteg(fokusModusar, punkt);
+    if (steg.length === 0) {
+      setHint("Kameraet lar ikke appen styre fokus. Bruk zoom, eller hold telefonen litt lenger unna.");
+      return;
+    }
+    void (async () => {
+      for (const s of steg) await spor.applyConstraints({ advanced: [s as MediaTrackConstraintSet] }).catch(() => {});
+      if (tilbakeTilKontinuerleg) {
         setTimeout(() => {
           void spor.applyConstraints({ advanced: [{ focusMode: "continuous" } as MediaTrackConstraintSet] }).catch(() => {});
-        }, 1500),
-      )
-      .catch(() => {});
+        }, 1500);
+      }
+    })();
   };
 
   // Når kameraet ikkje vil: varenummeret står trykt på etiketten
@@ -379,9 +412,17 @@ export function Scanner({
               muted
               playsInline
               aria-label="Kamerabilde for skanning"
-              className="h-full w-full object-cover"
-              onClick={fokuser}
+              className="h-full w-full cursor-crosshair object-cover"
+              onPointerDown={fokuser}
             />
+            {ring ? (
+              <span
+                key={ring.n}
+                aria-hidden="true"
+                className="pointer-events-none absolute z-10 h-16 w-16 -translate-x-1/2 -translate-y-1/2 animate-ping rounded-full border-2 border-white"
+                style={{ left: ring.x, top: ring.y, animationIterationCount: 1 }}
+              />
+            ) : null}
             {zoomar.length > 1 ? (
               <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/55 p-1">
                 {zoomar.map((z) => (
