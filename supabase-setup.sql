@@ -15,7 +15,7 @@
 -- slettet pipe_types, og siden hver fremmednøkkel dit er «on delete set null»,
 -- gikk det gjennom uten en eneste feilmelding.
 --
--- Bygget fra 40 migrasjoner:
+-- Bygget fra 41 migrasjoner:
 --   20260810100000_rorlager_init.sql
 --   20260810100100_rorlager_admins.sql
 --   20260810110000_invoice_keeps_status.sql
@@ -56,6 +56,7 @@
 --   20261014240000_overgang_200x160.sql
 --   20261015090000_lopemuffe_wafix_110.sql
 --   20261015100000_prisliste_dato.sql
+--   20261015110000_pakning_gli_1600.sql
 
 
 -- ══════════════════════════════════════════════════════════════════════
@@ -8529,3 +8530,23 @@ $$;
 
 revoke all on function public.pipe_import_costs(jsonb, numeric, numeric) from public, anon;
 grant execute on function public.pipe_import_costs(jsonb, numeric, numeric) to authenticated;
+
+-- ══════════════════════════════════════════════════════════════════════
+-- 20261015110000_pakning_gli_1600.sql
+-- ══════════════════════════════════════════════════════════════════════
+
+-- Pakning GLI 1600 for betongkumring, Dahl 2182009. Står på hylla, men mangla
+-- i tellelista frå januar. Namn og varenummer er lesne av hylleetiketten,
+-- 15.10.2026. Ingen pris på etiketten, så prisane står tomme til neste
+-- prisimport eller til kontoret legg dei inn – kunden ser «–».
+--
+-- Ligg varenummeret der frå før, skjer ingenting ved omkøyring. Blir varen
+-- sletta, kjem han att neste gong setup-fila blir køyrd – slå han heller av.
+
+insert into public.pipe_types
+  (category_id, name, dimension, sku, qr_slug, unit, cost_price, price, stock, low_stock_threshold, sort_order)
+select
+  (select id from public.pipe_categories where name = 'Kummer og lokk'),
+  'Pakning GLI 1600 for betongkumring', null, '2182009', 'pakning-gli-1600-for-betongkumring', 'stk', null, null, 0, 0, 126
+where not exists (select 1 from public.pipe_types where sku = '2182009')
+on conflict do nothing;

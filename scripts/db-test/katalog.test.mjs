@@ -48,7 +48,7 @@ let foer, etter, slug;
 
 await somAnon(db, async () => {
   const n = (await alle(`select id from public.pipe_catalog`)).length;
-  n === 392 ? ok(`anon leser katalogen gjennom visningen (${n} rader)`) : nei("katalogen", `${n} rader`);
+  n === 393 ? ok(`anon leser katalogen gjennom visningen (${n} rader)`) : nei("katalogen", `${n} rader`);
 
   const s = await en(`select company_name, show_prices from public.pipe_public_settings`);
   s?.company_name ? ok(`anon leser innstillingene (${s.company_name})`) : nei("innstillingene", "ingen rad");
@@ -94,7 +94,7 @@ await som(db, KONTOR, async () => {
   const s = await en(`select markup_percent from public.pipe_settings`);
   s?.markup_percent != null ? ok(`kontoret leser påslaget (${s.markup_percent} %)`) : nei("markup_percent", "ikke lest");
   const k = (await alle(`select id from public.pipe_catalog`)).length;
-  k === 392 ? ok("kontoret kan også bruke visningen") : nei("visningen for kontor", k);
+  k === 393 ? ok("kontoret kan også bruke visningen") : nei("visningen for kontor", k);
 });
 
 console.log("\n── Prosjektbrukeren ser katalogen, men ikke prisen inn ──\n");
@@ -111,7 +111,7 @@ await som(db, KARI, async () => {
   sjekk("pipe_settings gir null rader", s.length, 0);
 
   const n = (await alle(`select id, name, dimension, unit from public.pipe_catalog`)).length;
-  n === 392 ? ok(`leser katalogen gjennom visningen (${n}) – trengs for å melde behov`) : nei("katalogen", n);
+  n === 393 ? ok(`leser katalogen gjennom visningen (${n}) – trengs for å melde behov`) : nei("katalogen", n);
 
   const p = await en(`select price from public.pipe_catalog where price is not null limit 1`);
   p?.price != null ? ok(`ser salgsprisen (${p.price}), som er den han skal se`) : nei("price", "manglar");
