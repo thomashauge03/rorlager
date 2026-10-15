@@ -5,10 +5,10 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 const { vare } = vi.hoisted(() => ({
-  vare: (id: string, name: string, price: number | null, active = true) => ({
+  vare: (id: string, name: string, price: number | null, active = true, prisliste_dato: string | null = null) => ({
     id, name, dimension: null, sku: id, ean: null, qr_slug: id, unit: "stk", price, cost_price: null, stock: 4,
     low_stock_threshold: 0, location: null, color: null, description: null, active, sort_order: 0,
-    category_id: null, category_name: null, created_at: "", updated_at: "",
+    category_id: null, category_name: null, created_at: "", updated_at: "", prisliste_dato,
   }),
 }));
 
@@ -16,7 +16,9 @@ vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
   fetchPipeTypes: vi.fn().mockResolvedValue([
     vare("a", "Albue messing 2\" R", null),
-    vare("b", "Bend grunnavløp 15°", 35.13),
+    // Den einaste som var med i siste prisliste
+    vare("b", "Bend grunnavløp 15°", 35.13, true, "2026-10-15T08:00:00.123456+00:00"),
+    vare("e", "Dobbelmuffe grunnavløp", 45.38, true, "2026-09-01T08:00:00+00:00"),
     vare("c", "Plugg messing 2\" R", null),
     // Inaktiv: tel ikkje med før «Vis inaktive» er på
     vare("d", "Gammel vare", null, false),
@@ -54,5 +56,23 @@ describe("varer uten pris", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Fjern prisfilter" }));
     expect(screen.getAllByText("Bend grunnavløp 15°").length).toBeGreaterThan(0);
+  });
+});
+
+describe("varer som ikkje var med i siste prisliste", () => {
+  it("tel dei og viser datoen for lista", async () => {
+    vis();
+    expect(await screen.findByText(/3 varer var ikke med i prislista fra/)).toBeInTheDocument();
+    const stat = screen.getByText("Ikke i siste prisliste").closest(".hm-stat") as HTMLElement;
+    expect(within(stat).getByText("3")).toBeInTheDocument();
+  });
+
+  it("«Vis bare disse» skjuler varene som var med", async () => {
+    vis();
+    const melding = (await screen.findByText(/var ikke med i prislista/)).parentElement as HTMLElement;
+    fireEvent.click(within(melding).getByRole("button", { name: "Vis bare disse" }));
+    expect(screen.queryByText("Bend grunnavløp 15°")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Dobbelmuffe grunnavløp").length).toBeGreaterThan(0);
+    expect(screen.getByRole("button", { name: "Fjern prislistefilter" })).toBeInTheDocument();
   });
 });

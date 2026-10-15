@@ -22,6 +22,7 @@ import {
   Plus,
   ScanLine,
   Search,
+  FileSpreadsheet,
   ShoppingBasket,
   Tag,
   Trash2,
@@ -66,8 +67,8 @@ import { StockBadge } from "@/components/StatusBadge";
 import { QuantityInput } from "@/components/QuantityInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { dateTime, kr, krShort, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
-import { filterAndSortPipes, stockStatus, stockTotals, type PipeSort } from "@/lib/stock";
+import { dateTime, kr, krShort, longDate, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
+import { filterAndSortPipes, ikkeISisteListe, sistePrislisteDato, stockStatus, stockTotals, type PipeSort } from "@/lib/stock";
 import {
   QK,
   adjustStock,
@@ -93,6 +94,8 @@ const SORT_OPTIONS: { key: PipeSort["key"]; label: string }[] = [
 ];
 
 const ALLE = "alle";
+
+type Utval = "lav" | "utenPris" | "ikkeIListe" | null;
 const INGEN = "ingen";
 
 /** Standardfarge på nye kategoriar – HM-raud, så fargevelgaren aldri står tom */
@@ -137,9 +140,10 @@ export function StockTab({
   const [categoryId, setCategoryId] = useState<string>(ALLE);
   const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<PipeSort>({ key: "name", dir: "asc" });
-  const [onlyLow, setOnlyLow] = useState(false);
-  // Varer uten salgspris: kunden ser «–», og kassen kan ikke regne ut noe
-  const [onlyNoPrice, setOnlyNoPrice] = useState(false);
+  // «Vis bare disse» fra én av meldingene over lista. Ett utvalg om gangen:
+  // tomme varer, varer uten salgspris, eller varer som ikke var med i siste prisliste.
+  const [utval, setUtval] = useState<Utval>(null);
+  const veksle = (u: Exclude<Utval, null>) => setUtval((v) => (v === u ? null : u));
 
   const [editing, setEditing] = useState<{ pipe: PipeType | null } | null>(null);
   const [adjust, setAdjust] = useState<{ pipe: PipeType; mode: "add" | "remove" | "count" } | null>(null);
@@ -152,6 +156,7 @@ export function StockTab({
 
   // Ny tom array kvar render ville gjort alle useMemo-ane under verdilause
   const rows = useMemo(() => types.data ?? [], [types.data]);
+  const sistePrisliste = useMemo(() => sistePrislisteDato(rows), [rows]);
 
   // Nøkkeltala gjeld heile lageret slik det er skrudd på no (med eller utan
   // inaktive varer), ikkje søketreffet – elles ville "0 tomme" berre bety at
@@ -166,11 +171,17 @@ export function StockTab({
       onlyActive: !showInactive,
       sort,
     });
-    if (onlyNoPrice) return list.filter((t) => t.price === null);
-    return onlyLow ? list.filter((t) => stockStatus(t) !== "pa_lager") : list;
-  }, [rows, search, categoryId, showInactive, sort, onlyLow, onlyNoPrice]);
+    if (utval === "lav") return list.filter((t) => stockStatus(t) !== "pa_lager");
+    if (utval === "utenPris") return list.filter((t) => t.price === null);
+    if (utval === "ikkeIListe") return list.filter((t) => ikkeISisteListe(t, sistePrisliste));
+    return list;
+  }, [rows, search, categoryId, showInactive, sort, utval, sistePrisliste]);
 
   const utenPris = useMemo(() => base.filter((t) => t.price === null).length, [base]);
+  const ikkeIListe = useMemo(
+    () => (sistePrisliste ? base.filter((t) => ikkeISisteListe(t, sistePrisliste)).length : 0),
+    [base, sistePrisliste],
+  );
 
   /*
    * Dyplenke fra Innboks: nullstill filtrene så varen kommer med, og rull fram
@@ -189,8 +200,7 @@ export function StockTab({
     }
     setSearch("");
     setCategoryId(ALLE);
-    setOnlyLow(false);
-    setOnlyNoPrice(false);
+    setUtval(null);
     if (!t.active) setShowInactive(true);
     setDypMål(t.id);
   }, [vare, types.data, toast]);
@@ -270,6 +280,14 @@ export function StockTab({
           value={num(utenPris, 0)}
           tone={utenPris > 0 ? "warn" : undefined}
         />
+        {sistePrisliste ? (
+          <Stat
+            icon={<FileSpreadsheet className="h-4 w-4" />}
+            label="Ikke i siste prisliste"
+            value={num(ikkeIListe, 0)}
+            tone={ikkeIListe > 0 ? "warn" : undefined}
+          />
+        ) : null}
       </div>
 
       {totals.perUnit.length > 0 && (
@@ -291,12 +309,9 @@ export function StockTab({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              setOnlyNoPrice(false);
-              setOnlyLow((v) => !v);
-            }}
+            onClick={() => veksle("lav")}
           >
-            {onlyLow ? "Vis alle varer" : "Vis bare disse"}
+            {utval === "lav" ? "Vis alle varer" : "Vis bare disse"}
           </Button>
         </div>
       )}
@@ -311,12 +326,22 @@ export function StockTab({
           <Button
             size="sm"
             variant="outline"
-            onClick={() => {
-              setOnlyLow(false);
-              setOnlyNoPrice((v) => !v);
-            }}
+            onClick={() => veksle("utenPris")}
           >
-            {onlyNoPrice ? "Vis alle varer" : "Vis bare disse"}
+            {utval === "utenPris" ? "Vis alle varer" : "Vis bare disse"}
+          </Button>
+        </div>
+      )}
+
+      {sistePrisliste && ikkeIListe > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5">
+          <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <p className="min-w-[12rem] flex-1 text-sm text-foreground">
+            {ikkeIListe} {ikkeIListe === 1 ? "vare var" : "varer var"} ikke med i prislista fra {longDate(sistePrisliste)}.
+            Prisen deres er ikke oppdatert — sjekk dem, eller rett prisen på varen.
+          </p>
+          <Button size="sm" variant="outline" onClick={() => veksle("ikkeIListe")}>
+            {utval === "ikkeIListe" ? "Vis alle varer" : "Vis bare disse"}
           </Button>
         </div>
       )}
@@ -391,14 +416,9 @@ export function StockTab({
             <span className="text-sm text-foreground">Vis inaktive</span>
           </label>
 
-          {onlyLow && (
-            <Button size="sm" variant="ghost" onClick={() => setOnlyLow(false)}>
-              Fjern varselfilter
-            </Button>
-          )}
-          {onlyNoPrice && (
-            <Button size="sm" variant="ghost" onClick={() => setOnlyNoPrice(false)}>
-              Fjern prisfilter
+          {utval && (
+            <Button size="sm" variant="ghost" onClick={() => setUtval(null)}>
+              {utval === "lav" ? "Fjern varselfilter" : utval === "utenPris" ? "Fjern prisfilter" : "Fjern prislistefilter"}
             </Button>
           )}
 

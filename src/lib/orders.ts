@@ -494,6 +494,8 @@ export async function applyMarkup(percent: number, scope: MarkupScope = {}): Pro
 export type ImportResult = {
   /** Varer som fekk ny innkjøps- og salspris */
   updated: number;
+  /** Varer som var med i lista til same innkjøpspris – berre merkte som med */
+  confirmed: number;
   /** Linjer databasen tok imot */
   received: number;
   /** Varenummer i fila som ikkje finst i katalogen */
@@ -505,8 +507,13 @@ export type ImportResult = {
  * salsprisane på nytt. Namn, dimensjon, hylleplass og beholdning blir ikkje
  * rørte – dei kan vere retta for hand, og ein prisimport skal ikkje viske det ut.
  */
+/**
+ * `bekreft`: varen var med i prislista til same innkjøpspris. Han blir merkt
+ * som med i lista, men prisane blir ikkje rekna om – ein salspris retta for
+ * hand skal stå.
+ */
 export async function importCosts(
-  rows: { sku: string; cost: number }[],
+  rows: { sku: string; cost: number; bekreft?: boolean }[],
   percent: number,
   roundTo = 1,
 ): Promise<ImportResult> {
@@ -516,8 +523,8 @@ export async function importCosts(
     p_round_to: roundTo,
   });
   if (error) fail("Klarte ikke å importere prisene", error);
-  const r = (data ?? {}) as { updated?: number; received?: number; unmatched?: string[] };
-  return { updated: r.updated ?? 0, received: r.received ?? 0, unmatched: r.unmatched ?? [] };
+  const r = (data ?? {}) as { updated?: number; confirmed?: number; received?: number; unmatched?: string[] };
+  return { updated: r.updated ?? 0, confirmed: r.confirmed ?? 0, received: r.received ?? 0, unmatched: r.unmatched ?? [] };
 }
 
 /**

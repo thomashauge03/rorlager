@@ -155,6 +155,7 @@ export function PriceImport() {
   }, [parsed, types.data, percent, round]);
 
   const changed = diff?.changed ?? [];
+  const unchanged = diff?.unchanged ?? [];
   const created = diff?.created ?? [];
   const missing = diff?.missing ?? [];
   const categoryName = (categories.data ?? []).find((c) => c.id === categoryId)?.name ?? "varegruppen";
@@ -202,17 +203,29 @@ export function PriceImport() {
   const update = useMutation({
     mutationFn: () =>
       importCosts(
-        changed.map((l) => ({ sku: l.sku, cost: l.newCost })),
+        // Uendra pris blir òg sendt, merkt som stadfesta: varen var med i lista,
+        // og Lager-fana skal ikkje vise han som «ikke i siste prisliste»
+        [
+          ...changed.map((l) => ({ sku: l.sku, cost: l.newCost })),
+          ...unchanged.map((l) => ({ sku: l.sku, cost: l.newCost, bekreft: true })),
+        ],
         percent,
         round,
       ),
     onSuccess: (res) => {
       setUpdateOpen(false);
       toast.success(`${num(res.updated, 0)} varer fikk ny pris`, {
-        description:
+        description: [
+          res.confirmed > 0 ? `${num(res.confirmed, 0)} hadde samme pris som før.` : null,
           res.unmatched.length > 0
             ? `${num(res.unmatched.length, 0)} varenummer ble ikke funnet i katalogen og står urørt.`
-            : "Navn, dimensjon, hylleplass og beholdning står som før.",
+            : null,
+          missing.length > 0
+            ? `${num(missing.length, 0)} varer var ikke med i lista – se «Ikke i siste prisliste» i Lager-fanen.`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ") || "Navn, dimensjon, hylleplass og beholdning står som før.",
       });
       // Diffen blir rekna på nytt så snart den ferske katalogen er inne, slik at
       // tala på skjermen framleis stemmer med det som faktisk ligg i basen.
@@ -583,7 +596,7 @@ export function PriceImport() {
                     <Button
                       className="h-11"
                       onClick={() => setUpdateOpen(true)}
-                      disabled={changed.length === 0 || !percentOk || busy}
+                      disabled={changed.length + unchanged.length === 0 || !percentOk || busy}
                     >
                       {update.isPending ? (
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
@@ -593,7 +606,8 @@ export function PriceImport() {
                       Oppdater prisene
                     </Button>
                     <p className="text-xs text-muted-foreground">
-                      Skriver ny innkjøpspris og ny salgspris på {num(changed.length, 0)} varer.
+                      Skriver ny innkjøpspris og ny salgspris på {num(changed.length, 0)} varer
+                      {unchanged.length > 0 ? `, og merker ${num(unchanged.length, 0)} med samme pris som med i lista` : ""}.
                     </p>
                   </div>
 
@@ -664,7 +678,8 @@ export function PriceImport() {
             </li>
             <li>
               De {num(created.length, 0)} nye varene i filen blir ikke opprettet av denne knappen, og de{" "}
-              {num(missing.length, 0)} varene som mangler i filen blir ikke slettet.
+              {num(missing.length, 0)} varene som mangler i filen blir ikke slettet. De beholder prisen de har, og
+              vises etterpå under «Ikke i siste prisliste» i Lager-fanen.
             </li>
           </ul>
           <AlertDialogFooter>

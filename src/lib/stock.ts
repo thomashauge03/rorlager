@@ -102,3 +102,19 @@ export function stockTotals(rows: PipeType[]) {
     perUnit: [...perUnit.entries()].map(([unit, qty]) => ({ unit, qty: Math.round(qty * 100) / 100 })),
   };
 }
+
+/**
+ * Siste prisimport. Alle varene i same import får nøyaktig same tidspunkt i
+ * basen, så den største datoen er den siste lista – og ei vare med ein annan
+ * dato (eller ingen) var ikkje med i henne.
+ */
+export function sistePrislisteDato(varer: Pick<PipeType, "prisliste_dato">[]): string | null {
+  let siste: string | null = null;
+  for (const v of varer) {
+    if (v.prisliste_dato && (!siste || Date.parse(v.prisliste_dato) > Date.parse(siste))) siste = v.prisliste_dato;
+  }
+  return siste;
+}
+
+export const ikkeISisteListe = (v: Pick<PipeType, "prisliste_dato">, siste: string | null) =>
+  !!siste && (!v.prisliste_dato || Date.parse(v.prisliste_dato) !== Date.parse(siste));

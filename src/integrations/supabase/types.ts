@@ -33,6 +33,8 @@ export type PipeTypeRow = {
   updated_at: string;
   /** Strekkoden frå produsenten. Berre i tabellen, ikkje i pipe_catalog; manglar før 20261014200000. */
   ean?: string | null;
+  /** Siste prisimport varen var med i. Berre i tabellen; manglar før 20261015100000. */
+  prisliste_dato?: string | null;
 };
 
 export type PipeOrderRow = {

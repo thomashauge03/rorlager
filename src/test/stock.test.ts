@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSortPipes, matchesSearch, stockStatus, stockTotals } from "@/lib/stock";
+import { filterAndSortPipes, ikkeISisteListe, matchesSearch, sistePrislisteDato, stockStatus, stockTotals } from "@/lib/stock";
 import type { PipeType } from "@/lib/types";
 
 const pipe = (over: Partial<PipeType>): PipeType =>
@@ -101,5 +101,23 @@ describe("stockTotals", () => {
       pipe({ id: "minus", stock: -2, low_stock_threshold: 0 }),
     ]);
     expect(totals.tomme).toBe(2);
+  });
+});
+
+describe("siste prisliste", () => {
+  const v = (prisliste_dato: string | null) => ({ prisliste_dato });
+  it("er den største datoen, uansett format på tidssona", () => {
+    const siste = sistePrislisteDato([v(null), v("2026-09-01T08:00:00+00:00"), v("2026-10-15T10:00:00+02:00")]);
+    expect(siste).toBe("2026-10-15T10:00:00+02:00");
+    expect(sistePrislisteDato([v(null)])).toBeNull();
+  });
+
+  it("ei vare var ikkje med når datoen er ein annan eller manglar – same tidspunkt i anna skrivemåte tel som med", () => {
+    const siste = "2026-10-15T08:00:00+00:00";
+    expect(ikkeISisteListe(v("2026-10-15T10:00:00+02:00"), siste)).toBe(false);
+    expect(ikkeISisteListe(v("2026-09-01T08:00:00+00:00"), siste)).toBe(true);
+    expect(ikkeISisteListe(v(null), siste)).toBe(true);
+    // Før første import finst det inga liste å mangle i
+    expect(ikkeISisteListe(v(null), null)).toBe(false);
   });
 });
