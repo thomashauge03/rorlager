@@ -73,7 +73,18 @@ import { cn } from "@/lib/utils";
 import { dateTime, kr, krShort, longDate, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
 import { avrundingTekst, prisTekst, salsprisFraInnkjop } from "@/lib/prisoversikt";
 import { useOfficeSettings } from "@/lib/settings";
-import { filterAndSortPipes, ikkeISisteListe, sistePrislisteDato, stockStatus, stockTotals, type PipeSort } from "@/lib/stock";
+import {
+  filterAndSortPipes,
+  ikkeISisteListe,
+  sistePrislisteDato,
+  stockStatus,
+  stockTotals,
+  salsverdi,
+  vareverdi,
+  varselgrense,
+  type PipeSort,
+  type VarselStandard,
+} from "@/lib/stock";
 import {
   QK,
   adjustStock,
@@ -99,6 +110,8 @@ const SORT_OPTIONS: { key: PipeSort["key"]; label: string }[] = [
   { key: "sku", label: "Varenummer" },
   { key: "threshold", label: "Varselgrense" },
   { key: "cost", label: "Kostpris" },
+  { key: "costValue", label: "Innkjøpsverdi" },
+  { key: "saleValue", label: "Salgsverdi" },
   { key: "active", label: "Aktiv" },
 ];
 
@@ -174,7 +187,13 @@ export function StockTab({
   // inaktive varer), ikkje søketreffet – elles ville "0 tomme" berre bety at
   // ein har søkt vekk problemet.
   const base = useMemo(() => (showInactive ? rows : rows.filter((t) => t.active)), [rows, showInactive]);
-  const totals = useMemo(() => stockTotals(base), [base]);
+  // Standard varselgrense frå innstillingane, for varer utan eiga
+  const kontor = useOfficeSettings();
+  const standard = useMemo<VarselStandard>(
+    () => ({ stk: kontor.data?.low_stock_default_stk ?? 2, m: kontor.data?.low_stock_default_m ?? 10 }),
+    [kontor.data?.low_stock_default_stk, kontor.data?.low_stock_default_m],
+  );
+  const totals = useMemo(() => stockTotals(base, standard), [base, standard]);
 
   const visible = useMemo(() => {
     const list = filterAndSortPipes(rows, {
@@ -182,12 +201,13 @@ export function StockTab({
       categoryId: categoryId === ALLE ? null : categoryId,
       onlyActive: !showInactive,
       sort,
+      standard,
     });
-    if (utval === "lav") return list.filter((t) => stockStatus(t) !== "pa_lager");
+    if (utval === "lav") return list.filter((t) => stockStatus(t, standard) !== "pa_lager");
     if (utval === "utenPris") return list.filter((t) => t.price === null);
     if (utval === "ikkeIListe") return list.filter((t) => ikkeISisteListe(t, sistePrisliste));
     return list;
-  }, [rows, search, categoryId, showInactive, sort, utval, sistePrisliste]);
+  }, [rows, search, categoryId, showInactive, sort, utval, sistePrisliste, standard]);
 
   const utenPris = useMemo(() => base.filter((t) => t.price === null).length, [base]);
   const ikkeIListe = useMemo(
@@ -403,7 +423,7 @@ export function StockTab({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SORT_OPTIONS.filter((o) => visKostpris || o.key !== "cost").map((o) => (
+                {SORT_OPTIONS.filter((o) => visKostpris || (o.key !== "cost" && o.key !== "costValue")).map((o) => (
                   <SelectItem key={o.key} value={o.key}>
                     {o.label}
                   </SelectItem>
@@ -492,6 +512,10 @@ export function StockTab({
                   {visKostpris ? (
                     <SortHead k="cost" sort={sort} onSort={sorterPå} align="right">Kostpris</SortHead>
                   ) : null}
+                  {visKostpris ? (
+                    <SortHead k="costValue" sort={sort} onSort={sorterPå} align="right">Innkjøpsverdi</SortHead>
+                  ) : null}
+                  <SortHead k="saleValue" sort={sort} onSort={sorterPå} align="right">Salgsverdi</SortHead>
                   <SortHead k="status" sort={sort} onSort={sorterPå}>Status</SortHead>
                   <SortHead k="active" sort={sort} onSort={sorterPå} align="center">Aktiv</SortHead>
                   <TableHead className="text-right">Handling</TableHead>
@@ -516,7 +540,7 @@ export function StockTab({
                         <span className="ml-1 text-xs text-muted-foreground">{t.unit}</span>
                       </TableCell>
                       <TableCell className="tabular text-right text-sm text-muted-foreground">
-                        {t.low_stock_threshold > 0 ? num(t.low_stock_threshold) : "–"}
+                        <Varselgrense vare={t} standard={standard} />
                       </TableCell>
                       <TableCell className="tabular text-right text-sm">{t.price === null ? "–" : kr(t.price)}</TableCell>
                       {visKostpris ? (
@@ -524,8 +548,16 @@ export function StockTab({
                           {t.cost_price === null ? "–" : kr(t.cost_price)}
                         </TableCell>
                       ) : null}
+                      {visKostpris ? (
+                        <TableCell className="tabular text-right text-sm text-muted-foreground">
+                          {vareverdi(t) === null ? "–" : kr(vareverdi(t) as number)}
+                        </TableCell>
+                      ) : null}
+                      <TableCell className="tabular text-right text-sm font-medium">
+                        {salsverdi(t) === null ? "–" : kr(salsverdi(t) as number)}
+                      </TableCell>
                       <TableCell>
-                        <StockBadge status={stockStatus(t)} />
+                        <StockBadge status={stockStatus(t, standard)} />
                       </TableCell>
                       <TableCell className="text-center">
                         <Switch
@@ -568,7 +600,7 @@ export function StockTab({
                         </span>
                       </p>
                     </div>
-                    <StockBadge status={stockStatus(t)} />
+                    <StockBadge status={stockStatus(t, standard)} />
                   </div>
 
                   <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
@@ -579,9 +611,18 @@ export function StockTab({
                     <p className="tabular text-sm text-muted-foreground">
                       {t.price === null ? "Ingen pris" : `${kr(t.price)} kr / ${t.unit}`}
                     </p>
-                    {t.low_stock_threshold > 0 && (
-                      <p className="tabular text-xs text-muted-foreground">Varsel ved {num(t.low_stock_threshold)}</p>
+                    {varselgrense(t, standard) > 0 && (
+                      <p className="tabular text-xs text-muted-foreground">
+                        Varsel ved {num(varselgrense(t, standard))}
+                        {t.low_stock_threshold > 0 ? "" : " (standard)"}
+                      </p>
                     )}
+                    {salsverdi(t) !== null ? (
+                      <p className="tabular text-xs text-muted-foreground">Salgsverdi {kr(salsverdi(t) as number)} kr</p>
+                    ) : null}
+                    {visKostpris && vareverdi(t) !== null ? (
+                      <p className="tabular text-xs text-muted-foreground">Innkjøpsverdi {kr(vareverdi(t) as number)} kr</p>
+                    ) : null}
                   </div>
 
                   <div className="flex flex-wrap items-center gap-2">
@@ -696,6 +737,19 @@ function CategoryDot({ color }: { color: string | null }) {
       className="inline-block h-2 w-2 shrink-0 rounded-full border border-foreground/15"
       style={{ backgroundColor: color }}
     />
+  );
+}
+
+/** Varas eiga grense, eller standarden for eininga i svakare skrift. */
+function Varselgrense({ vare, standard }: { vare: PipeType; standard: VarselStandard }) {
+  if (vare.low_stock_threshold > 0) return <>{num(vare.low_stock_threshold)}</>;
+  const g = varselgrense(vare, standard);
+  if (g <= 0) return <>–</>;
+  return (
+    <span className="opacity-60" title="Standard fra innstillingene – varen har ingen egen grense">
+      {num(g)}
+      <span className="sr-only"> (standard)</span>
+    </span>
   );
 }
 

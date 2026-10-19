@@ -17,6 +17,7 @@ import { num, pipeLabel, qtyLabel } from "@/lib/format";
 import { QK, finnSlugForEan, setStock } from "@/lib/orders";
 import { finnVare } from "@/lib/scanner";
 import { stockStatus } from "@/lib/stock";
+import { useOfficeSettings } from "@/lib/settings";
 import type { PipeType } from "@/lib/types";
 
 /** Står i lagerloggen, så ein ser kva som er telt med kameraet og kva som er justert for hand */
@@ -35,6 +36,8 @@ export function SkannVare({
 }) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  // Standard varselgrense, så «Snart tomt» her er det same som i lista
+  const kontor = useOfficeSettings();
   const [skann, setSkann] = useState(true);
   const [vareId, setVareId] = useState<string | null>(null);
   const [telt, setTelt] = useState<number | null>(null);
@@ -131,7 +134,12 @@ export function SkannVare({
                     {num(Number(vare.stock))} <span className="text-lg font-normal text-muted-foreground">{vare.unit}</span>
                   </p>
                 </div>
-                <StockBadge status={stockStatus(vare)} />
+                <StockBadge
+                  status={stockStatus(vare, {
+                    stk: kontor.data?.low_stock_default_stk ?? 2,
+                    m: kontor.data?.low_stock_default_m ?? 10,
+                  })}
+                />
               </div>
 
               <div className="space-y-1.5">

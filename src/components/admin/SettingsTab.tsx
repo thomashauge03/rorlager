@@ -52,6 +52,9 @@ type Draft = {
   /** Verdien i avrundingsvalet: "0.01", "1", "5" eller "10" */
   price_round_to: string;
   price_round_up: boolean;
+  /** Standard varselgrense for varer utan eiga, per eining */
+  low_stock_default_stk: string;
+  low_stock_default_m: string;
   show_prices: boolean;
   require_phone: boolean;
   require_signature: boolean;
@@ -75,6 +78,8 @@ const toDraft = (s: PipeSettingsRow): Draft => ({
       : String(s.markup_percent).replace(".", ","),
   price_round_to: String(s.price_round_to ?? 1),
   price_round_up: s.price_round_up !== false,
+  low_stock_default_stk: String(s.low_stock_default_stk ?? 2).replace(".", ","),
+  low_stock_default_m: String(s.low_stock_default_m ?? 10).replace(".", ","),
   show_prices: s.show_prices !== false,
   require_phone: s.require_phone !== false,
   require_signature: s.require_signature === true,
@@ -260,10 +265,26 @@ export function SettingsTab() {
         patch.price_round_to = Number(draft.price_round_to) || 1;
         patch.price_round_up = draft.price_round_up;
       }
+      // Same grunn: standard varselgrense kom med 20261019130000
+      if (
+        !base ||
+        draft.low_stock_default_stk !== base.low_stock_default_stk ||
+        draft.low_stock_default_m !== base.low_stock_default_m
+      ) {
+        const stk = draft.low_stock_default_stk.trim() ? parseNum(draft.low_stock_default_stk) : 0;
+        const m = draft.low_stock_default_m.trim() ? parseNum(draft.low_stock_default_m) : 0;
+        if (stk === null || stk < 0 || m === null || m < 0) {
+          throw new Error("Standard varselgrense må være et tall, 0 eller mer.");
+        }
+        patch.low_stock_default_stk = stk;
+        patch.low_stock_default_m = m;
+      }
       await saveSettings(patch);
     },
     onSuccess: () => {
       setBase(draft);
+      // Lager-fana les grensa frå kontorinnstillingane
+      qc.invalidateQueries({ queryKey: QK.officeSettings });
       toast({ title: "Innstillingene er lagret", description: "Endringene gjelder med en gang." });
       qc.invalidateQueries({ queryKey: QK.settings });
     },
@@ -650,6 +671,40 @@ export function SettingsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Card className="hm-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Snart tomt</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Standard varselgrense for varer som ikke har sin egen. Når beholdningen er på grensen eller under,
+            står varen som «Snart tomt» på Lager. En vare med egen varselgrense bruker sin. 0 slår av standarden.
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="inn-varsel-stk">Varer i stk</Label>
+              <Input
+                id="inn-varsel-stk"
+                className="h-11 tabular"
+                inputMode="decimal"
+                value={draft.low_stock_default_stk}
+                onChange={(e) => set("low_stock_default_stk", e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="inn-varsel-m">Varer i meter</Label>
+              <Input
+                id="inn-varsel-m"
+                className="h-11 tabular"
+                inputMode="decimal"
+                value={draft.low_stock_default_m}
+                onChange={(e) => set("low_stock_default_m", e.target.value)}
+              />
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="hm-card">
         <CardHeader className="pb-3">

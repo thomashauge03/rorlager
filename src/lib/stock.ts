@@ -3,9 +3,27 @@ import type { PipeType, StockStatus } from "@/lib/types";
 /** Same normalisering overalt: store/små bokstavar og doble mellomrom betyr ingenting */
 export const searchKey = (value: string) => (value ?? "").trim().replace(/\s+/g, " ").toLowerCase();
 
-export function stockStatus(t: Pick<PipeType, "stock" | "low_stock_threshold">): StockStatus {
+/** Standard varselgrense frå innstillingane, for varer utan eiga. 0 = av. */
+export type VarselStandard = { stk: number; m: number };
+
+/**
+ * Grensa som gjeld for vara: hennar eiga, elles standarden for eininga.
+ * Utan standard (kundeflyten) berre den eigne – som før.
+ */
+export function varselgrense(t: Pick<PipeType, "low_stock_threshold"> & { unit?: string }, standard?: VarselStandard): number {
+  const eiga = t.low_stock_threshold ?? 0;
+  if (eiga > 0 || !standard) return eiga;
+  if (t.unit === "m") return standard.m;
+  if (t.unit === "stk") return standard.stk;
+  return 0;
+}
+
+export function stockStatus(
+  t: Pick<PipeType, "stock" | "low_stock_threshold"> & { unit?: string },
+  standard?: VarselStandard,
+): StockStatus {
   if (t.stock <= 0) return "tomt";
-  const limit = t.low_stock_threshold ?? 0;
+  const limit = varselgrense(t, standard);
   if (limit > 0 && t.stock <= limit) return "snart";
   return "pa_lager";
 }
@@ -20,7 +38,19 @@ export const STOCK_LABEL: Record<StockStatus, string> = {
 const STATUS_ORDER: Record<StockStatus, number> = { tomt: 0, snart: 1, pa_lager: 2 };
 
 export type PipeSort = {
-  key: "name" | "dimension" | "stock" | "price" | "status" | "location" | "sku" | "threshold" | "cost" | "active";
+  key:
+    | "name"
+    | "dimension"
+    | "stock"
+    | "price"
+    | "status"
+    | "location"
+    | "sku"
+    | "threshold"
+    | "cost"
+    | "costValue"
+    | "saleValue"
+    | "active";
   dir: "asc" | "desc";
 };
 
@@ -50,9 +80,9 @@ export function filterAndSortPipes<
   T extends Søkbar & Pick<PipeType, "active" | "category_id" | "stock" | "price" | "low_stock_threshold">,
 >(
   rows: T[],
-  opts: { search?: string; categoryId?: string | null; onlyActive?: boolean; sort?: PipeSort } = {},
+  opts: { search?: string; categoryId?: string | null; onlyActive?: boolean; sort?: PipeSort; standard?: VarselStandard } = {},
 ): T[] {
-  const { search = "", categoryId = null, onlyActive = false, sort = { key: "name", dir: "asc" } } = opts;
+  const { search = "", categoryId = null, onlyActive = false, sort = { key: "name", dir: "asc" }, standard } = opts;
   const dir = sort.dir === "asc" ? 1 : -1;
   const nb = (a: string, b: string) => (a ?? "").localeCompare(b ?? "", "nb", { numeric: true });
 
@@ -72,16 +102,24 @@ export function filterAndSortPipes<
         case "sku":
           return nb(a.sku ?? "", b.sku ?? "") * dir || nb(a.name, b.name);
         case "threshold":
-          return ((a.low_stock_threshold ?? 0) - (b.low_stock_threshold ?? 0)) * dir || nb(a.name, b.name);
+          return (varselgrense(a, standard) - varselgrense(b, standard)) * dir || nb(a.name, b.name);
         case "cost": {
           // Katalogvisninga har ikkje innkjøpsprisen; der er alle like
           const k = (t: T) => (t as { cost_price?: number | null }).cost_price ?? -1;
           return (k(a) - k(b)) * dir || nb(a.name, b.name);
         }
+        case "costValue": {
+          const v = (t: T) => vareverdi(t as T & { cost_price?: number | null }) ?? -1;
+          return (v(a) - v(b)) * dir || nb(a.name, b.name);
+        }
+        case "saleValue": {
+          const v = (t: T) => salsverdi(t) ?? -1;
+          return (v(a) - v(b)) * dir || nb(a.name, b.name);
+        }
         case "active":
           return (Number(a.active) - Number(b.active)) * dir || nb(a.name, b.name);
         case "status": {
-          const diff = STATUS_ORDER[stockStatus(a)] - STATUS_ORDER[stockStatus(b)];
+          const diff = STATUS_ORDER[stockStatus(a, standard)] - STATUS_ORDER[stockStatus(b, standard)];
           return diff !== 0 ? diff * dir : nb(a.name, b.name);
         }
         default: {
@@ -94,7 +132,20 @@ export function filterAndSortPipes<
     });
 }
 
-export function stockTotals(rows: PipeType[]) {
+/**
+ * Kva vara på lageret kosta: innkjøpsprisen × beholdninga. Aldri for negativ
+ * beholdning. Null utan innkjøpspris.
+ */
+export function vareverdi(t: Pick<PipeType, "stock"> & { cost_price?: number | null }): number | null {
+  return t.cost_price == null ? null : t.cost_price * Math.max(Number(t.stock), 0);
+}
+
+/** Kva vara på lageret er verdt i sal: utsalsprisen (utan mva) × beholdninga. */
+export function salsverdi(t: Pick<PipeType, "stock" | "price">): number | null {
+  return t.price === null ? null : t.price * Math.max(Number(t.stock), 0);
+}
+
+export function stockTotals(rows: PipeType[], standard?: VarselStandard) {
   const perUnit = new Map<string, number>();
   rows.forEach((t) => perUnit.set(t.unit, (perUnit.get(t.unit) || 0) + t.stock));
   return {
@@ -106,14 +157,15 @@ export function stockTotals(rows: PipeType[]) {
      * står på 0 med grense 0, og gav «156 tomme» – støy som skjulte dei ekte.
      */
     tomme: rows.filter((t) => t.stock < 0 || (stockStatus(t) === "tomt" && (t.low_stock_threshold ?? 0) > 0)).length,
-    snart: rows.filter((t) => stockStatus(t) === "snart").length,
+    // Standardgrensa tel med her – ho gjeld berre «snart», aldri «tomme»
+    snart: rows.filter((t) => stockStatus(t, standard) === "snart").length,
     /*
      * Lagerverdien er det lageret kosta – innkjøpsprisen. Rekneskapen bruker
      * den, og salsprisen gav ein verdi rundt 25 % for høg. Salsverdien står ved
      * sida av. Berre der prisen er sett, og aldri for negativ beholdning.
      */
-    verdi: rows.reduce((sum, t) => (t.cost_price == null ? sum : sum + t.cost_price * Math.max(t.stock, 0)), 0),
-    salsverdi: rows.reduce((sum, t) => (t.price === null ? sum : sum + t.price * Math.max(t.stock, 0)), 0),
+    verdi: rows.reduce((sum, t) => sum + (vareverdi(t) ?? 0), 0),
+    salsverdi: rows.reduce((sum, t) => sum + (salsverdi(t) ?? 0), 0),
     perUnit: [...perUnit.entries()].map(([unit, qty]) => ({ unit, qty: Math.round(qty * 100) / 100 })),
   };
 }

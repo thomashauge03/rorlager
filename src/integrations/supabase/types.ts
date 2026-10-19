@@ -167,6 +167,9 @@ export type PipeSettingsRow = {
   price_round_to?: number;
   /** true = alltid opp til neste trinn, så prisen aldri ligg under avansen */
   price_round_up?: boolean;
+  /** Varselgrense for varer utan eiga grense, per eining. 0 = av. Manglar før 20261019130000. */
+  low_stock_default_stk?: number;
+  low_stock_default_m?: number;
   /** Tek butikken på /bestill imot bestillingar */
   accept_orders: boolean;
   /** Varsel om nye bestillingar. Tom = firmaets e-post */

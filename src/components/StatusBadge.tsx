@@ -32,7 +32,12 @@ const STOCK_STYLE: Record<StockStatus, string> = {
 };
 
 export function StockBadge({ status }: { status: StockStatus }) {
-  return <span className={cn("hm-chip", STOCK_STYLE[status] ?? STOCK_STYLE.pa_lager)}>{STOCK_LABEL[status] ?? status}</span>;
+  // nowrap: i ei smal tabellkolonne brotna «På lager» over to linjer
+  return (
+    <span className={cn("hm-chip whitespace-nowrap", STOCK_STYLE[status] ?? STOCK_STYLE.pa_lager)}>
+      {STOCK_LABEL[status] ?? status}
+    </span>
+  );
 }
 
 // Prosjektbestillingar har fleire steg enn uttaka, og «delvis» er det viktigaste

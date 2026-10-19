@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { filterAndSortPipes, ikkeISisteListe, matchesSearch, sistePrislisteDato, stockStatus, stockTotals } from "@/lib/stock";
+import {
+  filterAndSortPipes,
+  ikkeISisteListe,
+  matchesSearch,
+  sistePrislisteDato,
+  stockStatus,
+  stockTotals,
+  varselgrense,
+} from "@/lib/stock";
 import type { PipeType } from "@/lib/types";
 
 const pipe = (over: Partial<PipeType>): PipeType =>
@@ -94,6 +102,48 @@ describe("filterAndSortPipes", () => {
     expect(ids("cost")).toEqual(["y", "z", "x"]);
     expect(ids("active")).toEqual(["y", "x", "z"]);
     expect(ids("active", "desc")).toEqual(["x", "z", "y"]);
+  });
+
+  it("sorterer på innkjøps- og salgsverdi", () => {
+    const tabell = [
+      pipe({ id: "x", name: "X", stock: 10, cost_price: 5, price: 10 }), // 50 / 100
+      pipe({ id: "y", name: "Y", stock: 2, cost_price: 40, price: 30 }), // 80 / 60
+      pipe({ id: "z", name: "Z", stock: -3, cost_price: 100, price: 200 }), // negativ = 0
+    ];
+    const ids = (key: "costValue" | "saleValue") =>
+      filterAndSortPipes(tabell, { sort: { key, dir: "desc" } }).map((r) => r.id);
+    expect(ids("costValue")).toEqual(["y", "x", "z"]);
+    expect(ids("saleValue")).toEqual(["x", "y", "z"]);
+  });
+});
+
+describe("standard varselgrense", () => {
+  const STD = { stk: 2, m: 10 };
+
+  it("gjeld berre varer utan eiga grense, per eining", () => {
+    expect(varselgrense(pipe({ unit: "stk", low_stock_threshold: 0 }), STD)).toBe(2);
+    expect(varselgrense(pipe({ unit: "m", low_stock_threshold: 0 }), STD)).toBe(10);
+    expect(varselgrense(pipe({ unit: "stk", low_stock_threshold: 7 }), STD)).toBe(7);
+    // Utan standard (kundeflyten): som før
+    expect(varselgrense(pipe({ unit: "stk", low_stock_threshold: 0 }))).toBe(0);
+  });
+
+  it("gir «snart» på grensa, men aldri for ei tom vare", () => {
+    expect(stockStatus(pipe({ unit: "stk", stock: 2, low_stock_threshold: 0 }), STD)).toBe("snart");
+    expect(stockStatus(pipe({ unit: "stk", stock: 3, low_stock_threshold: 0 }), STD)).toBe("pa_lager");
+    expect(stockStatus(pipe({ unit: "m", stock: 8, low_stock_threshold: 0 }), STD)).toBe("snart");
+    expect(stockStatus(pipe({ unit: "stk", stock: 0, low_stock_threshold: 0 }), STD)).toBe("tomt");
+    expect(stockStatus(pipe({ unit: "stk", stock: 2, low_stock_threshold: 0 }), { stk: 0, m: 0 })).toBe("pa_lager");
+  });
+
+  it("tel med i «snart», men ikkje i «tomme»", () => {
+    const rader = [
+      pipe({ id: "a", unit: "stk", stock: 1, low_stock_threshold: 0 }), // snart via standard
+      pipe({ id: "b", unit: "stk", stock: 0, low_stock_threshold: 0 }), // aldri teken inn – ikkje støy
+    ];
+    const t = stockTotals(rader, STD);
+    expect(t.snart).toBe(1);
+    expect(t.tomme).toBe(0);
   });
 });
 
