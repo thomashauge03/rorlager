@@ -28,6 +28,7 @@ import { InstallPrompt } from "@/components/InstallPrompt";
 import { SetupBanner } from "@/components/SetupBanner";
 import { SideTittel } from "@/components/SideTittel";
 import { FeilGrense } from "@/components/FeilGrense";
+import { BreiddVakt } from "@/components/BreiddVakt";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -81,6 +82,7 @@ const App = () => (
           {/* Ligg utanfor Routes, så dei overlever navigering mellom sidene */}
           <InstallPrompt />
           <SetupBanner />
+          <BreiddVakt />
         </BrowserRouter>
       </TooltipProvider>
     </ThemeProvider>
