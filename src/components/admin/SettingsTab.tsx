@@ -395,32 +395,36 @@ export function SettingsTab() {
 
       <Card className="hm-card">
         <CardHeader className="pb-3">
-          <CardTitle className="text-base">Prisjustering</CardTitle>
+          <CardTitle className="text-base">Avanse over Dahl</CardTitle>
           <p className="text-sm text-muted-foreground">
-            Prislisten fra Brødrene Dahl er innkjøpspris uten mva. Påslaget er det dere legger oppå, og
-            salgsprisen blir regnet ut og lagret på hver enkelt vare.
+            Prislisten fra Brødrene Dahl er innkjøpspris uten mva. Avansen er det dere legger oppå, og mva kommer i
+            tillegg. Nye varer som legges inn med innkjøpspris, får salgsprisen regnet ut med avansen automatisk.
           </p>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">
             <div className="space-y-1.5">
-              <Label htmlFor="inn-paaslag">Påslag (%)</Label>
+              <Label htmlFor="inn-paaslag">Avanse (%)</Label>
               <Input
                 id="inn-paaslag"
                 className="h-11 tabular"
                 inputMode="decimal"
-                placeholder="25"
+                placeholder="35"
                 value={draft.markup_percent}
                 onChange={(e) => set("markup_percent", e.target.value)}
                 aria-invalid={markupText.trim() !== "" && !markupOk}
               />
               {markupText.trim() !== "" && !markupOk ? (
                 <p className="text-xs text-destructive-ink">
-                  Påslaget må være et tall mellom 0 og {MAX_MARKUP}.
+                  Avansen må være et tall mellom 0 og {MAX_MARKUP}.
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">
-                  25 betyr at en vare som koster 100 kroner inn, får 125 kroner i salgspris.
+                  {markupValue === null
+                    ? "Prosent oppå innkjøpsprisen fra Dahl."
+                    : `${num(markupValue, 2)} betyr at en vare som koster 100 kr fra Dahl, selges for ${kr(100 + markupValue)} kr eks. mva.`}{" "}
+                  Lagres med «Lagre innstillinger» og gjelder nye varer med en gang. Eksisterende varer endres først
+                  når du trykker «Oppdater prisene».
                 </p>
               )}
             </div>
@@ -555,7 +559,7 @@ export function SettingsTab() {
               Oppdater prisene
             </Button>
             <p className="text-xs text-muted-foreground">
-              Skriver ny pris på varene med en gang. Påslaget blir lagret samtidig.
+              Skriver ny pris på varene med en gang. Avansen blir lagret samtidig.
             </p>
           </div>
         </CardContent>

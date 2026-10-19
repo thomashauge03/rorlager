@@ -166,7 +166,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
                 eks: kr(eksInnkjop),
               },
               {
-                tittel: `+ Påslag ${num(paaslagProsent, 2)} %`,
+                tittel: `+ Avanse ${num(paaslagProsent, 2)} %`,
                 tekst: dg === null ? "Tillegg oppå innkjøpsprisen" : `Gir ${num(dg, 1)} % dekningsgrad`,
                 eks: `+ ${kr(eksMedPaaslag - eksInnkjop)}`,
               },

@@ -68,6 +68,8 @@ import { QuantityInput } from "@/components/QuantityInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { dateTime, kr, krShort, longDate, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
+import { prisTekst, salsprisFraInnkjop } from "@/lib/prisoversikt";
+import { useOfficeSettings } from "@/lib/settings";
 import { filterAndSortPipes, ikkeISisteListe, sistePrislisteDato, stockStatus, stockTotals, type PipeSort } from "@/lib/stock";
 import {
   QK,
@@ -950,6 +952,36 @@ export function PipeDialog({
 
   const set = (patch: Partial<PipeForm>) => setForm((f) => ({ ...f, ...patch }));
 
+  // Avansen frå innstillingane. Ei ny vare får salsprisen rekna ut av
+  // innkjøpsprisen til nokon skriv ein pris sjølv; ei eksisterande vare blir
+  // ikkje rørt utan at nokon ber om det.
+  const kontor = useOfficeSettings();
+  const avanse = visKostpris && !kontor.isPlaceholderData ? (kontor.data?.markup_percent ?? null) : null;
+  const faktor = pipe?.prishopp_faktor ?? 1;
+  const [prisAuto, setPrisAuto] = useState(!pipe);
+  const utrekna = (kostTekst: string) =>
+    avanse === null ? null : salsprisFraInnkjop(parseNum(kostTekst), avanse, faktor);
+
+  const setKostpris = (cost_price: string) =>
+    setForm((f) => {
+      const ny = utrekna(cost_price);
+      return prisAuto && avanse !== null ? { ...f, cost_price, price: ny === null ? "" : prisTekst(ny) } : { ...f, cost_price };
+    });
+
+  // Avansen kjem frå basen etter at dialogen er open. Har nokon alt skrive
+  // innkjøpsprisen, skal salsprisen fylgje med når han kjem.
+  useEffect(() => {
+    if (!prisAuto || avanse === null) return;
+    setForm((f) => {
+      const ny = utrekna(f.cost_price);
+      return ny === null ? f : { ...f, price: prisTekst(ny) };
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [avanse]);
+
+  const forslagPris = utrekna(form.cost_price);
+  const prisAvvik = forslagPris !== null && Math.abs((parseNum(form.price) ?? NaN) - forslagPris) >= 0.005;
+
   const setName = (name: string) =>
     setForm((f) => ({ ...f, name, qr_slug: slugLocked ? f.qr_slug : slugify(`${name} ${f.dimension}`) }));
 
@@ -1119,31 +1151,60 @@ export function PipeDialog({
             />
           </div>
 
+          {visKostpris ? (
+            <div className="space-y-1.5">
+              <Label htmlFor="vare-kostpris">Innkjøpspris fra Dahl per {form.unit} (kr)</Label>
+              <Input
+                id="vare-kostpris"
+                className="h-11 tabular"
+                inputMode="decimal"
+                placeholder="Ingen innkjøpspris"
+                value={form.cost_price}
+                onChange={(e) => setKostpris(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Uten mva.</p>
+            </div>
+          ) : null}
+
           <div className="space-y-1.5">
-            <Label htmlFor="vare-pris">Pris per {form.unit} (kr)</Label>
+            <Label htmlFor="vare-pris">
+              {visKostpris ? "Salgspris eks. mva" : "Pris"} per {form.unit} (kr)
+            </Label>
             <Input
               id="vare-pris"
               className="h-11 tabular"
               inputMode="decimal"
               placeholder="Ingen pris"
               value={form.price}
-              onChange={(e) => set({ price: e.target.value })}
+              onChange={(e) => {
+                setPrisAuto(false);
+                set({ price: e.target.value });
+              }}
             />
+            {avanse !== null ? (
+              prisAuto ? (
+                <p className="text-xs text-muted-foreground">
+                  Regnes ut: innkjøpspris + {num(avanse, 2)} % avanse. Skriv en annen pris for å sette den selv.
+                </p>
+              ) : prisAvvik && forslagPris !== null ? (
+                <p className="text-xs text-muted-foreground">
+                  Med {num(avanse, 2)} % avanse{faktor !== 1 ? " og prishoppet" : ""} blir det {kr(forslagPris)} kr.{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline underline-offset-2"
+                    onClick={() => {
+                      setPrisAuto(true);
+                      set({ price: prisTekst(forslagPris) });
+                    }}
+                  >
+                    Bruk den
+                  </button>
+                </p>
+              ) : forslagPris !== null ? (
+                <p className="text-xs text-muted-foreground">Følger {num(avanse, 2)} % avanse.</p>
+              ) : null
+            ) : null}
           </div>
-
-          {visKostpris ? (
-            <div className="space-y-1.5">
-              <Label htmlFor="vare-kostpris">Kostpris per {form.unit} (kr)</Label>
-              <Input
-                id="vare-kostpris"
-                className="h-11 tabular"
-                inputMode="decimal"
-                placeholder="Ingen kostpris"
-                value={form.cost_price}
-                onChange={(e) => set({ cost_price: e.target.value })}
-              />
-            </div>
-          ) : null}
 
           {!pipe && (
             <div className="space-y-1.5">

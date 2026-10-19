@@ -150,3 +150,13 @@ export function spreiddUtval<T>(rader: T[], pris: (r: T) => number, antall: numb
   }
   return ut;
 }
+
+/**
+ * Salsprisen ei vare får av innkjøpsprisen og avansen, runda til øre – same
+ * som prisane i katalogen. null når innkjøpsprisen manglar.
+ */
+export const salsprisFraInnkjop = (innkjop: number | null, avanseProsent: number, faktor = 1) =>
+  innkjop === null ? null : Math.round(innkjop * (1 + avanseProsent / 100) * (faktor || 1) * 100) / 100;
+
+/** Som skjemafelta skriv tal: komma og to desimalar. */
+export const prisTekst = (v: number) => v.toFixed(2).replace(".", ",");
