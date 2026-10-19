@@ -144,6 +144,15 @@
     overflow-x: clip;
   }
 
+  /* Body åleine held ikkje: overflow på body går over til sjølve vindauget,
+     og Chrome på Android gjer då sida breiare likevel. Alt som er festa til
+     skjermen, blei rekna frå den breie sida – skannarvindauget på Lager-fana
+     sat 70 px til høgre og gjekk ut over kanten. #root blir ikkje flytta opp,
+     så her blir det breie elementet faktisk klipt. */
+  #root {
+    overflow-x: clip;
+  }
+
   /* Eit langt trykk på ein knapp skal trykke han, ikkje markere teksten i han
      eller opne iOS-menyen for lenkjer. Vanleg tekst kan framleis markerast. */
   button,
