@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { finnVare, fokuspunkt, fokussteg, hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, zoomTrinn } from "@/lib/scanner";
+import { finnVare, fokuspunkt, fokussteg, hovudkamera, kodeFraSkann, kodeFraSkannMedOppslag, fastZoom } from "@/lib/scanner";
 
 describe("kodeFraSkann", () => {
   it("les QR-lenkja frå hylla, uansett vertsnamn", () => {
@@ -108,12 +108,12 @@ describe("hovudkamera", () => {
   });
 });
 
-describe("zoomTrinn", () => {
-  it("1× og oppover, innanfor det kameraet kan", () => {
-    expect(zoomTrinn({ min: 1, max: 8 })).toEqual([1, 2, 3, 4]);
-    expect(zoomTrinn({ min: 1, max: 2.5 })).toEqual([1, 2]);
-    expect(zoomTrinn({ min: 1, max: 1 })).toEqual([]);
-    expect(zoomTrinn(undefined)).toEqual([]);
+describe("fastZoom", () => {
+  it("3×, eller så nær det kameraet kjem", () => {
+    expect(fastZoom({ min: 1, max: 8 })).toBe(3);
+    expect(fastZoom({ min: 1, max: 2.5 })).toBe(2.5);
+    expect(fastZoom({ min: 1, max: 1 })).toBeNull();
+    expect(fastZoom(undefined)).toBeNull();
   });
 });
 

@@ -112,7 +112,7 @@ describe("skriv varenummeret", () => {
 });
 
 describe("zoom", () => {
-  it("startar på 2× og byter når ein trykkjer", async () => {
+  it("låser kameraet på 3× utan zoomknappar", async () => {
     const applyConstraints = vi.fn().mockResolvedValue(undefined);
     const spor = {
       stop: vi.fn(),
@@ -130,14 +130,9 @@ describe("zoom", () => {
     innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
     render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
 
-    const to = await screen.findByRole("button", { name: "Zoom 2×" });
-    await waitFor(() => expect(to).toHaveAttribute("aria-pressed", "true"));
-    expect(screen.getByRole("button", { name: "Zoom 4×" })).toBeInTheDocument();
-    expect(screen.getByText(/Trykk på bildet for å fokusere/)).toBeInTheDocument();
-
-    fireEvent.click(screen.getByRole("button", { name: "Zoom 3×" }));
-    await waitFor(() => expect(screen.getByRole("button", { name: "Zoom 3×" })).toHaveAttribute("aria-pressed", "true"));
-    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 3 }] });
+    await waitFor(() => expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 3 }] }));
+    expect(await screen.findByText(/Trykk på bildet for å fokusere/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Zoom/ })).not.toBeInTheDocument();
   });
 
   it("byter til hovudkameraet når telefonen gav vidvinkelen", async () => {

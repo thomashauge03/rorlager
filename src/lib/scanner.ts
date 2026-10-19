@@ -130,10 +130,13 @@ export function hovudkamera(einingar: { deviceId: string; label: string; kind: s
   return bak[0]?.id ?? null;
 }
 
-/** Zoomtrinna kameraet kan, frå 1× og oppover */
-export function zoomTrinn(evne: Kameraevne["zoom"]): number[] {
-  if (!evne || evne.max <= evne.min) return [];
-  return [1, 2, 3, 4].filter((z) => z >= evne.min && z <= evne.max);
+/** 3× les dei små etikettane best, så kameraet blir låst der */
+const FAST_ZOOM = 3;
+
+/** Zoomen kameraet blir låst på, eller null når appen ikkje kan styre zoom */
+export function fastZoom(evne: Kameraevne["zoom"]): number | null {
+  if (!evne || evne.max <= evne.min) return null;
+  return Math.max(evne.min, Math.min(FAST_ZOOM, evne.max));
 }
 
 /**

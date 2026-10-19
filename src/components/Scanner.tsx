@@ -4,12 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
+  fastZoom,
   fokuspunkt,
   fokussteg,
   hovudkamera,
   kodeFraSkann,
   kodeFraSkannMedOppslag,
-  zoomTrinn,
   type Kameraevne,
   type Skannsvar,
 } from "@/lib/scanner";
@@ -123,10 +123,8 @@ export function Scanner({
   const [skrive, setSkrive] = useState("");
   // Ein QR Admin-kode blir slått opp på nettet, og det kan ta litt tid
   const [slaarOpp, setSlaarOpp] = useState(false);
-  // Sporet kameraet gir, så zoomknappane og trykk-for-fokus når det
+  // Sporet kameraet gir, så trykk-for-fokus når det
   const sporRef = useRef<MediaStreamTrack | null>(null);
-  const [zoomar, setZoomar] = useState<number[]>([]);
-  const [zoom, setZoom] = useState<number | null>(null);
   // Fokusmodusane kameraet seier det kan. Tom = appen kan ikkje styre fokus.
   const [fokusModusar, setFokusModusar] = useState<string[]>([]);
   // Ringen som viser kvar ein trykte, så ein ser at trykket blei teke imot
@@ -144,8 +142,6 @@ export function Scanner({
     setHint(null);
     setSkrive("");
     setSlaarOpp(false);
-    setZoomar([]);
-    setZoom(null);
     setFokusModusar([]);
     setRing(null);
     sporRef.current = null;
@@ -225,16 +221,10 @@ export function Scanner({
         }
         setFokusModusar(kan.focusMode ?? []);
         // Zoom: ein liten etikett kan haldast 20–30 cm unna, der fokus verkar,
-        // og likevel fylle biletet. 2× frå start der kameraet kan zoome.
-        const trinn = zoomTrinn(kan.zoom);
-        setZoomar(trinn);
-        if (trinn.includes(2)) {
-          void spor
-            .applyConstraints({ advanced: [{ zoom: 2 } as MediaTrackConstraintSet] })
-            .then(() => setZoom(2))
-            .catch(() => {});
-        } else if (trinn.length) {
-          setZoom(trinn[0]);
+        // og likevel fylle biletet. Låst på 3×, som les best – ingen knappar.
+        const z = fastZoom(kan.zoom);
+        if (z !== null) {
+          void spor.applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] }).catch(() => {});
         }
       } catch {
         setStarting(false);
@@ -323,15 +313,6 @@ export function Scanner({
     return stop;
   }, [open]);
 
-  const brukZoom = (z: number) => {
-    const spor = sporRef.current;
-    if (!spor) return;
-    void spor
-      .applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] })
-      .then(() => setZoom(z))
-      .catch(() => {});
-  };
-
   const kanFokusere = fokusModusar.includes("single-shot") || fokusModusar.includes("continuous");
 
   // Trykk på biletet: fokuser på punktet. Sjå fokussteg for kva som blir gjort
@@ -353,7 +334,7 @@ export function Scanner({
       : null;
     const { steg, tilbakeTilKontinuerleg } = fokussteg(fokusModusar, punkt);
     if (steg.length === 0) {
-      setHint("Kameraet lar ikke appen styre fokus. Bruk zoom, eller hold telefonen litt lenger unna.");
+      setHint("Kameraet lar ikke appen styre fokus. Hold telefonen litt lenger unna.");
       return;
     }
     void (async () => {
@@ -409,24 +390,6 @@ export function Scanner({
                 style={{ left: ring.x, top: ring.y, animationIterationCount: 1 }}
               />
             ) : null}
-            {zoomar.length > 1 ? (
-              <div className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 gap-1 rounded-full bg-black/55 p-1">
-                {zoomar.map((z) => (
-                  <button
-                    key={z}
-                    type="button"
-                    onClick={() => brukZoom(z)}
-                    aria-pressed={zoom === z}
-                    aria-label={`Zoom ${z}×`}
-                    className={`h-10 min-w-10 rounded-full px-3 text-sm font-semibold ${
-                      zoom === z ? "bg-white text-black" : "text-white hover:bg-white/15"
-                    }`}
-                  >
-                    {z}×
-                  </button>
-                ))}
-              </div>
-            ) : null}
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="h-48 w-48 rounded-xl border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
             </div>
@@ -441,7 +404,7 @@ export function Scanner({
 
         {!error && !starting ? (
           <p className="-mb-2 text-xs text-muted-foreground">
-            Små etiketter: hold telefonen 20–30 cm unna{zoomar.length > 1 ? " og zoom inn" : ""}
+            Små etiketter: hold telefonen 20–30 cm unna
             {kanFokusere ? ". Trykk på bildet for å fokusere." : "."}
           </p>
         ) : null}
