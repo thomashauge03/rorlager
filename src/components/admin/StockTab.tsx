@@ -500,22 +500,24 @@ export function StockTab({
         <>
           {/* Desktop: tabell med alle tala ved sida av kvarandre */}
           <div className="hm-card hidden overflow-x-auto md:block">
-            <Table>
+            {/* px-3 i staden for px-4: ti kolonnar skal få plass i 1280 px */}
+            <Table className="[&_td]:px-3 [&_th]:px-3">
               <TableHeader>
                 <TableRow>
                   <SortHead k="name" sort={sort} onSort={sorterPå}>Vare</SortHead>
                   <SortHead k="sku" sort={sort} onSort={sorterPå}>Varenr.</SortHead>
                   <SortHead k="location" sort={sort} onSort={sorterPå}>Hylle</SortHead>
                   <SortHead k="stock" sort={sort} onSort={sorterPå} align="right">Beholdning</SortHead>
-                  <SortHead k="threshold" sort={sort} onSort={sorterPå} align="right">Varselgrense</SortHead>
+                  <SortHead k="threshold" sort={sort} onSort={sorterPå} align="right" title="Varselgrense">
+                    Varsel
+                  </SortHead>
+                  {/* Kostpris og innkjøpsverdi står under salsprisen i same celle: med
+                      eigne kolonnar blei tabellen 180 px for brei. Sortering på dei
+                      ligg i nedtrekket over lista. */}
                   <SortHead k="price" sort={sort} onSort={sorterPå} align="right">Pris</SortHead>
-                  {visKostpris ? (
-                    <SortHead k="cost" sort={sort} onSort={sorterPå} align="right">Kostpris</SortHead>
-                  ) : null}
-                  {visKostpris ? (
-                    <SortHead k="costValue" sort={sort} onSort={sorterPå} align="right">Innkjøpsverdi</SortHead>
-                  ) : null}
-                  <SortHead k="saleValue" sort={sort} onSort={sorterPå} align="right">Salgsverdi</SortHead>
+                  <SortHead k="saleValue" sort={sort} onSort={sorterPå} align="right" title="Beholdning × pris">
+                    Verdi
+                  </SortHead>
                   <SortHead k="status" sort={sort} onSort={sorterPå}>Status</SortHead>
                   <SortHead k="active" sort={sort} onSort={sorterPå} align="center">Aktiv</SortHead>
                   <TableHead className="text-right">Handling</TableHead>
@@ -542,19 +544,23 @@ export function StockTab({
                       <TableCell className="tabular text-right text-sm text-muted-foreground">
                         <Varselgrense vare={t} standard={standard} />
                       </TableCell>
-                      <TableCell className="tabular text-right text-sm">{t.price === null ? "–" : kr(t.price)}</TableCell>
-                      {visKostpris ? (
-                        <TableCell className="tabular text-right text-sm text-muted-foreground">
-                          {t.cost_price === null ? "–" : kr(t.cost_price)}
-                        </TableCell>
-                      ) : null}
-                      {visKostpris ? (
-                        <TableCell className="tabular text-right text-sm text-muted-foreground">
-                          {vareverdi(t) === null ? "–" : kr(vareverdi(t) as number)}
-                        </TableCell>
-                      ) : null}
-                      <TableCell className="tabular text-right text-sm font-medium">
-                        {salsverdi(t) === null ? "–" : kr(salsverdi(t) as number)}
+                      <TableCell className="tabular whitespace-nowrap text-right text-sm">
+                        <p>{t.price === null ? "–" : kr(t.price)}</p>
+                        {visKostpris ? (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="sr-only">Kostpris </span>
+                            innkj. {t.cost_price === null ? "–" : kr(t.cost_price)}
+                          </p>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="tabular whitespace-nowrap text-right text-sm">
+                        <p className="font-medium">{salsverdi(t) === null ? "–" : kr(salsverdi(t) as number)}</p>
+                        {visKostpris ? (
+                          <p className="text-xs text-muted-foreground">
+                            <span className="sr-only">Innkjøpsverdi </span>
+                            innkj. {vareverdi(t) === null ? "–" : kr(vareverdi(t) as number)}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <StockBadge status={stockStatus(t, standard)} />
@@ -759,12 +765,15 @@ function SortHead({
   sort,
   onSort,
   align = "left",
+  title,
   children,
 }: {
   k: PipeSort["key"];
   sort: PipeSort;
   onSort: (key: PipeSort["key"]) => void;
   align?: "left" | "right" | "center";
+  /** Heile namnet når overskrifta er forkorta */
+  title?: string;
   children: ReactNode;
 }) {
   const aktiv = sort.key === k;
@@ -776,6 +785,7 @@ function SortHead({
     >
       <button
         type="button"
+        title={title}
         onClick={() => onSort(k)}
         className={cn(
           "-mx-2 inline-flex items-center gap-1 rounded px-2 py-1 font-medium hover:bg-muted hover:text-foreground",
