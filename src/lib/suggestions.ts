@@ -14,7 +14,8 @@ export type Suggestion = PipeSuggestionRow & {
 
 export const SUGGESTION_STATUS_LABEL: Record<SuggestionStatus, string> = {
   ny: "Ny",
-  opprettet: "Lagt i katalogen",
+  // Både «Opprett vare» og «Knytt til vare» endar her
+  opprettet: "Knyttet til vare",
   engangs: "Engangsvare",
   avvist: "Avvist",
 };
@@ -138,6 +139,30 @@ export async function registrerRetur(
 export async function byttVare(lineId: string, pipeTypeId: string) {
   const { error } = await supabase.rpc("pipe_bytt_vare", { p_line_id: lineId, p_pipe_type_id: pipeTypeId });
   if (error) throw new Error(error.message || "Klarte ikke å bytte vare");
+}
+
+/**
+ * Forslaga gjeld ei vare som alt finst. Linja blir gjort om til vara – pris,
+ * lager og lukking av forslaget i same transaksjon i basen. Er ordren sletta
+ * eller fakturert, blir berre forslaget knytt til vara: eit sendt
+ * fakturagrunnlag skal ikkje skifte innhald.
+ *
+ * Returnerer kor mange linjer som blei gjort om, og kor mange forslag som
+ * berre blei knytte.
+ */
+export async function knyttTilVare(liste: Suggestion[], pipeTypeId: string) {
+  let linjer = 0;
+  let berreForslag = 0;
+  for (const s of liste) {
+    if (kanPrisast(s) && s.order_line_id) {
+      await byttVare(s.order_line_id, pipeTypeId);
+      linjer++;
+    } else {
+      await closeSuggestion(s.id, "opprettet", pipeTypeId);
+      berreForslag++;
+    }
+  }
+  return { linjer, berreForslag };
 }
 
 /** Talet på fana. Same nøkkel som lista, så det følgjer med når eit forslag blir lukka. */

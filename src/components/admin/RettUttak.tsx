@@ -427,6 +427,73 @@ export function ReturDialog({
 
 const MAKS_TREFF = 40;
 
+/** Søkjefelt og treffliste for å velje ei vare. Brukt av Bytt vare og av forslaga. */
+export function VareVelger({
+  treff,
+  lastar,
+  søk,
+  setSøk,
+  onVelg,
+}: {
+  treff: PipeType[];
+  lastar: boolean;
+  søk: string;
+  setSøk: (v: string) => void;
+  onVelg: (t: PipeType) => void;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
+        <Input
+          type="search"
+          className="h-11 pl-9"
+          placeholder="Søk på navn, dimensjon eller varenummer"
+          aria-label="Søk etter vare"
+          value={søk}
+          onChange={(e) => setSøk(e.target.value)}
+          autoFocus
+        />
+      </div>
+      {lastar ? (
+        <Skeleton className="h-48 w-full rounded-lg" />
+      ) : treff.length === 0 ? (
+        <p className="py-3 text-sm text-muted-foreground">
+          Ingen varer passer. Finnes den ikke, opprett den under Lager eller fra Forslag.
+        </p>
+      ) : (
+        <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
+          {treff.slice(0, MAKS_TREFF).map((t) => (
+            <li key={t.id}>
+              <button
+                type="button"
+                onClick={() => onVelg(t)}
+                className="flex min-h-12 w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-sm font-medium text-foreground">
+                    {pipeLabel(t.name, t.dimension)}
+                    {!t.active ? <span className="text-muted-foreground"> · avslått</span> : null}
+                  </span>
+                  <span className="block truncate text-xs text-muted-foreground">
+                    {t.sku ?? "–"} · {t.category_name ?? "Uten kategori"}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-muted-foreground tabular">
+                  {t.price === null ? "–" : `${kr(t.price)} kr/${t.unit}`}
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {treff.length > MAKS_TREFF ? (
+        <p className="text-xs text-muted-foreground">Viser {MAKS_TREFF} av {treff.length}. Søk for å finne resten.</p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ByttVareDialog({
   line,
   lagerTrekt,
@@ -512,55 +579,7 @@ export function ByttVareDialog({
                 ) : null}
               </div>
             ) : (
-              <div className="space-y-2">
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" aria-hidden="true" />
-                  <Input
-                    type="search"
-                    className="h-11 pl-9"
-                    placeholder="Søk på navn, dimensjon eller varenummer"
-                    aria-label="Søk etter vare"
-                    value={søk}
-                    onChange={(e) => setSøk(e.target.value)}
-                    autoFocus
-                  />
-                </div>
-                {varer.isLoading ? (
-                  <Skeleton className="h-48 w-full rounded-lg" />
-                ) : treff.length === 0 ? (
-                  <p className="py-3 text-sm text-muted-foreground">
-                    Ingen varer passer. Finnes den ikke, opprett den under Lager eller fra Forslag.
-                  </p>
-                ) : (
-                  <ul className="max-h-72 divide-y divide-border overflow-y-auto rounded-lg border border-border">
-                    {treff.slice(0, MAKS_TREFF).map((t) => (
-                      <li key={t.id}>
-                        <button
-                          type="button"
-                          onClick={() => setValgt(t)}
-                          className="flex min-h-12 w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted"
-                        >
-                          <span className="min-w-0">
-                            <span className="block truncate text-sm font-medium text-foreground">
-                              {pipeLabel(t.name, t.dimension)}
-                              {!t.active ? <span className="text-muted-foreground"> · avslått</span> : null}
-                            </span>
-                            <span className="block truncate text-xs text-muted-foreground">
-                              {t.sku ?? "–"} · {t.category_name ?? "Uten kategori"}
-                            </span>
-                          </span>
-                          <span className="shrink-0 text-xs text-muted-foreground tabular">
-                            {t.price === null ? "–" : `${kr(t.price)} kr/${t.unit}`}
-                          </span>
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-                {treff.length > MAKS_TREFF ? (
-                  <p className="text-xs text-muted-foreground">Viser {MAKS_TREFF} av {treff.length}. Søk for å finne resten.</p>
-                ) : null}
-              </div>
+              <VareVelger treff={treff} lastar={varer.isLoading} søk={søk} setSøk={setSøk} onVelg={setValgt} />
             )}
 
             <DialogFooter className="gap-2 sm:gap-0">

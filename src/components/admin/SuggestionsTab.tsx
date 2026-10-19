@@ -1,11 +1,11 @@
 // Forslaga frå «Annet»: det kundar og tilsette har teke eller bede om, men som
-// katalogen mangla. Kvart forslag kan bli ei vare, ein pris på éi linje, eller
-// lukkast. Lista er kontoret sin måte å sjå kva som manglar.
+// katalogen mangla. Kvart forslag kan bli ei ny vare, knytast til ei vare som
+// alt finst, få ein pris på éi linje, eller lukkast. Lista er kontoret sin måte å sjå kva som manglar.
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Ban, Inbox, PackagePlus, Pencil, RotateCcw, Tag } from "lucide-react";
+import { Ban, Inbox, Link2, PackagePlus, Pencil, RotateCcw, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
@@ -27,6 +27,7 @@ import type { PipeTypeRow } from "@/lib/types";
 import { PipeDialog } from "@/components/admin/StockTab";
 import { PriceLineDialog, type PrisLinje } from "@/components/admin/PriceLineDialog";
 import { EndreAnnetDialog } from "@/components/admin/RettUttak";
+import { KnyttForslagDialog } from "@/components/admin/KnyttForslagDialog";
 import { finnDyplenke, markerOgRull } from "@/lib/dyplenke";
 
 type Utsnitt = "nye" | "behandlet";
@@ -46,6 +47,7 @@ export function SuggestionsTab({
   const [opprett, setOpprett] = useState<Suggestion[] | null>(null);
   const [prisFor, setPrisFor] = useState<Suggestion | null>(null);
   const [namnFor, setNamnFor] = useState<Suggestion[] | null>(null);
+  const [knytt, setKnytt] = useState<Suggestion[] | null>(null);
 
   const forslag = useQuery({ queryKey: QK.suggestions, queryFn: fetchSuggestions });
   // Vare-dialogen sjekkar at QR-kode og varenummer er ledige, og treng difor heile katalogen
@@ -221,6 +223,7 @@ export function SuggestionsTab({
                 key={s.id}
                 s={s}
                 onOpprett={() => setOpprett([s])}
+                onKnytt={() => setKnytt([s])}
                 onNamn={() => setNamnFor([s])}
                 onPris={() => setPrisFor(s)}
                 onAvvis={() => avvis.mutate([s])}
@@ -234,6 +237,7 @@ export function SuggestionsTab({
                 key={gruppe[0].id}
                 gruppe={gruppe}
                 onOpprett={() => setOpprett(gruppe)}
+                onKnytt={() => setKnytt(gruppe)}
                 onNamn={() => setNamnFor(gruppe)}
                 onAvvis={() => avvis.mutate(gruppe)}
                 opptatt={avvis.isPending}
@@ -270,6 +274,8 @@ export function SuggestionsTab({
         }}
       />
 
+      <KnyttForslagDialog forslag={knytt} onClose={() => setKnytt(null)} />
+
       <PriceLineDialog
         line={prisLinje}
         onClose={() => setPrisFor(null)}
@@ -284,6 +290,7 @@ export function SuggestionsTab({
 function ForslagKort({
   s,
   onOpprett,
+  onKnytt,
   onNamn,
   onPris,
   onAvvis,
@@ -292,6 +299,7 @@ function ForslagKort({
 }: {
   s: Suggestion;
   onOpprett: () => void;
+  onKnytt: () => void;
   onNamn: () => void;
   onPris: () => void;
   onAvvis: () => void;
@@ -370,6 +378,10 @@ function ForslagKort({
               <PackagePlus aria-hidden="true" />
               Opprett vare
             </Button>
+            <Button size="sm" variant="outline" onClick={onKnytt} className="h-10 [&_svg]:size-4">
+              <Link2 aria-hidden="true" />
+              Knytt til vare
+            </Button>
             <Button size="sm" variant="outline" onClick={onNamn} className="h-10 [&_svg]:size-4">
               <Pencil aria-hidden="true" />
               Endre navn
@@ -409,6 +421,7 @@ function ForslagKort({
 function ForslagGruppe({
   gruppe,
   onOpprett,
+  onKnytt,
   onNamn,
   onAvvis,
   opptatt,
@@ -416,6 +429,7 @@ function ForslagGruppe({
 }: {
   gruppe: Suggestion[];
   onOpprett: () => void;
+  onKnytt: () => void;
   onNamn: () => void;
   onAvvis: () => void;
   opptatt: boolean;
@@ -440,6 +454,10 @@ function ForslagGruppe({
         <Button size="sm" onClick={onOpprett} className="h-10 [&_svg]:size-4">
           <PackagePlus aria-hidden="true" />
           Opprett vare
+        </Button>
+        <Button size="sm" variant="outline" onClick={onKnytt} className="h-10 [&_svg]:size-4">
+          <Link2 aria-hidden="true" />
+          Knytt alle til vare
         </Button>
         <Button size="sm" variant="outline" onClick={onNamn} className="h-10 [&_svg]:size-4">
           <Pencil aria-hidden="true" />

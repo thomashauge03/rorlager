@@ -6,16 +6,18 @@ import { fireEvent, render, screen, within } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
 
-const { fetchSuggestions, closeSuggestion } = vi.hoisted(() => ({
+const { fetchSuggestions, closeSuggestion, knyttTilVare, fetchPipeTypes } = vi.hoisted(() => ({
   fetchSuggestions: vi.fn(),
   closeSuggestion: vi.fn().mockResolvedValue(undefined),
+  knyttTilVare: vi.fn().mockResolvedValue({ linjer: 1, berreForslag: 0 }),
+  fetchPipeTypes: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock("@/lib/orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/orders")>()),
   fetchCatalog: vi.fn().mockResolvedValue([]),
   fetchCategories: vi.fn().mockResolvedValue([]),
-  fetchPipeTypes: vi.fn().mockResolvedValue([]),
+  fetchPipeTypes,
 }));
 vi.mock("@/lib/pickup-orders", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/pickup-orders")>()),
@@ -25,6 +27,7 @@ vi.mock("@/lib/suggestions", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/suggestions")>()),
   fetchSuggestions,
   closeSuggestion,
+  knyttTilVare,
 }));
 vi.mock("@/lib/settings", () => ({
   useSettings: () => ({ data: { vat_rate: 25, company_name: "Hauge Maskin AS", show_prices: true } }),
@@ -47,6 +50,7 @@ const medKlient = (ui: React.ReactNode) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  fetchPipeTypes.mockResolvedValue([]);
   clearCart();
 });
 
@@ -168,5 +172,36 @@ describe("forslagsfanen", () => {
     medKlient(<SuggestionsTab />);
     expect(await screen.findByRole("button", { name: "Sett pris" })).toBeDisabled();
     expect(screen.getByText("Mangler (fakturert)")).toBeInTheDocument();
+  });
+
+  const pe40 = {
+    id: "v1",
+    name: "PE-rør",
+    dimension: "40 mm",
+    sku: "1234",
+    unit: "m",
+    price: 55,
+    stock: 100,
+    active: true,
+    category_name: "PE",
+  };
+
+  const knytt = async () => {
+    fetchPipeTypes.mockResolvedValue([pe40]);
+    medKlient(<SuggestionsTab />);
+    fireEvent.click(await screen.findByRole("button", { name: "Knytt til vare" }));
+    const dialog = within(await screen.findByRole("dialog"));
+    // Søket står ferdig utfylt med det som ble skrevet
+    expect(dialog.getByLabelText("Søk etter vare")).toHaveValue("PE-rør");
+    fireEvent.click(await dialog.findByRole("button", { name: /PE-rør 40 mm/ }));
+    fireEvent.click(dialog.getByRole("button", { name: "Knytt til varen" }));
+  };
+
+  it("knytt til vare sender forslaget og den valgte varen videre", async () => {
+    const f = forslag();
+    fetchSuggestions.mockResolvedValue([f]);
+    await knytt();
+    await vi.waitFor(() => expect(knyttTilVare).toHaveBeenCalledWith([f], "v1"));
+    await vi.waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   });
 });
