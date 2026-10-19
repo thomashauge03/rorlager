@@ -76,6 +76,25 @@ describe("filterAndSortPipes", () => {
     expect(sorted[0]).toBe("a");
     expect(sorted[1]).toBe("b");
   });
+
+  it("sorterer på kolonnane i tabellen, begge vegar", () => {
+    const tabell = [
+      pipe({ id: "x", name: "B", sku: "100", low_stock_threshold: 5, cost_price: 30, active: true }),
+      pipe({ id: "y", name: "A", sku: "20", low_stock_threshold: 0, cost_price: null, active: false }),
+      pipe({ id: "z", name: "C", sku: "3", low_stock_threshold: 5, cost_price: 10, active: true }),
+    ];
+    const ids = (key: "sku" | "threshold" | "cost" | "active", dir: "asc" | "desc" = "asc") =>
+      filterAndSortPipes(tabell, { sort: { key, dir } }).map((r) => r.id);
+    // Varenummeret numerisk: 3 før 20 før 100
+    expect(ids("sku")).toEqual(["z", "y", "x"]);
+    expect(ids("sku", "desc")).toEqual(["x", "y", "z"]);
+    // Lik varselgrense: namnet avgjer
+    expect(ids("threshold")).toEqual(["y", "x", "z"]);
+    // Utan kostpris først stigande
+    expect(ids("cost")).toEqual(["y", "z", "x"]);
+    expect(ids("active")).toEqual(["y", "x", "z"]);
+    expect(ids("active", "desc")).toEqual(["x", "z", "y"]);
+  });
 });
 
 describe("stockTotals", () => {

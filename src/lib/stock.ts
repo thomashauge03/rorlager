@@ -19,7 +19,10 @@ export const STOCK_LABEL: Record<StockStatus, string> = {
 // Tomt først når ein sorterer på status – det hastar mest
 const STATUS_ORDER: Record<StockStatus, number> = { tomt: 0, snart: 1, pa_lager: 2 };
 
-export type PipeSort = { key: "name" | "dimension" | "stock" | "price" | "status" | "location"; dir: "asc" | "desc" };
+export type PipeSort = {
+  key: "name" | "dimension" | "stock" | "price" | "status" | "location" | "sku" | "threshold" | "cost" | "active";
+  dir: "asc" | "desc";
+};
 
 /**
  * Fritekstsøket treffer namn, dimensjon, varenummer, hylle og kategori under
@@ -65,6 +68,18 @@ export function filterAndSortPipes<
           return nb(a.dimension ?? "", b.dimension ?? "") * dir;
         case "location":
           return nb(a.location ?? "", b.location ?? "") * dir;
+        // Dei nye kolonnane i tabellen: likt blir sortert på namn, så rekkjefølgja ikkje hoppar
+        case "sku":
+          return nb(a.sku ?? "", b.sku ?? "") * dir || nb(a.name, b.name);
+        case "threshold":
+          return ((a.low_stock_threshold ?? 0) - (b.low_stock_threshold ?? 0)) * dir || nb(a.name, b.name);
+        case "cost": {
+          // Katalogvisninga har ikkje innkjøpsprisen; der er alle like
+          const k = (t: T) => (t as { cost_price?: number | null }).cost_price ?? -1;
+          return (k(a) - k(b)) * dir || nb(a.name, b.name);
+        }
+        case "active":
+          return (Number(a.active) - Number(b.active)) * dir || nb(a.name, b.name);
         case "status": {
           const diff = STATUS_ORDER[stockStatus(a)] - STATUS_ORDER[stockStatus(b)];
           return diff !== 0 ? diff * dir : nb(a.name, b.name);

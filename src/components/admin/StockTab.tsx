@@ -7,6 +7,9 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   ClipboardCheck,
   Coins,
@@ -93,6 +96,10 @@ const SORT_OPTIONS: { key: PipeSort["key"]; label: string }[] = [
   { key: "price", label: "Pris" },
   { key: "status", label: "Status" },
   { key: "location", label: "Hylle" },
+  { key: "sku", label: "Varenummer" },
+  { key: "threshold", label: "Varselgrense" },
+  { key: "cost", label: "Kostpris" },
+  { key: "active", label: "Aktiv" },
 ];
 
 const ALLE = "alle";
@@ -142,6 +149,9 @@ export function StockTab({
   const [categoryId, setCategoryId] = useState<string>(ALLE);
   const [showInactive, setShowInactive] = useState(false);
   const [sort, setSort] = useState<PipeSort>({ key: "name", dir: "asc" });
+  // Trykk på ei kolonneoverskrift: same kolonne snur retninga, ei ny startar stigande
+  const sorterPå = (key: PipeSort["key"]) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
   // «Vis bare disse» fra én av meldingene over lista. Ett utvalg om gangen:
   // tomme varer, varer uten salgspris, eller varer som ikke var med i siste prisliste.
   const [utval, setUtval] = useState<Utval>(null);
@@ -393,7 +403,7 @@ export function StockTab({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {SORT_OPTIONS.map((o) => (
+                {SORT_OPTIONS.filter((o) => visKostpris || o.key !== "cost").map((o) => (
                   <SelectItem key={o.key} value={o.key}>
                     {o.label}
                   </SelectItem>
@@ -473,15 +483,17 @@ export function StockTab({
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Vare</TableHead>
-                  <TableHead>Varenr.</TableHead>
-                  <TableHead>Hylle</TableHead>
-                  <TableHead className="text-right">Beholdning</TableHead>
-                  <TableHead className="text-right">Varselgrense</TableHead>
-                  <TableHead className="text-right">Pris</TableHead>
-                  {visKostpris ? <TableHead className="text-right">Kostpris</TableHead> : null}
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-center">Aktiv</TableHead>
+                  <SortHead k="name" sort={sort} onSort={sorterPå}>Vare</SortHead>
+                  <SortHead k="sku" sort={sort} onSort={sorterPå}>Varenr.</SortHead>
+                  <SortHead k="location" sort={sort} onSort={sorterPå}>Hylle</SortHead>
+                  <SortHead k="stock" sort={sort} onSort={sorterPå} align="right">Beholdning</SortHead>
+                  <SortHead k="threshold" sort={sort} onSort={sorterPå} align="right">Varselgrense</SortHead>
+                  <SortHead k="price" sort={sort} onSort={sorterPå} align="right">Pris</SortHead>
+                  {visKostpris ? (
+                    <SortHead k="cost" sort={sort} onSort={sorterPå} align="right">Kostpris</SortHead>
+                  ) : null}
+                  <SortHead k="status" sort={sort} onSort={sorterPå}>Status</SortHead>
+                  <SortHead k="active" sort={sort} onSort={sorterPå} align="center">Aktiv</SortHead>
                   <TableHead className="text-right">Handling</TableHead>
                 </TableRow>
               </TableHeader>
@@ -684,6 +696,43 @@ function CategoryDot({ color }: { color: string | null }) {
       className="inline-block h-2 w-2 shrink-0 rounded-full border border-foreground/15"
       style={{ backgroundColor: color }}
     />
+  );
+}
+
+/** Kolonneoverskrift som sorterer tabellen. Same sortering som nedtrekket over lista. */
+function SortHead({
+  k,
+  sort,
+  onSort,
+  align = "left",
+  children,
+}: {
+  k: PipeSort["key"];
+  sort: PipeSort;
+  onSort: (key: PipeSort["key"]) => void;
+  align?: "left" | "right" | "center";
+  children: ReactNode;
+}) {
+  const aktiv = sort.key === k;
+  const Ikon = !aktiv ? ArrowUpDown : sort.dir === "asc" ? ArrowUp : ArrowDown;
+  return (
+    <TableHead
+      aria-sort={aktiv ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      className={cn(align === "right" && "text-right", align === "center" && "text-center")}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(k)}
+        className={cn(
+          "-mx-2 inline-flex items-center gap-1 rounded px-2 py-1 font-medium hover:bg-muted hover:text-foreground",
+          aktiv && "text-foreground",
+          align === "right" && "flex-row-reverse",
+        )}
+      >
+        {children}
+        <Ikon className={cn("h-3.5 w-3.5 shrink-0", !aktiv && "opacity-40")} aria-hidden="true" />
+      </button>
+    </TableHead>
   );
 }
 
