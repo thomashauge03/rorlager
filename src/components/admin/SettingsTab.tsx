@@ -27,6 +27,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Textarea } from "@/components/ui/textarea";
 
 import { PriceImport } from "@/components/admin/PriceImport";
+import { PrisOversikt } from "@/components/admin/PrisOversikt";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
@@ -137,6 +138,9 @@ export function SettingsTab() {
   const markupValue = markupText.trim() ? parseNum(markupText) : null;
   const markupOk = markupValue !== null && markupValue >= 0 && markupValue <= MAX_MARKUP;
   const round = Number(roundTo) || 1;
+  // Prisoversikta skal vise det som gjeld, ikkje det som står halvskrive i feltet.
+  // base blir sett både ved lagring og etter «Oppdater prisene».
+  const lagraPaaslag = (base?.markup_percent.trim() ? parseNum(base.markup_percent) : 0) ?? 0;
 
   const scoped = useMemo(() => {
     const rows = types.data ?? [];
@@ -399,6 +403,12 @@ export function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <PrisOversikt
+        paaslagProsent={lagraPaaslag}
+        mvaSats={(base?.vat_rate.trim() ? parseNum(base.vat_rate) : 0) ?? 0}
+        ulagraPaaslag={markupOk && markupValue !== lagraPaaslag}
+      />
 
       <Card className="hm-card">
         <CardHeader className="pb-3">
