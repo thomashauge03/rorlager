@@ -1,8 +1,9 @@
 # E-post for bestillinger
 
 Kunden får kvittering når bestillingen sendes, og beskjed når kontoret har
-godkjent eller avvist den. Kontoret får varsel om hver ny bestilling – med
-«Henter nå» først i emnet når kunden står og venter.
+godkjent eller avvist den. Kontoret får hver ny bestilling i Innboks, som
+hentebestilling som haster når kunden står og venter. Fra 19.10.2026 sendes det
+ingen egen e-post til kontoret herfra (migrasjonen `20261019120000_ingen_kontorepost.sql`).
 
 Alt er bygget og testet. **Det sendes ingenting før du har gjort punktene
 under.** Til da svarer funksjonen «ikke satt opp», og alt annet virker som før:
@@ -98,7 +99,6 @@ er Vercels, og kan aldri verifiseres hos Resend.
 | E-post | Når | Til |
 |---|---|---|
 | Kvittering | kunden sender inn | kunden |
-| Ny bestilling / «Henter nå» | kunden sender inn | «Varsel om nye bestillinger» i Innstillinger, ellers firmaets e-post |
 | Klar til henting | kontoret godkjenner | kunden |
 | Avvist | kontoret avviser | kunden |
 
@@ -108,7 +108,9 @@ lenke til en nettside regnes ikke som varig medium. Fram til e-post er satt opp,
 **må** kontoret skrive ut PDF-en til privatkunder ved henting – den har de samme
 vilkårene og skjemaet.
 
-Kundens kommentar står bare i e-posten til kontoret, aldri i den til kunden.
+Kundens kommentar står i saken i Innboks, aldri i e-posten til kunden. Ny
+bestilling og «Henter nå» kommer i Innboks, ikke på e-post (19.10.2026), så
+`order_email` i innstillingene brukes ikke lenger.
 
 ## Når noe ikke går
 

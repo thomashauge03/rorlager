@@ -714,20 +714,22 @@ await db.exec(`update public.pipe_settings set order_email = 'Ordre@Hauge.no' wh
 
 await somTeneste(async () => {
   const r = (await en(KREV, [epostId])).r;
-  sjekk("en ny bestilling gir kvittering til kunden og varsel til kontoret", typar(r), [
+  // Kontoret får bestillinga i Innboks, ikkje på e-post herifrå (19.10.2026).
+  sjekk("en ny bestilling gir kvittering til kunden, og ingen e-post til kontoret", typar(r), [
     ["kvittering", "epost@kunde.no"],
-    ["kontor", "ordre@hauge.no"],
   ]);
   sjekk("med bestillingen, linjene og firmaet", [r.order?.order_number > 0, r.lines?.length, r.company?.name], [
     true,
     2,
     "Hauge Maskin AS",
   ]);
-  sjekk("linjene har beholdningen, til kontorets e-post", typeof tal(r.lines?.[0]?.stock), "number");
+  sjekk("linjene har beholdningen", typeof tal(r.lines?.[0]?.stock), "number");
   sjekk("et nytt kall gir ingenting – hver e-post går én gang", typar((await en(KREV, [epostId])).r), []);
 
-  await db.query(`select public.pipe_email_release($1, 'kontor')`, [epostId]);
-  sjekk("feilet sendingen, kan den kreves på nytt", typar((await en(KREV, [epostId])).r), [["kontor", "ordre@hauge.no"]]);
+  await db.query(`select public.pipe_email_release($1, 'kvittering')`, [epostId]);
+  sjekk("feilet sendingen, kan den kreves på nytt", typar((await en(KREV, [epostId])).r), [
+    ["kvittering", "epost@kunde.no"],
+  ]);
 
   await db.query(`select public.pipe_email_mark_sent($1, 'kvittering', 're_123')`, [epostId]);
   await db.query(`select public.pipe_email_release($1, 'kvittering')`, [epostId]);
@@ -778,20 +780,24 @@ await somTeneste(async () => sjekk("et uttak gir aldri e-post herfra", typar((aw
 
 // Ein lås ingen kjem til å sleppe: funksjonen døydde mellom kravet og sendinga.
 const hengId = await rawBestilling({ customer_email: "heng@kunde.no" });
+const eldre = () =>
+  db.query(`update public.pipe_order_emails set claimed_at = now() - interval '16 minutes' where order_id = $1`, [
+    hengId,
+  ]);
 await somTeneste(async () => {
-  sjekk("kravet gir kvittering og varsel", typar((await en(KREV, [hengId])).r).length, 2);
+  sjekk("kravet gir kvitteringen", typar((await en(KREV, [hengId])).r).length, 1);
   sjekk("et krav som verken er sendt eller sluppet, holder e-posten", typar((await en(KREV, [hengId])).r), []);
+});
+await eldre();
+await somTeneste(async () => {
+  sjekk("etter et kvarter kan en e-post som aldri ble sendt, kreves igjen", typar((await en(KREV, [hengId])).r), [
+    ["kvittering", "heng@kunde.no"],
+  ]);
   await db.query(`select public.pipe_email_mark_sent($1, 'kvittering', 're_heng')`, [hengId]);
 });
-await db.query(`update public.pipe_order_emails set claimed_at = now() - interval '16 minutes' where order_id = $1`, [
-  hengId,
-]);
+await eldre();
 await somTeneste(async () =>
-  sjekk(
-    "etter et kvarter kan en e-post som aldri ble sendt, kreves igjen – den sendte går ikke to ganger",
-    typar((await en(KREV, [hengId])).r),
-    [["kontor", "ordre@hauge.no"]],
-  ),
+  sjekk("men den sendte går ikke to ganger, heller ikke etter et kvarter", typar((await en(KREV, [hengId])).r), []),
 );
 
 // Taket per mottakar: 10 i døgnet. Bestillingane blir lagde rett inn, forbi
@@ -806,8 +812,9 @@ await somTeneste(async () => {
   sjekk("høyst 10 kvitteringer til samme adresse per døgn", kvitteringar, [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0]);
 });
 
-// Døgntaket: 90 e-postar totalt. Fyll opp med kontorvarsel, som ikkje tel per
-// mottakar, og sjå at ein ny bestilling ikkje får noko.
+// Døgntaket: 90 e-postar totalt. Fyll opp med kontorvarsel (slik dei låg før
+// 19.10.2026), som ikkje tel per mottakar, og sjå at ein ny bestilling ikkje
+// får noko.
 const brukt = tal(
   (await en(`select count(*) as n from public.pipe_order_emails where claimed_at > now() - interval '24 hours'`)).n,
 );
