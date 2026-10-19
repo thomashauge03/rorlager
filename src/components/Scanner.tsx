@@ -363,7 +363,15 @@ export function Scanner({
     <Dialog open={open} onOpenChange={onOpenChange}>
       {/* Fast høgd på telefon, utan rulling: kamerabiletet tek det som er att.
           Med fast 3:4 blei vindauget høgare enn skjermen og måtte rullast. */}
-      <DialogContent className="flex h-[calc(100dvh-2rem)] max-w-md flex-col gap-3 overflow-hidden p-4 sm:h-auto sm:p-6">
+      {/* Fokus på sjølve vindauget, ikkje i skrivefeltet: der kom tastaturet opp
+          med ein gong, klemde kamerabiletet til ei stripe og dytta vindauget skeivt. */}
+      <DialogContent
+        className="flex h-[calc(100dvh-2rem)] max-w-md flex-col gap-3 overflow-hidden p-4 sm:h-auto sm:p-6"
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          (e.currentTarget as HTMLElement | null)?.focus();
+        }}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {/* På telefonen tar teksten plass frå kamerabiletet */}
