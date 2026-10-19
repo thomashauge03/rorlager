@@ -35,6 +35,24 @@ export type PipeTypeRow = {
   ean?: string | null;
   /** Siste prisimport varen var med i. Berre i tabellen; manglar før 20261015100000. */
   prisliste_dato?: string | null;
+  /** Prishopp sidan siste prisliste, ganga saman (1 = ingen). Manglar før 20261019100000. */
+  prishopp_faktor?: number | null;
+};
+
+/** Ei rad i prissporet: ny prisliste, «Oppdater prisene» eller eit prishopp. */
+export type PipePrishendingRow = {
+  id: string;
+  created_at: string;
+  created_by: string | null;
+  created_by_name: string | null;
+  slag: "import" | "paaslag" | "hopp";
+  /** Påslaget for import og paaslag, hoppet for hopp */
+  prosent: number | null;
+  grunn: string | null;
+  category_id: string | null;
+  kategori_namn: string | null;
+  avrunding: number | null;
+  antall: number;
 };
 
 export type PipeOrderRow = {
@@ -375,6 +393,7 @@ export type Database = {
       pipe_order_emails: Table<PipeOrderEmailRow>;
       pipe_suggestions: Table<PipeSuggestionRow>;
       pipe_revisjon: Table<PipeRevisjonRow>;
+      pipe_prishendingar: Table<PipePrishendingRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;
@@ -410,6 +429,10 @@ export type Database = {
         Returns: number;
       };
       pipe_delete_order: { Args: { p_order_id: string }; Returns: void };
+      pipe_prishopp: {
+        Args: { p_prosent: number; p_grunn: string; p_category_id?: string | null; p_round_to?: number };
+        Returns: number;
+      };
       pipe_apply_markup: {
         Args: {
           p_percent: number;

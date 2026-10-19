@@ -26,6 +26,11 @@ vi.mock("@/lib/orders", async (orig) => ({
   fetchCategories: async () => [],
 }));
 
+vi.mock("@/lib/prishopp", async (orig) => ({
+  ...(await orig<typeof import("@/lib/prishopp")>()),
+  fetchPrisHendingar: async () => [],
+}));
+
 import { PrisOversikt } from "@/components/admin/PrisOversikt";
 
 describe("prisoversikta", () => {

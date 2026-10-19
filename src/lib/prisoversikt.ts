@@ -4,10 +4,11 @@
 
 import { previewPrice } from "@/lib/orders";
 import { prisInklMva } from "@/lib/mva";
+import { hoppProsent } from "@/lib/prishopp";
 import type { PipeType } from "@/lib/types";
 
 /**
- * standard   salsprisen er innkjøp + standardpåslaget (med ei av avrundingane)
+ * standard   salsprisen er innkjøp × påslag × prishopp (med ei av avrundingane)
  * avvik      salsprisen er sett for hand, eller med eit anna påslag
  * utenInnkjop varen har ingen innkjøpspris, så påslaget kan ikkje reknast
  * utenPris   varen har innkjøpspris, men ingen salspris
@@ -28,11 +29,13 @@ export type Prislinje = {
   utsalgInklMva: number | null;
   /** Kroner oppå innkjøpsprisen */
   tillegg: number | null;
-  /** Tillegget i prosent av innkjøpsprisen */
+  /** Tillegget i prosent av innkjøpsprisen – påslag og prishopp til saman */
   paaslag: number | null;
+  /** Prishoppa sidan siste prisliste, i prosent (0 = ingen) */
+  hopp: number;
   /** Tillegget i prosent av salsprisen */
   dekningsgrad: number | null;
-  /** Det standardpåslaget ville gitt, runda til heile kroner */
+  /** Det påslaget og prishoppet ville gitt, runda til heile kroner */
   standardPris: number | null;
   status: PrisStatus;
 };
@@ -47,18 +50,20 @@ export function prislinje(vare: PipeType, paaslagProsent: number, mvaSats: numbe
   const innkjop = vare.cost_price;
   const utsalg = vare.price;
   const utsalgInklMva = utsalg === null ? null : prisInklMva(utsalg, mvaSats);
-  const standardPris = previewPrice(innkjop, paaslagProsent, 1);
+  const faktor = vare.prishopp_faktor ?? 1;
+  const hopp = hoppProsent(faktor);
+  const standardPris = previewPrice(innkjop, paaslagProsent, 1, faktor);
 
   if (innkjop === null) {
     return {
-      vare, innkjop, utsalg, utsalgInklMva, standardPris,
+      vare, innkjop, utsalg, utsalgInklMva, standardPris, hopp,
       tillegg: null, paaslag: null, dekningsgrad: null,
       status: "utenInnkjop",
     };
   }
   if (utsalg === null) {
     return {
-      vare, innkjop, utsalg, utsalgInklMva, standardPris,
+      vare, innkjop, utsalg, utsalgInklMva, standardPris, hopp,
       tillegg: null, paaslag: null, dekningsgrad: null,
       status: "utenPris",
     };
@@ -67,10 +72,10 @@ export function prislinje(vare: PipeType, paaslagProsent: number, mvaSats: numbe
   const tillegg = Math.round((utsalg - innkjop) * 100) / 100;
   const paaslag = innkjop > 0 ? (tillegg / innkjop) * 100 : null;
   const dekningsgrad = utsalg > 0 ? (tillegg / utsalg) * 100 : null;
-  const fylgjerStandard = AVRUNDINGAR.some((r) => likt(previewPrice(innkjop, paaslagProsent, r) ?? NaN, utsalg));
+  const fylgjerStandard = AVRUNDINGAR.some((r) => likt(previewPrice(innkjop, paaslagProsent, r, faktor) ?? NaN, utsalg));
 
   return {
-    vare, innkjop, utsalg, utsalgInklMva, standardPris,
+    vare, innkjop, utsalg, utsalgInklMva, standardPris, hopp,
     tillegg, paaslag, dekningsgrad,
     status: fylgjerStandard ? "standard" : "avvik",
   };
@@ -118,3 +123,30 @@ export function prisoppsummering(linjer: Prislinje[]): Prisoppsummering {
 /** Dekningsgraden eit påslag gir: 25 % påslag er 20 % av salsprisen. */
 export const dekningsgradAv = (paaslagProsent: number) =>
   paaslagProsent <= -100 ? null : (paaslagProsent / (100 + paaslagProsent)) * 100;
+
+/** Avrundingane prisjusteringa og prishoppet kan velje mellom. */
+export const AVRUNDINGAR_VAL = [
+  { value: "1", label: "Nærmeste krone" },
+  { value: "5", label: "Nærmeste 5 kroner" },
+  { value: "10", label: "Nærmeste 10 kroner" },
+  { value: "0.01", label: "Øre" },
+] as const;
+
+/**
+ * Nokre varer spreidde over prisspennet. Dei første radene i katalogen høyrer
+ * alle til same varegruppe, og ville ikkje vist kva ei endring gjer med dei dyre.
+ */
+export function spreiddUtval<T>(rader: T[], pris: (r: T) => number, antall: number): T[] {
+  if (rader.length === 0) return [];
+  const sortert = [...rader].sort((a, b) => pris(a) - pris(b));
+  const ønska = Math.min(antall, sortert.length);
+  const teke = new Set<number>();
+  const ut: T[] = [];
+  for (let i = 0; i < ønska; i++) {
+    const idx = Math.round((i * (sortert.length - 1)) / Math.max(1, ønska - 1));
+    if (teke.has(idx)) continue;
+    teke.add(idx);
+    ut.push(sortert[idx]);
+  }
+  return ut;
+}

@@ -28,11 +28,13 @@ import { Textarea } from "@/components/ui/textarea";
 
 import { PriceImport } from "@/components/admin/PriceImport";
 import { PrisOversikt } from "@/components/admin/PrisOversikt";
+import { Prishopp } from "@/components/admin/Prishopp";
+import { AVRUNDINGAR_VAL, spreiddUtval } from "@/lib/prisoversikt";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
 import { saveSettings, useOfficeSettings } from "@/lib/settings";
-import type { PipeSettingsRow, PipeType } from "@/lib/types";
+import type { PipeSettingsRow } from "@/lib/types";
 import { EndringsLogg } from "@/components/admin/EndringsLogg";
 
 /** Skjemaet held alt som tekst, slik at eit halvskrive tal ikkje blir tolka
@@ -86,12 +88,7 @@ const orNull = (v: string) => {
 /** Select-verdiar må vere ikkje-tomme strengar, difor eit eige ord for «alle». */
 const SCOPE_ALL = "alle";
 
-const ROUNDING = [
-  { value: "1", label: "Nærmeste krone" },
-  { value: "5", label: "Nærmeste 5 kroner" },
-  { value: "10", label: "Nærmeste 10 kroner" },
-  { value: "0.01", label: "Øre" },
-] as const;
+const ROUNDING = AVRUNDINGAR_VAL;
 
 const PREVIEW_ROWS = 6;
 
@@ -150,22 +147,8 @@ export function SettingsTab() {
   const priced = useMemo(() => scoped.filter((t) => t.cost_price !== null), [scoped]);
   const missingCost = scoped.length - priced.length;
 
-  /** Utplukk spreidd over prisspennet. Dei første radene i katalogen høyrer alle
-   *  til same varegruppe, og ville ikkje vist kva påslaget gjer med dei dyre. */
-  const sample = useMemo(() => {
-    if (priced.length === 0) return [] as PipeType[];
-    const sorted = [...priced].sort((a, b) => (a.cost_price ?? 0) - (b.cost_price ?? 0));
-    const wanted = Math.min(PREVIEW_ROWS, sorted.length);
-    const picked = new Set<number>();
-    const out: PipeType[] = [];
-    for (let i = 0; i < wanted; i++) {
-      const idx = Math.round((i * (sorted.length - 1)) / Math.max(1, wanted - 1));
-      if (picked.has(idx)) continue;
-      picked.add(idx);
-      out.push(sorted[idx]);
-    }
-    return out;
-  }, [priced]);
+  /** Utplukk spreidd over prisspennet, ikkje berre dei billigaste. */
+  const sample = useMemo(() => spreiddUtval(priced, (t) => t.cost_price ?? 0, PREVIEW_ROWS), [priced]);
 
   const scopeLabel =
     scope === SCOPE_ALL
@@ -517,7 +500,8 @@ export function SettingsTab() {
                       {sample.map((t) => {
                         // Tomt eller ugyldig felt skal vise dagens pris om att,
                         // ikkje sprenge tabellen medan brukaren skriv.
-                        const next = markupOk ? previewPrice(t.cost_price, markupValue, round) : null;
+                        // Prishoppet står, så det er med i den nye prisen òg
+                        const next = markupOk ? previewPrice(t.cost_price, markupValue, round, t.prishopp_faktor ?? 1) : null;
                         const diff = next === null || t.price === null ? null : next - t.price;
                         const pct = diff !== null && t.price ? (diff / t.price) * 100 : null;
                         return (
@@ -576,6 +560,8 @@ export function SettingsTab() {
           </div>
         </CardContent>
       </Card>
+
+      <Prishopp paaslagProsent={lagraPaaslag} />
 
       <PriceImport />
 

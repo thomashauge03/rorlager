@@ -58,6 +58,8 @@ export const QK = {
   orderEmails: (id: string) => ["pipe_order_emails", id],
   /** Forslaga frå «Annet». Talet på fana les same nøkkel. */
   suggestions: ["pipe_suggestions"],
+  /** Prissporet: importar, påslagskøyringar og prishopp. */
+  prishendingar: ["pipe_prishendingar"],
 } as const;
 
 /** Postgres-feil er engelske og kryptiske. Vi set på norsk kontekst så brukaren
@@ -539,11 +541,14 @@ export async function createPipeTypes(rows: Partial<PipeTypeRow>[]): Promise<num
   return data?.length ?? 0;
 }
 
-/** Reknar ut same pris som databasen gjer, slik at førehandsvisinga stemmer. */
-export function previewPrice(costPrice: number | null, percent: number, roundTo = 1): number | null {
+/**
+ * Reknar ut same pris som databasen gjer, slik at førehandsvisinga stemmer.
+ * faktor er prishoppa sidan siste prisliste (pipe_types.prishopp_faktor).
+ */
+export function previewPrice(costPrice: number | null, percent: number, roundTo = 1, faktor = 1): number | null {
   if (costPrice === null || costPrice === undefined) return null;
   const step = roundTo || 1;
-  return Math.round((costPrice * (1 + percent / 100)) / step) * step;
+  return Math.round((costPrice * (1 + percent / 100) * (faktor || 1)) / step) * step;
 }
 
 export async function fetchStockLog(opts: { pipeTypeId?: string; limit?: number } = {}): Promise<PipeStockLogRow[]> {

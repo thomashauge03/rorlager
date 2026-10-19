@@ -673,6 +673,10 @@ export function PriceImport() {
               navn for hånd, står det slik dere skrev det.
             </li>
             <li>
+              Prishopp siden forrige prisliste nullstilles på varene som får ny innkjøpspris – den nye lista har
+              valutaen i seg. Importen står i prissporet under Prishopp.
+            </li>
+            <li>
               Bestillinger som alt er sendt inn endres ikke. Hver ordrelinje har sin egen pris fra dagen
               bestillingen kom inn, og den skal stå slik den var.
             </li>

@@ -17,6 +17,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { kr, num, pipeLabel } from "@/lib/format";
 import { prisInklMva } from "@/lib/mva";
 import { QK, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
+import { fetchPrisHendingar, hoppSidanImport } from "@/lib/prishopp";
 import {
   PRIS_STATUS_LABEL,
   dekningsgradAv,
@@ -33,8 +34,8 @@ type Sortering = "katalog" | "paaslagLav" | "paaslagHoy" | "utsalgHoy";
 
 const SORTERINGAR: { value: Sortering; label: string }[] = [
   { value: "katalog", label: "Som i katalogen" },
-  { value: "paaslagLav", label: "Lavest påslag først" },
-  { value: "paaslagHoy", label: "Høyest påslag først" },
+  { value: "paaslagLav", label: "Lavest over Dahl først" },
+  { value: "paaslagHoy", label: "Høyest over Dahl først" },
   { value: "utsalgHoy", label: "Dyreste først" },
 ];
 
@@ -73,6 +74,9 @@ type Props = {
 export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) {
   const types = useQuery({ queryKey: QK.types, queryFn: fetchPipeTypes });
   const categories = useQuery({ queryKey: QK.categories, queryFn: fetchCategories });
+  // Manglar migrasjonen, er det berre som om ingen hopp er gjort
+  const hendingar = useQuery({ queryKey: QK.prishendingar, queryFn: () => fetchPrisHendingar(), retry: false });
+  const sidan = useMemo(() => hoppSidanImport(hendingar.data ?? []), [hendingar.data]);
 
   const [sok, setSok] = useState("");
   const [gruppe, setGruppe] = useState(ALLE);
@@ -108,7 +112,9 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
 
   // Regneeksempelet på 100 kroner, med same formel og avrunding som databasen
   const eksInnkjop = 100;
-  const eksUtsalg = previewPrice(eksInnkjop, paaslagProsent, 1) ?? eksInnkjop;
+  const eksMedPaaslag = eksInnkjop * (1 + paaslagProsent / 100);
+  const eksUtsalg = previewPrice(eksInnkjop, paaslagProsent, 1, sidan.faktor) ?? eksInnkjop;
+  const hoppTotal = (sidan.faktor - 1) * 100;
   const eksInkl = prisInklMva(eksUtsalg, mvaSats);
   const dg = dekningsgradAv(paaslagProsent);
 
@@ -117,7 +123,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
       key: "standard",
       tittel: "Følger standard",
       verdi: `${num(sum.perStatus.standard, 0)} av ${num(sum.antall, 0)}`,
-      under: `Salgspris = innkjøp + ${num(paaslagProsent, 2)} %`,
+      under: "Salgspris = innkjøp × påslag × prishopp",
     },
     {
       key: "avvik",
@@ -152,7 +158,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
         {/* ------------------------------------------------ regnestykket */}
         <div>
           <p className="mb-2 text-sm font-semibold">Slik regnes prisen</p>
-          <ol className="grid gap-2 sm:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr] sm:items-stretch">
+          <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1fr_auto_1fr] lg:items-stretch">
             {[
               {
                 tittel: "Innkjøpspris",
@@ -162,7 +168,15 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
               {
                 tittel: `+ Påslag ${num(paaslagProsent, 2)} %`,
                 tekst: dg === null ? "Tillegg oppå innkjøpsprisen" : `Gir ${num(dg, 1)} % dekningsgrad`,
-                eks: `+ ${kr(eksUtsalg - eksInnkjop)}`,
+                eks: `+ ${kr(eksMedPaaslag - eksInnkjop)}`,
+              },
+              {
+                tittel: `${hoppTotal < 0 ? "−" : "+"} Prishopp ${num(Math.abs(hoppTotal), 2)} %`,
+                tekst:
+                  sidan.hopp.length === 0
+                    ? "Ingen hopp siden siste prisliste"
+                    : `${sidan.hopp.length} hopp siden siste prisliste`,
+                eks: `${hoppTotal < 0 ? "−" : "+"} ${kr(Math.abs(eksInnkjop * (1 + paaslagProsent / 100) * (sidan.faktor - 1)))}`,
               },
               {
                 tittel: "= Salgspris eks. mva",
@@ -183,7 +197,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
                 </div>
                 {i < arr.length - 1 && (
                   <ArrowRight
-                    className="mx-auto hidden h-4 w-4 self-center text-muted-foreground sm:block"
+                    className="mx-auto hidden h-4 w-4 self-center text-muted-foreground lg:block"
                     aria-hidden="true"
                   />
                 )}
@@ -191,7 +205,8 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
             ))}
           </ol>
           <p className="mt-2 text-xs text-muted-foreground">
-            Eksempel på en vare som koster 100 kroner inn. Påslag regnes av innkjøpsprisen, dekningsgrad av
+            Eksempel på en vare som koster 100 kroner inn. Prishoppet legges oppå påslaget, og nullstilles når en
+            ny prisliste fra Dahl importeres. Påslag regnes av innkjøpsprisen, dekningsgrad av
             salgsprisen – derfor er {num(paaslagProsent, 2)} % påslag bare {dg === null ? "–" : num(dg, 1)} % av det
             kunden betaler.
             {ulagraPaaslag && " Påslaget i feltet under er ikke lagret ennå; oversikten viser det som gjelder nå."}
@@ -226,11 +241,11 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
 
             <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg border border-border p-3 text-sm sm:grid-cols-4">
               <div>
-                <dt className="text-xs text-muted-foreground">Snitt påslag</dt>
+                <dt className="text-xs text-muted-foreground">Snitt over Dahl</dt>
                 <dd className="tabular font-semibold">{prosent(sum.snittPaaslag)}</dd>
               </div>
               <div>
-                <dt className="text-xs text-muted-foreground">Lavest / høyest påslag</dt>
+                <dt className="text-xs text-muted-foreground">Lavest / høyest over Dahl</dt>
                 <dd className="tabular font-semibold">
                   {prosent(sum.lavestPaaslag)} / {prosent(sum.hoyestPaaslag)}
                 </dd>
@@ -320,13 +335,14 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
               )}
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
-              <Table className="min-w-[56rem]">
+              <Table className="min-w-[62rem]">
                 <TableHeader>
                   <TableRow>
                     <TableHead>Vare</TableHead>
                     <TableHead className="text-right">Innkjøp</TableHead>
                     <TableHead className="text-right">Tillegg</TableHead>
-                    <TableHead className="text-right">Påslag</TableHead>
+                    <TableHead className="text-right">Over Dahl</TableHead>
+                    <TableHead className="text-right">Prishopp</TableHead>
                     <TableHead className="text-right">Salgspris eks. mva</TableHead>
                     <TableHead className="text-right">Inkl. mva</TableHead>
                     <TableHead className="text-right">Dekningsgrad</TableHead>
@@ -347,6 +363,9 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
                         {l.tillegg === null ? "–" : `${l.tillegg > 0 ? "+" : ""}${kr(l.tillegg)}`}
                       </TableCell>
                       <TableCell className="tabular text-right text-sm font-semibold">{prosent(l.paaslag)}</TableCell>
+                      <TableCell className="tabular text-right text-sm text-muted-foreground">
+                        {Math.abs(l.hopp) < 0.005 ? "–" : `${l.hopp > 0 ? "+" : ""}${num(l.hopp, 2)} %`}
+                      </TableCell>
                       <TableCell className="tabular text-right text-sm font-semibold">{kr(l.utsalg)}</TableCell>
                       <TableCell className="tabular text-right text-sm text-muted-foreground">
                         {kr(l.utsalgInklMva)}
@@ -376,12 +395,14 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
         <ul className="list-disc space-y-1 pl-5 text-xs text-muted-foreground">
           <li>
             <span className="font-medium text-foreground">Tillegg</span> er kronene som ligger oppå innkjøpsprisen.{" "}
-            <span className="font-medium text-foreground">Påslag</span> er tillegget i prosent av innkjøpsprisen.{" "}
+            <span className="font-medium text-foreground">Over Dahl</span> er tillegget i prosent av innkjøpsprisen –
+            påslag og prishopp til sammen. <span className="font-medium text-foreground">Prishopp</span> er hoppene
+            siden siste prisliste.{" "}
             <span className="font-medium text-foreground">Dekningsgrad</span> er tillegget i prosent av salgsprisen.
           </li>
           <li>
             «Avviker» betyr at salgsprisen er satt for hånd under Lager, eller regnet med et annet påslag. «Oppdater
-            prisene» under setter dem tilbake til standard.
+            prisene» under setter dem tilbake til innkjøp × påslag × prishopp.
           </li>
           <li>Lagerverdien er beholdning × pris, bare for varer som har både innkjøps- og salgspris.</li>
         </ul>

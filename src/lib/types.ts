@@ -25,6 +25,7 @@ export type {
   Deviation,
   PipeSuggestionRow,
   SuggestionStatus,
+  PipePrishendingRow,
 } from "@/integrations/supabase/types";
 
 import type { AnnetData, InnsendingsLinje } from "@/lib/annet";
