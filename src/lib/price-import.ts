@@ -10,6 +10,7 @@
 
 import * as XLSX from "xlsx";
 import type { PipeType } from "@/lib/types";
+import { rundPris } from "@/lib/orders";
 
 export type ImportRow = {
   /** Varenummeret hos grossisten. Dette er nøkkelen mot katalogen. */
@@ -231,10 +232,6 @@ export type ImportDiff = {
   missing: { sku: string; name: string; dimension: string | null }[];
 };
 
-const round = (value: number, step: number) => {
-  const s = step || 1;
-  return Math.round(value / s) * s;
-};
 
 /**
  * Samanliknar fila med katalogen.
@@ -246,10 +243,10 @@ const round = (value: number, step: number) => {
 export function diffAgainstCatalog(
   rows: ImportRow[],
   types: PipeType[],
-  opts: { markupPercent: number; roundTo?: number },
+  opts: { markupPercent: number; roundTo?: number; roundUp?: boolean },
 ): ImportDiff {
-  const { markupPercent, roundTo = 1 } = opts;
-  const priceOf = (cost: number) => round(cost * (1 + markupPercent / 100), roundTo);
+  const { markupPercent, roundTo = 1, roundUp = false } = opts;
+  const priceOf = (cost: number) => rundPris(cost * (1 + markupPercent / 100), roundTo, roundUp);
 
   const bySku = new Map<string, PipeType>();
   types.forEach((t) => {

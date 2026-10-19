@@ -20,9 +20,12 @@ import { QK, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders"
 import { fetchPrisHendingar, hoppSidanImport } from "@/lib/prishopp";
 import {
   PRIS_STATUS_LABEL,
+  STANDARD_AVRUNDING,
+  avrundingTekst,
   dekningsgradAv,
   prislinje,
   prisoppsummering,
+  type Avrunding,
   type PrisStatus,
   type Prislinje,
 } from "@/lib/prisoversikt";
@@ -69,9 +72,11 @@ type Props = {
   mvaSats: number;
   /** Feltet under har eit anna påslag enn det som er lagra */
   ulagraPaaslag?: boolean;
+  /** Den lagra avrundinga, til «Standard gir» og regneeksempelet */
+  avrunding?: Avrunding;
 };
 
-export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) {
+export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag, avrunding = STANDARD_AVRUNDING }: Props) {
   const types = useQuery({ queryKey: QK.types, queryFn: fetchPipeTypes });
   const categories = useQuery({ queryKey: QK.categories, queryFn: fetchCategories });
   // Manglar migrasjonen, er det berre som om ingen hopp er gjort
@@ -85,8 +90,8 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
   const [visAlle, setVisAlle] = useState(false);
 
   const alle = useMemo(
-    () => (types.data ?? []).map((t) => prislinje(t, paaslagProsent, mvaSats)),
-    [types.data, paaslagProsent, mvaSats],
+    () => (types.data ?? []).map((t) => prislinje(t, paaslagProsent, mvaSats, avrunding)),
+    [types.data, paaslagProsent, mvaSats, avrunding],
   );
 
   // Oppsummeringa gjeld varegruppa, men ikkje søket eller statusfilteret –
@@ -113,7 +118,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
   // Regneeksempelet på 100 kroner, med same formel og avrunding som databasen
   const eksInnkjop = 100;
   const eksMedPaaslag = eksInnkjop * (1 + paaslagProsent / 100);
-  const eksUtsalg = previewPrice(eksInnkjop, paaslagProsent, 1, sidan.faktor) ?? eksInnkjop;
+  const eksUtsalg = previewPrice(eksInnkjop, paaslagProsent, avrunding.steg, sidan.faktor, avrunding.opp) ?? eksInnkjop;
   const hoppTotal = (sidan.faktor - 1) * 100;
   const eksInkl = prisInklMva(eksUtsalg, mvaSats);
   const dg = dekningsgradAv(paaslagProsent);
@@ -180,7 +185,7 @@ export function PrisOversikt({ paaslagProsent, mvaSats, ulagraPaaslag }: Props) 
               },
               {
                 tittel: "= Salgspris eks. mva",
-                tekst: "Avrundet og lagret på hver vare",
+                tekst: `Avrundet ${avrunding.opp && avrunding.steg !== 0.01 ? avrundingTekst(avrunding) : `til ${avrundingTekst(avrunding)}`}, lagret på hver vare`,
                 eks: kr(eksUtsalg),
               },
               {

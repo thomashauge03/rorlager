@@ -22,6 +22,8 @@ export const DEFAULT_SETTINGS: PipeSettingsRow = {
   require_signature: false,
   vat_rate: 25,
   markup_percent: 25,
+  price_round_to: 1,
+  price_round_up: true,
   accept_orders: false,
   order_email: null,
   payment_terms_days: 14,
@@ -32,6 +34,8 @@ export const DEFAULT_SETTINGS: PipeSettingsRow = {
 // dei to ikkje kome i utakt når eit felt blir lagt til.
 const {
   markup_percent: _påslag,
+  price_round_to: _trinn,
+  price_round_up: _opp,
   accept_orders: _open,
   order_email: _varsel,
   payment_terms_days: _frist,

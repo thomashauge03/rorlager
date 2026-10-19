@@ -542,13 +542,25 @@ export async function createPipeTypes(rows: Partial<PipeTypeRow>[]): Promise<num
 }
 
 /**
+ * Rundar av som pipe_rund_pris i basen: til trinnet, opp eller til næraste.
+ *
+ * Flyttal gir 100 × 1,35 = 135,00000000000003, og «opp» ville då blitt 136.
+ * Difor blir kvotienten runda til seks desimalar før han blir runda til trinn.
+ * Resultatet blir runda til øre, så 18 × 0,01-støy ikkje blir med vidare.
+ */
+export function rundPris(verdi: number, steg = 1, opp = false): number {
+  const s = steg || 1;
+  const k = Math.round((verdi / s) * 1e6) / 1e6;
+  return Math.round((opp ? Math.ceil(k) : Math.round(k)) * s * 100) / 100;
+}
+
+/**
  * Reknar ut same pris som databasen gjer, slik at førehandsvisinga stemmer.
  * faktor er prishoppa sidan siste prisliste (pipe_types.prishopp_faktor).
  */
-export function previewPrice(costPrice: number | null, percent: number, roundTo = 1, faktor = 1): number | null {
+export function previewPrice(costPrice: number | null, percent: number, roundTo = 1, faktor = 1, opp = false): number | null {
   if (costPrice === null || costPrice === undefined) return null;
-  const step = roundTo || 1;
-  return Math.round((costPrice * (1 + percent / 100) * (faktor || 1)) / step) * step;
+  return rundPris(costPrice * (1 + percent / 100) * (faktor || 1), roundTo, opp);
 }
 
 export async function fetchStockLog(opts: { pipeTypeId?: string; limit?: number } = {}): Promise<PipeStockLogRow[]> {

@@ -163,6 +163,10 @@ export type PipeSettingsRow = {
   vat_rate: number;
   /** Påslag i prosent frå cost_price til price. Brukt av prisjusteringa. */
   markup_percent: number;
+  /** Trinnet salsprisen blir runda til: 0,01, 1, 5 eller 10. Manglar før 20261019110000. */
+  price_round_to?: number;
+  /** true = alltid opp til neste trinn, så prisen aldri ligg under avansen */
+  price_round_up?: boolean;
   /** Tek butikken på /bestill imot bestillingar */
   accept_orders: boolean;
   /** Varsel om nye bestillingar. Tom = firmaets e-post */

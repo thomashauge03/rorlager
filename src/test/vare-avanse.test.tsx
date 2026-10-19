@@ -41,6 +41,7 @@ describe("eksisterende vare", () => {
     vis({ id: "a", name: "PVC", dimension: null, sku: null, qr_slug: "pvc", unit: "m", price: 80, cost_price: 60, low_stock_threshold: 0, active: true, prishopp_faktor: 1 });
     fireEvent.change(screen.getByLabelText(/Innkjøpspris fra Dahl/), { target: { value: "70" } });
     expect(screen.getByLabelText(/Salgspris eks. mva/)).toHaveValue("80");
-    expect(screen.getByText(/blir det 94,50 kr/)).toBeInTheDocument();
+    // 70 × 1,35 = 94,50, runda opp til hel krone
+    expect(screen.getByText(/blir det 95,00 kr/)).toBeInTheDocument();
   });
 });

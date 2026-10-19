@@ -438,6 +438,10 @@ sjekk(
 console.log("\n── pipe_apply_markup: påslaget ──\n");
 // Prisen blir REKNA UT OG LAGRA, ikkje utleidd ved lesing – ei ordrelinje skal
 // for alltid vise prisen som gjaldt den dagen. Difor må utrekninga stemme her.
+//
+// Standard er «alltid opp» sidan 20261019110000_avrunding.sql. Tala under er
+// vanleg avrunding til næraste; «opp» er testa i avrunding.test.mjs.
+await db.exec(`update public.pipe_settings set price_round_up = false where id = 1`);
 
 await som(db, LEIF, async () => {
   // 55 % på innkjøpsprisen, avrunda til heile kroner:

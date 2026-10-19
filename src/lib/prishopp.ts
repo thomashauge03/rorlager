@@ -3,7 +3,8 @@
 // (20261019100000_prishopp.sql); her blir det berre kalla og gjort lesbart.
 
 import { supabase } from "@/integrations/supabase/client";
-import { previewPrice } from "@/lib/orders";
+import { previewPrice, rundPris } from "@/lib/orders";
+import { fylgjerAvansen } from "@/lib/prisoversikt";
 import type { PipePrishendingRow, PipeType } from "@/lib/types";
 
 export type PrisHending = PipePrishendingRow;
@@ -59,17 +60,21 @@ export async function prishopp(
  * fylgjer formelen blir rekna frå innkjøpsprisen; ei med handsett pris, eller
  * utan innkjøpspris, får hoppet på prisen ho har.
  */
-export function prisEtterHopp(vare: PipeType, paaslagProsent: number, prosent: number, roundTo = 1): number | null {
+export function prisEtterHopp(
+  vare: PipeType,
+  paaslagProsent: number,
+  prosent: number,
+  roundTo = 1,
+  opp = false,
+): number | null {
   const faktor = vare.prishopp_faktor ?? 1;
   const f = 1 + prosent / 100;
-  const step = roundTo || 1;
   const fylgjerFormel =
     vare.cost_price !== null &&
-    (vare.price === null ||
-      [0.01, 1, 5, 10].some((r) => Math.abs((previewPrice(vare.cost_price, paaslagProsent, r, faktor) ?? NaN) - (vare.price as number)) < 0.005));
-  if (fylgjerFormel) return previewPrice(vare.cost_price, paaslagProsent, roundTo, faktor * f);
+    (vare.price === null || fylgjerAvansen(vare.cost_price, vare.price, paaslagProsent, faktor));
+  if (fylgjerFormel) return previewPrice(vare.cost_price, paaslagProsent, roundTo, faktor * f, opp);
   if (vare.price === null) return null;
-  return Math.round((vare.price * f) / step) * step;
+  return rundPris(vare.price * f, roundTo, opp);
 }
 
 export type HoppSidanImport = {

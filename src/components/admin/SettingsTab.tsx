@@ -29,7 +29,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { PriceImport } from "@/components/admin/PriceImport";
 import { PrisOversikt } from "@/components/admin/PrisOversikt";
 import { Prishopp } from "@/components/admin/Prishopp";
-import { AVRUNDINGAR_VAL, spreiddUtval } from "@/lib/prisoversikt";
+import { AVRUNDINGAR_VAL, avrundingTekst, spreiddUtval, type Avrunding } from "@/lib/prisoversikt";
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, num, parseNum, pipeLabel } from "@/lib/format";
 import { QK, applyMarkup, fetchCategories, fetchPipeTypes, previewPrice } from "@/lib/orders";
@@ -49,6 +49,9 @@ type Draft = {
   pickup_note: string;
   vat_rate: string;
   markup_percent: string;
+  /** Verdien i avrundingsvalet: "0.01", "1", "5" eller "10" */
+  price_round_to: string;
+  price_round_up: boolean;
   show_prices: boolean;
   require_phone: boolean;
   require_signature: boolean;
@@ -70,6 +73,8 @@ const toDraft = (s: PipeSettingsRow): Draft => ({
     s.markup_percent === null || s.markup_percent === undefined
       ? ""
       : String(s.markup_percent).replace(".", ","),
+  price_round_to: String(s.price_round_to ?? 1),
+  price_round_up: s.price_round_up !== false,
   show_prices: s.show_prices !== false,
   require_phone: s.require_phone !== false,
   require_signature: s.require_signature === true,
@@ -109,7 +114,6 @@ export function SettingsTab() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [base, setBase] = useState<Draft | null>(null);
   const [scope, setScope] = useState<string>(SCOPE_ALL);
-  const [roundTo, setRoundTo] = useState<string>("1");
   const [confirmOpen, setConfirmOpen] = useState(false);
   // Ei bakgrunnsoppfrisking skal ikkje overskrive det brukaren held på å skrive,
   // så vi tek berre imot rader vi ikkje har teke imot før.
@@ -134,7 +138,14 @@ export function SettingsTab() {
   const markupText = draft?.markup_percent ?? "";
   const markupValue = markupText.trim() ? parseNum(markupText) : null;
   const markupOk = markupValue !== null && markupValue >= 0 && markupValue <= MAX_MARKUP;
+  // Avrundinga er ei innstilling, ikkje eit val for kvar køyring: nye varer,
+  // prishopp og import skal runde likt.
+  const roundTo = draft?.price_round_to ?? "1";
   const round = Number(roundTo) || 1;
+  const roundUp = draft?.price_round_up ?? true;
+  const lagraSteg = Number(base?.price_round_to) || 1;
+  const lagraOpp = base?.price_round_up ?? true;
+  const lagraAvrunding = useMemo<Avrunding>(() => ({ steg: lagraSteg, opp: lagraOpp }), [lagraSteg, lagraOpp]);
   // Prisoversikta skal vise det som gjeld, ikkje det som står halvskrive i feltet.
   // base blir sett både ved lagring og etter «Oppdater prisene».
   const lagraPaaslag = (base?.markup_percent.trim() ? parseNum(base.markup_percent) : 0) ?? 0;
@@ -155,7 +166,7 @@ export function SettingsTab() {
       ? "alle varer"
       : (categories.data ?? []).find((c) => c.id === scope)?.name ?? "varegruppen";
 
-  const roundLabel = (ROUNDING.find((r) => r.value === roundTo)?.label ?? "nærmeste krone").toLowerCase();
+  const roundLabel = avrundingTekst({ steg: round, opp: roundUp });
 
   const apply = useMutation({
     mutationFn: async () => {
@@ -164,7 +175,7 @@ export function SettingsTab() {
       }
       // Påslaget blir lagra saman med køyringa, slik at innstillinga og prisane
       // som faktisk ligg ute fortel same historia.
-      await saveSettings({ markup_percent: markupValue });
+      await saveSettings({ markup_percent: markupValue, price_round_to: round, price_round_up: roundUp });
       return applyMarkup(markupValue, {
         categoryId: scope === SCOPE_ALL ? null : scope,
         roundTo: round,
@@ -173,7 +184,9 @@ export function SettingsTab() {
     onSuccess: (count) => {
       setConfirmOpen(false);
       // Feltet står no likt med basen, så det skal ikkje lenger telje som ulagra.
-      setBase((prev) => (prev ? { ...prev, markup_percent: markupText } : prev));
+      setBase((prev) =>
+        prev ? { ...prev, markup_percent: markupText, price_round_to: roundTo, price_round_up: roundUp } : prev,
+      );
       toast({
         title: `${num(count ?? 0, 0)} varer fikk ny pris`,
         description: "Bestillinger som alt er sendt inn beholder prisene sine.",
@@ -241,6 +254,11 @@ export function SettingsTab() {
         patch.accept_orders = draft.accept_orders;
         patch.order_email = orNull(draft.order_email);
         patch.payment_terms_days = frist;
+      }
+      // Same grunn: avrundingsfelta kom med 20261019110000
+      if (!base || draft.price_round_to !== base.price_round_to || draft.price_round_up !== base.price_round_up) {
+        patch.price_round_to = Number(draft.price_round_to) || 1;
+        patch.price_round_up = draft.price_round_up;
       }
       await saveSettings(patch);
     },
@@ -391,6 +409,7 @@ export function SettingsTab() {
         paaslagProsent={lagraPaaslag}
         mvaSats={(base?.vat_rate.trim() ? parseNum(base.vat_rate) : 0) ?? 0}
         ulagraPaaslag={markupOk && markupValue !== lagraPaaslag}
+        avrunding={lagraAvrunding}
       />
 
       <Card className="hm-card">
@@ -431,7 +450,7 @@ export function SettingsTab() {
 
             <div className="space-y-1.5">
               <Label htmlFor="inn-avrunding">Avrunding</Label>
-              <Select value={roundTo} onValueChange={setRoundTo}>
+              <Select value={roundTo} onValueChange={(v) => set("price_round_to", v)}>
                 <SelectTrigger id="inn-avrunding" className="h-11">
                   <SelectValue />
                 </SelectTrigger>
@@ -443,7 +462,25 @@ export function SettingsTab() {
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Hele kroner er lettest å lese på hylleskiltet.</p>
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <Label htmlFor="inn-avrunding-opp" className="cursor-pointer text-sm">
+                  Alltid oppover
+                </Label>
+                <Switch
+                  id="inn-avrunding-opp"
+                  checked={roundUp}
+                  disabled={round === 0.01}
+                  onCheckedChange={(v) => set("price_round_up", v)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {round === 0.01
+                  ? "Øre gir nøyaktig avansen, men ikke runde priser."
+                  : roundUp
+                    ? `Salgsprisen rundes opp til ${roundLabel.replace("opp til ", "")}, så den aldri ligger under avansen.`
+                    : "Rundes til nærmeste – noen varer ender litt under avansen."}{" "}
+                Gjelder nye varer, prishopp, prisimport og «Oppdater prisene».
+              </p>
             </div>
 
             <div className="space-y-1.5">
@@ -505,7 +542,9 @@ export function SettingsTab() {
                         // Tomt eller ugyldig felt skal vise dagens pris om att,
                         // ikkje sprenge tabellen medan brukaren skriv.
                         // Prishoppet står, så det er med i den nye prisen òg
-                        const next = markupOk ? previewPrice(t.cost_price, markupValue, round, t.prishopp_faktor ?? 1) : null;
+                        const next = markupOk
+                          ? previewPrice(t.cost_price, markupValue, round, t.prishopp_faktor ?? 1, roundUp)
+                          : null;
                         const diff = next === null || t.price === null ? null : next - t.price;
                         const pct = diff !== null && t.price ? (diff / t.price) * 100 : null;
                         return (
@@ -565,7 +604,7 @@ export function SettingsTab() {
         </CardContent>
       </Card>
 
-      <Prishopp paaslagProsent={lagraPaaslag} />
+      <Prishopp paaslagProsent={lagraPaaslag} avrunding={lagraAvrunding} />
 
       <PriceImport />
 
@@ -575,7 +614,7 @@ export function SettingsTab() {
             <AlertDialogTitle>Oppdatere prisene på {num(priced.length, 0)} varer?</AlertDialogTitle>
             <AlertDialogDescription>
               Alle varer i «{scopeLabel}» som har innkjøpspris får ny pris regnet ut med{" "}
-              {num(markupValue ?? 0, 2)} % påslag, avrundet til {roundLabel}.
+              {num(markupValue ?? 0, 2)} % avanse, avrundet {roundUp && round !== 0.01 ? roundLabel : `til ${roundLabel}`}.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <ul className="list-disc space-y-2 pl-5 text-sm text-muted-foreground">

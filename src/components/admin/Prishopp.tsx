@@ -25,8 +25,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { useToast } from "@/hooks/use-toast";
 import { dateTime, kr, longDate, num, parseNum, pipeLabel } from "@/lib/format";
-import { QK, fetchCategories, fetchPipeTypes } from "@/lib/orders";
-import { AVRUNDINGAR_VAL, spreiddUtval } from "@/lib/prisoversikt";
+import { QK, fetchCategories, fetchPipeTypes, rundPris } from "@/lib/orders";
+import { STANDARD_AVRUNDING, avrundingTekst, spreiddUtval, type Avrunding } from "@/lib/prisoversikt";
 import {
   SLAG_LABEL,
   fetchPrisHendingar,
@@ -43,7 +43,14 @@ const FORSTE_HENDINGAR = 15;
 
 const pluss = (v: number, des = 2) => `${v > 0 ? "+" : v < 0 ? "−" : ""}${num(Math.abs(v), des)} %`;
 
-export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
+export function Prishopp({
+  paaslagProsent,
+  avrunding = STANDARD_AVRUNDING,
+}: {
+  paaslagProsent: number;
+  /** Den lagra avrundinga. Retninga les basen sjølv; trinnet blir sendt med. */
+  avrunding?: Avrunding;
+}) {
   const { toast } = useToast();
   const qc = useQueryClient();
   const types = useQuery({ queryKey: QK.types, queryFn: fetchPipeTypes });
@@ -53,7 +60,6 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
   const [prosentTekst, setProsentTekst] = useState("");
   const [grunn, setGrunn] = useState("");
   const [utval, setUtval] = useState(ALLE);
-  const [avrunding, setAvrunding] = useState("1");
   const [stadfest, setStadfest] = useState(false);
   const [visAlle, setVisAlle] = useState(false);
 
@@ -61,7 +67,7 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
   const prosent = prosentTekst.trim() ? parseNum(prosentTekst.replace(/[−‑–]/g, "-")) : null;
   const prosentOk = prosent !== null && prosent !== 0 && prosent >= -50 && prosent <= 100;
   const grunnOk = grunn.trim().length > 0 && grunn.length <= 200;
-  const round = Number(avrunding) || 1;
+  const round = avrunding.steg;
 
   const sidan = useMemo(() => hoppSidanImport(hendingar.data ?? []), [hendingar.data]);
   const prislisteDato = useMemo(
@@ -141,7 +147,7 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
           )}
           <p className="mt-2 text-xs text-muted-foreground">
             En vare til 100 kr fra Dahl koster nå{" "}
-            {kr(Math.round(100 * (1 + paaslagProsent / 100) * sidan.faktor))} kr eks. mva: {num(paaslagProsent, 2)} %
+            {kr(rundPris(100 * (1 + paaslagProsent / 100) * sidan.faktor, avrunding.steg, avrunding.opp))} kr eks. mva: {num(paaslagProsent, 2)} %
             påslag{sidan.hopp.length > 0 ? ` og ${pluss(samla)} prishopp` : ""}.
           </p>
         </div>
@@ -153,7 +159,7 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
         )}
 
         {/* ------------------------------------------------ nytt hopp */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div className="space-y-1.5">
             <Label htmlFor="hopp-prosent">Prishopp (%)</Label>
             <Input
@@ -202,22 +208,11 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
               {types.isLoading ? "Teller opp varene …" : `${num(iUtvalet.length, 0)} varer med pris.`}
             </p>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="hopp-avrunding">Avrunding</Label>
-            <Select value={avrunding} onValueChange={setAvrunding}>
-              <SelectTrigger id="hopp-avrunding" className="h-11">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {AVRUNDINGAR_VAL.map((r) => (
-                  <SelectItem key={r.value} value={r.value}>
-                    {r.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
+        <p className="text-xs text-muted-foreground">
+          Avrundes {avrunding.opp && avrunding.steg !== 0.01 ? avrundingTekst(avrunding) : `til ${avrundingTekst(avrunding)}`}, som
+          satt under Avanse over Dahl.
+        </p>
 
         {types.isLoading ? (
           <Skeleton className="h-40 w-full" />
@@ -236,7 +231,7 @@ export function Prishopp({ paaslagProsent }: { paaslagProsent: number }) {
                 </TableHeader>
                 <TableBody>
                   {eksempel.map((t) => {
-                    const ny = prosentOk ? prisEtterHopp(t, paaslagProsent, prosent as number, round) : null;
+                    const ny = prosentOk ? prisEtterHopp(t, paaslagProsent, prosent as number, round, avrunding.opp) : null;
                     const diff = ny === null || t.price === null ? null : ny - t.price;
                     return (
                       <TableRow key={t.id}>

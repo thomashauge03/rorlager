@@ -132,7 +132,12 @@ export function PriceImport() {
   // null = feltet er ikkje rørt, og då skal det følgje påslaget frå
   // innstillingane heilt til admin skriv noko sjølv.
   const [percentEdit, setPercentEdit] = useState<string | null>(null);
-  const [roundTo, setRoundTo] = useState("1");
+  // Som påslaget: følgjer innstillinga til nokon vel noko anna her
+  const [roundEdit, setRoundEdit] = useState<string | null>(null);
+  const roundTo = roundEdit ?? String(settings.data?.price_round_to ?? 1);
+  const setRoundTo = (v: string) => setRoundEdit(v);
+  // Retninga les basen frå innstillingane; førehandsvisinga gjer det same
+  const roundUp = settings.data?.price_round_up ?? false;
   const [categoryId, setCategoryId] = useState("");
 
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -151,15 +156,17 @@ export function PriceImport() {
 
   const diff = useMemo<ImportDiff | null>(() => {
     if (!parsed || !types.data) return null;
-    return diffAgainstCatalog(parsed.rows, types.data, { markupPercent: percent, roundTo: round });
-  }, [parsed, types.data, percent, round]);
+    return diffAgainstCatalog(parsed.rows, types.data, { markupPercent: percent, roundTo: round, roundUp });
+  }, [parsed, types.data, percent, round, roundUp]);
 
   const changed = diff?.changed ?? [];
   const unchanged = diff?.unchanged ?? [];
   const created = diff?.created ?? [];
   const missing = diff?.missing ?? [];
   const categoryName = (categories.data ?? []).find((c) => c.id === categoryId)?.name ?? "varegruppen";
-  const roundLabel = (ROUNDING.find((r) => r.value === roundTo)?.label ?? "nærmeste krone").toLowerCase();
+  const roundLabel = (ROUNDING.find((r) => r.value === roundTo)?.label ?? "nærmeste krone").toLowerCase()
+    .replace("nærmeste krone", roundUp ? "hele kroner, alltid opp" : "nærmeste krone")
+    .replace(/^nærmeste (\d+) kroner$/, roundUp ? "$1 kroner, alltid opp" : "nærmeste $1 kroner");
 
   /* ------------------------------------------------------------------ fil */
 
@@ -409,7 +416,10 @@ export function PriceImport() {
                     ))}
                   </SelectContent>
                 </Select>
-                <p className="text-xs text-muted-foreground">Tabellene under regnes om med en gang du endrer.</p>
+                <p className="text-xs text-muted-foreground">
+                  Starter på det som er satt under Avanse over Dahl{roundUp ? ", alltid oppover" : ""}. Tabellene under
+                  regnes om med en gang du endrer.
+                </p>
               </div>
             </div>
 

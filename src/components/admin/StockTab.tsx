@@ -68,7 +68,7 @@ import { QuantityInput } from "@/components/QuantityInput";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { dateTime, kr, krShort, longDate, num, parseNum, pipeLabel, qtyLabel } from "@/lib/format";
-import { prisTekst, salsprisFraInnkjop } from "@/lib/prisoversikt";
+import { avrundingTekst, prisTekst, salsprisFraInnkjop } from "@/lib/prisoversikt";
 import { useOfficeSettings } from "@/lib/settings";
 import { filterAndSortPipes, ikkeISisteListe, sistePrislisteDato, stockStatus, stockTotals, type PipeSort } from "@/lib/stock";
 import {
@@ -958,9 +958,10 @@ export function PipeDialog({
   const kontor = useOfficeSettings();
   const avanse = visKostpris && !kontor.isPlaceholderData ? (kontor.data?.markup_percent ?? null) : null;
   const faktor = pipe?.prishopp_faktor ?? 1;
+  const avrunding = { steg: kontor.data?.price_round_to ?? 1, opp: kontor.data?.price_round_up ?? true };
   const [prisAuto, setPrisAuto] = useState(!pipe);
   const utrekna = (kostTekst: string) =>
-    avanse === null ? null : salsprisFraInnkjop(parseNum(kostTekst), avanse, faktor);
+    avanse === null ? null : salsprisFraInnkjop(parseNum(kostTekst), avanse, faktor, avrunding);
 
   const setKostpris = (cost_price: string) =>
     setForm((f) => {
@@ -1184,7 +1185,9 @@ export function PipeDialog({
             {avanse !== null ? (
               prisAuto ? (
                 <p className="text-xs text-muted-foreground">
-                  Regnes ut: innkjøpspris + {num(avanse, 2)} % avanse. Skriv en annen pris for å sette den selv.
+                  Regnes ut: innkjøpspris + {num(avanse, 2)} % avanse, avrundet{" "}
+                  {avrunding.opp && avrunding.steg !== 0.01 ? avrundingTekst(avrunding) : `til ${avrundingTekst(avrunding)}`}. Skriv
+                  en annen pris for å sette den selv.
                 </p>
               ) : prisAvvik && forslagPris !== null ? (
                 <p className="text-xs text-muted-foreground">

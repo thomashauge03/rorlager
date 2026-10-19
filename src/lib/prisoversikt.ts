@@ -2,9 +2,8 @@
 // for, og kor mykje som ligg oppå – i kroner og i prosent. Reint rekneverk,
 // slik at tala kan testast utan å teikne noko.
 
-import { previewPrice } from "@/lib/orders";
+import { previewPrice, rundPris } from "@/lib/orders";
 import { prisInklMva } from "@/lib/mva";
-import { hoppProsent } from "@/lib/prishopp";
 import type { PipeType } from "@/lib/types";
 
 /**
@@ -41,18 +40,34 @@ export type Prislinje = {
 };
 
 /** Same trinn som avrundingsvalet i innstillingane. Prisen kan ha vore rekna
- *  med kva som helst av dei, og alle skal telje som standard. */
+ *  med kva som helst av dei, opp eller til næraste, og alle skal telje som
+ *  standard – same regel som prishoppet i basen. */
 const AVRUNDINGAR = [0.01, 1, 5, 10];
 
 const likt = (a: number, b: number) => Math.abs(a - b) < 0.005;
 
-export function prislinje(vare: PipeType, paaslagProsent: number, mvaSats: number): Prislinje {
+/** Avrundinga i innstillingane: trinn og retning. */
+export type Avrunding = { steg: number; opp: boolean };
+export const STANDARD_AVRUNDING: Avrunding = { steg: 1, opp: true };
+
+/** Er prisen innkjøp × avanse × faktor, med ei av avrundingane? */
+export const fylgjerAvansen = (innkjop: number, utsalg: number, avanseProsent: number, faktor = 1) =>
+  AVRUNDINGAR.some((r) =>
+    [false, true].some((opp) => likt(previewPrice(innkjop, avanseProsent, r, faktor, opp) ?? NaN, utsalg)),
+  );
+
+export function prislinje(
+  vare: PipeType,
+  paaslagProsent: number,
+  mvaSats: number,
+  avrunding: Avrunding = STANDARD_AVRUNDING,
+): Prislinje {
   const innkjop = vare.cost_price;
   const utsalg = vare.price;
   const utsalgInklMva = utsalg === null ? null : prisInklMva(utsalg, mvaSats);
   const faktor = vare.prishopp_faktor ?? 1;
-  const hopp = hoppProsent(faktor);
-  const standardPris = previewPrice(innkjop, paaslagProsent, 1, faktor);
+  const hopp = (faktor - 1) * 100;
+  const standardPris = previewPrice(innkjop, paaslagProsent, avrunding.steg, faktor, avrunding.opp);
 
   if (innkjop === null) {
     return {
@@ -72,7 +87,7 @@ export function prislinje(vare: PipeType, paaslagProsent: number, mvaSats: numbe
   const tillegg = Math.round((utsalg - innkjop) * 100) / 100;
   const paaslag = innkjop > 0 ? (tillegg / innkjop) * 100 : null;
   const dekningsgrad = utsalg > 0 ? (tillegg / utsalg) * 100 : null;
-  const fylgjerStandard = AVRUNDINGAR.some((r) => likt(previewPrice(innkjop, paaslagProsent, r, faktor) ?? NaN, utsalg));
+  const fylgjerStandard = fylgjerAvansen(innkjop, utsalg, paaslagProsent, faktor);
 
   return {
     vare, innkjop, utsalg, utsalgInklMva, standardPris, hopp,
@@ -152,11 +167,24 @@ export function spreiddUtval<T>(rader: T[], pris: (r: T) => number, antall: numb
 }
 
 /**
- * Salsprisen ei vare får av innkjøpsprisen og avansen, runda til øre – same
- * som prisane i katalogen. null når innkjøpsprisen manglar.
+ * Salsprisen ei vare får av innkjøpsprisen og avansen, runda som i
+ * innstillingane. null når innkjøpsprisen manglar.
  */
-export const salsprisFraInnkjop = (innkjop: number | null, avanseProsent: number, faktor = 1) =>
-  innkjop === null ? null : Math.round(innkjop * (1 + avanseProsent / 100) * (faktor || 1) * 100) / 100;
+export const salsprisFraInnkjop = (
+  innkjop: number | null,
+  avanseProsent: number,
+  faktor = 1,
+  avrunding: Avrunding = STANDARD_AVRUNDING,
+) =>
+  innkjop === null ? null : rundPris(innkjop * (1 + avanseProsent / 100) * (faktor || 1), avrunding.steg, avrunding.opp);
+
+/** «hele kroner, alltid opp» – til hjelpetekstar. */
+export function avrundingTekst(a: Avrunding): string {
+  const steg = AVRUNDINGAR_VAL.find((r) => Number(r.value) === a.steg)?.label.toLowerCase() ?? "nærmeste krone";
+  if (a.steg === 0.01) return "øre";
+  const trinn = steg.replace("nærmeste ", "");
+  return a.opp ? `opp til ${trinn === "krone" ? "hel krone" : trinn}` : steg;
+}
 
 /** Som skjemafelta skriv tal: komma og to desimalar. */
 export const prisTekst = (v: number) => v.toFixed(2).replace(".", ",");
