@@ -48,7 +48,7 @@ await somAnon(db, async () => {
   les === 1 ? ok("anon kan fortsatt LESE katalogen") : nei("lesing", `${les} rader`);
 });
 
-sjekk("katalogen står urørt etterpå", (await en(`select count(*)::int n from public.pipe_types`)).n, 398);
+sjekk("katalogen står urørt etterpå", (await en(`select count(*)::int n from public.pipe_types`)).n, 432);
 
 console.log("\n── Sekvensane ──\n");
 // Fanst som hol: berre pipe_orders-sekvensen var trekt tilbake. Dei andre

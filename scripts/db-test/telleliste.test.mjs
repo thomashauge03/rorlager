@@ -22,7 +22,7 @@ const en = async (sql, p) => (await db.query(sql, p)).rows[0];
 
 console.log("\n── Første køyring ──\n");
 
-sjekk("156 Dahl-varer + 227 frå tellelista + 15 delar frå hylla", Number((await en(`select count(*) as n from public.pipe_types`)).n), 398);
+sjekk("156 Dahl-varer + 227 frå tellelista + 49 delar frå hylla", Number((await en(`select count(*) as n from public.pipe_types`)).n), 432);
 sjekk("15 kategoriar", Number((await en(`select count(*) as n from public.pipe_categories`)).n), 15);
 sjekk(
   "ingen vare utan kategori",
@@ -59,7 +59,7 @@ await db.exec(`update public.pipe_types set stock = 12, name = 'Retta for hand' 
 await db.exec(`delete from public.pipe_types where sku = '9507871'`);
 await db.exec(readFileSync(MIGRASJON, "utf8"));
 
-sjekk("ingen nye varer", Number((await en(`select count(*) as n from public.pipe_types`)).n), 397);
+sjekk("ingen nye varer", Number((await en(`select count(*) as n from public.pipe_types`)).n), 431);
 sjekk("ei sletta vare kjem ikkje att", (await en(`select count(*)::int as n from public.pipe_types where sku = '9507871'`)).n, 0);
 sjekk(
   "det kontoret har retta står",
