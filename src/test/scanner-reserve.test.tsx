@@ -133,6 +133,36 @@ describe("zoom", () => {
     await waitFor(() => expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ zoom: 3 }] }));
     expect(await screen.findByText(/Trykk på bildet for å fokusere/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /^Zoom/ })).not.toBeInTheDocument();
+    // Kameraet seier ikkje at det har lykt, så ingen lysknapp
+    expect(screen.queryByRole("button", { name: /lyset/ })).not.toBeInTheDocument();
+  });
+
+  it("slår lyset av og på der kameraet har lykt", async () => {
+    const applyConstraints = vi.fn().mockResolvedValue(undefined);
+    const spor = {
+      stop: vi.fn(),
+      getSettings: () => ({ deviceId: "x" }),
+      getCapabilities: () => ({ torch: true }),
+      applyConstraints,
+    };
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: vi.fn().mockResolvedValue({ getTracks: () => [spor], getVideoTracks: () => [spor] }),
+        enumerateDevices: vi.fn().mockResolvedValue([]),
+      },
+    });
+    innebygd({ formats: ["qr_code"], finn: () => new Promise(() => {}) });
+    render(<Scanner open onOpenChange={() => {}} onCode={() => null} />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Slå på lyset" }));
+    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: true }] });
+    const av = await screen.findByRole("button", { name: "Slå av lyset" });
+    expect(av).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.click(av);
+    expect(applyConstraints).toHaveBeenCalledWith({ advanced: [{ torch: false }] });
+    expect(await screen.findByRole("button", { name: "Slå på lyset" })).toHaveAttribute("aria-pressed", "false");
   });
 
   it("byter til hovudkameraet når telefonen gav vidvinkelen", async () => {

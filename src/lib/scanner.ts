@@ -112,6 +112,7 @@ export async function kodeFraSkannMedOppslag(
 export type Kameraevne = {
   focusMode?: string[];
   zoom?: { min: number; max: number; step?: number };
+  torch?: boolean;
 };
 
 /**

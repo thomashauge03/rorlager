@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { Loader2, X } from "lucide-react";
+import { Flashlight, FlashlightOff, Loader2, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -129,6 +129,10 @@ export function Scanner({
   const [fokusModusar, setFokusModusar] = useState<string[]>([]);
   // Ringen som viser kvar ein trykte, så ein ser at trykket blei teke imot
   const [ring, setRing] = useState<{ x: number; y: number; n: number } | null>(null);
+  // Lommelykta: i ein mørk krok på lageret ser kameraet ikkje etiketten.
+  // Knappen kjem berre der kameraet seier at appen kan slå ho på.
+  const [kanLys, setKanLys] = useState(false);
+  const [lys, setLys] = useState(false);
 
   // Treffet skal ikkje starte kameraet på nytt, difor ein ref og ikkje ei avhengigheit
   const onCodeRef = useRef(onCode);
@@ -144,6 +148,8 @@ export function Scanner({
     setSlaarOpp(false);
     setFokusModusar([]);
     setRing(null);
+    setKanLys(false);
+    setLys(false);
     sporRef.current = null;
     setStarting(true);
 
@@ -226,6 +232,8 @@ export function Scanner({
         if (z !== null) {
           void spor.applyConstraints({ advanced: [{ zoom: z } as MediaTrackConstraintSet] }).catch(() => {});
         }
+        // Chrome på Android kan; Safari på iPhone gir ikkje appen lykta
+        setKanLys(kan.torch === true);
       } catch {
         setStarting(false);
         setError("Fikk ikke tilgang til kameraet. Tillat kamera for denne siden, eller bruk søkefeltet.");
@@ -315,6 +323,17 @@ export function Scanner({
 
   const kanFokusere = fokusModusar.includes("single-shot") || fokusModusar.includes("continuous");
 
+  // Lykta sloknar av seg sjølv når kameraet blir stoppa, så lukking treng ikkje noko eige
+  const vekslLys = () => {
+    const spor = sporRef.current;
+    if (!spor) return;
+    const på = !lys;
+    void spor
+      .applyConstraints({ advanced: [{ torch: på } as MediaTrackConstraintSet] })
+      .then(() => setLys(på))
+      .catch(() => setHint("Fikk ikke slått på lyset."));
+  };
+
   // Trykk på biletet: fokuser på punktet. Sjå fokussteg for kva som blir gjort
   // ut frå kva kameraet kan.
   const fokuser = (e: ReactPointerEvent<HTMLVideoElement>) => {
@@ -401,6 +420,19 @@ export function Scanner({
             <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div className="h-48 w-48 rounded-xl border-2 border-primary/80 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
             </div>
+            {kanLys ? (
+              <button
+                type="button"
+                onClick={vekslLys}
+                aria-pressed={lys}
+                aria-label={lys ? "Slå av lyset" : "Slå på lyset"}
+                className={`absolute bottom-3 right-3 z-10 flex h-12 w-12 items-center justify-center rounded-full ${
+                  lys ? "bg-white text-black" : "bg-black/55 text-white hover:bg-black/70"
+                }`}
+              >
+                {lys ? <Flashlight className="h-6 w-6" aria-hidden="true" /> : <FlashlightOff className="h-6 w-6" aria-hidden="true" />}
+              </button>
+            ) : null}
             {starting ? (
               <div className="absolute inset-0 flex items-center justify-center">
                 <Loader2 className="h-8 w-8 animate-spin text-white" aria-hidden="true" />
