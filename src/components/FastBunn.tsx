@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
  * før han bestiller. Frå sm og oppover står dei i flyten som før.
  *
  * Medan tastaturet er oppe, vik bunnen, elles dekkjer han feltet kunden skriv
- * i. Enter på tastaturet går til neste felt (useNesteFelt), så knappen trengst
+ * i. Han kjem att så snart tastaturet går ned. Enter på tastaturet går til neste felt (useNesteFelt), så knappen trengst
  * ikkje før kunden er ferdig.
  *
  * Må stå inne i <form>, så knappen sender skjemaet: plasseringa er berre CSS.
@@ -32,20 +32,48 @@ export function FastBunn({ children }: { children: ReactNode }) {
   );
 }
 
-/** Sant medan eit tekstfelt har fokus på ein berøringsskjerm – då er tastaturet oppe. */
+/** Så mykje må den synlege delen av sida krympe før det tel som tastatur – adresselinja er mindre. */
+const TASTATURHØGD = 150;
+
+/**
+ * Sant medan skjermtastaturet er oppe over eit tekstfelt.
+ *
+ * Fokus åleine er ikkje nok: tilbake-knappen på Android lukkar tastaturet,
+ * men feltet held på fokuset, og då stod knappen borte til kunden trykte ein
+ * annan stad. Difor må den synlege delen av sida (visualViewport) òg ha
+ * krympa. Nettlesarar utan visualViewport fell tilbake til berre fokus.
+ */
 function useTastaturOpe(): boolean {
   const [ope, setOpe] = useState(false);
   useEffect(() => {
     // Med mus og tastatur finst det ikkje noko skjermtastatur å vike for.
     if (!window.matchMedia?.("(pointer: coarse)").matches) return;
-    const sjekk = () => setOpe(erTekstfelt(document.activeElement));
+    const synleg = window.visualViewport;
+    // Høgaste synlege høgd i denne breidda – blir nullstilt når telefonen blir snudd
+    let breidd = window.innerWidth;
+    let full = 0;
+    const sjekk = () => {
+      const felt = erTekstfelt(document.activeElement);
+      if (!synleg) return setOpe(felt);
+      if (window.innerWidth !== breidd) {
+        breidd = window.innerWidth;
+        full = 0;
+      }
+      // Gange med scale, så det å zoome inn ikkje ser ut som eit tastatur
+      const høgd = synleg.height * synleg.scale;
+      full = Math.max(full, høgd, window.innerHeight);
+      setOpe(felt && full - høgd > TASTATURHØGD);
+    };
     // Midt i focusout har det nye feltet ikkje fått fokus enno
     const etterpå = () => window.setTimeout(sjekk, 0);
+    sjekk();
     document.addEventListener("focusin", sjekk);
     document.addEventListener("focusout", etterpå);
+    synleg?.addEventListener("resize", sjekk);
     return () => {
       document.removeEventListener("focusin", sjekk);
       document.removeEventListener("focusout", etterpå);
+      synleg?.removeEventListener("resize", sjekk);
     };
   }, []);
   return ope;

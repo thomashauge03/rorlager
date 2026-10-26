@@ -58,6 +58,43 @@ describe("den faste bunnen", () => {
     await waitFor(() => expect(bunnen()).not.toHaveAttribute("data-skjult"));
   });
 
+  describe("når nettlesaren fortel kor mykje av skjermen som er synleg", () => {
+    /** Den synlege delen av sida – han krympar når tastaturet kjem opp. */
+    const synleg = Object.assign(new EventTarget(), { height: 800, scale: 1 });
+    const tastatur = (ope: boolean) =>
+      act(() => {
+        synleg.height = ope ? 450 : 800;
+        synleg.dispatchEvent(new Event("resize"));
+      });
+
+    afterEach(() => {
+      synleg.height = 800;
+      delete (window as { visualViewport?: unknown }).visualViewport;
+    });
+
+    it("kjem att når tastaturet blir lukka, sjølv om feltet framleis har fokus", () => {
+      Object.defineProperty(window, "visualViewport", { value: synleg, configurable: true });
+      peikar(true);
+      render(<Side />);
+      act(() => screen.getByLabelText("Navn").focus());
+      tastatur(true);
+      expect(bunnen()).toHaveAttribute("data-skjult");
+
+      // Tilbake-knappen på Android lukkar tastaturet, men feltet held på fokuset
+      tastatur(false);
+      expect(screen.getByLabelText("Navn")).toHaveFocus();
+      expect(bunnen()).not.toHaveAttribute("data-skjult");
+    });
+
+    it("vik ikkje for eit felt som ikkje opnar noko tastatur", () => {
+      Object.defineProperty(window, "visualViewport", { value: synleg, configurable: true });
+      peikar(true);
+      render(<Side />);
+      act(() => screen.getByLabelText("Navn").focus());
+      expect(bunnen()).not.toHaveAttribute("data-skjult");
+    });
+  });
+
   it("blir ståande med mus og tastatur", () => {
     peikar(false);
     render(<Side />);
