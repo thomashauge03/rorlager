@@ -370,10 +370,19 @@ export function buildInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
   return doc;
 }
 
-export function downloadInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
-  const doc = buildInvoicePDF(inv, opts);
+export function invoiceFilnavn(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
   // Må lese same standard som buildInvoicePDF. Ein rein `opts.showPrices` ville
   // gitt "uten_pris" på ei fil full av beløp når valet ikkje er sendt inn.
   const suffix = (opts.showPrices ?? true) ? "med_pris" : "uten_pris";
-  doc.save(`fakturagrunnlag_${inv.invoice_number}_${safeName(inv.customer_name)}_${suffix}.pdf`);
+  return `fakturagrunnlag_${inv.invoice_number}_${safeName(inv.customer_name)}_${suffix}.pdf`;
+}
+
+export function downloadInvoicePDF(inv: InvoiceDoc, opts: InvoiceOptions = {}) {
+  buildInvoicePDF(inv, opts).save(invoiceFilnavn(inv, opts));
+}
+
+/** Den same PDF-en som nedlastinga, som base64 – vedlegget på ordren i Tripletex */
+export function invoicePdfBase64(inv: InvoiceDoc, opts: InvoiceOptions = {}): string {
+  const uri = buildInvoicePDF(inv, opts).output("datauristring");
+  return uri.slice(uri.indexOf(",") + 1);
 }

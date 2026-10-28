@@ -115,6 +115,9 @@ let funksjonarOk = true;
 if (!args.has("--berre-sql")) {
   steg("Serverfunksjonene");
   funksjonarOk = deploy("opprett-bruker") && funksjonarOk;
+  // Sender ingenting før TRIPLETEX_NOKKEL ligg i hemmelegheitene OG bryteren
+  // (pipe_tripletex_innstilling.fra_dato) er sett – sjå supabase/functions/tripletex-ordre
+  funksjonarOk = deploy("tripletex-ordre") && funksjonarOk;
   // Kassen kallar bestilling-epost utan innlogging, så JWT-sjekken skal vere av
   // – sjå docs/bestilling-epost.md
   if (args.has("--med-epost")) funksjonarOk = deploy("bestilling-epost", ["--no-verify-jwt"]) && funksjonarOk;

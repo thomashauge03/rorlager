@@ -32,6 +32,7 @@ import { StockTab } from "@/components/admin/StockTab";
 import { QrTab } from "@/components/admin/QrTab";
 import { InvoiceTab } from "@/components/admin/InvoiceTab";
 import { SettingsTab } from "@/components/admin/SettingsTab";
+import { TripletexInnstillinger } from "@/components/admin/TripletexInnstillinger";
 import { ProjectsTab } from "@/components/admin/ProjectsTab";
 import { ToOrderTab } from "@/components/admin/ToOrderTab";
 import { SuggestionsTab } from "@/components/admin/SuggestionsTab";
@@ -342,8 +343,9 @@ export default function AdminDashboard() {
           <TabsContent value="faktura" className="animate-fade-in">
             <InvoiceTab />
           </TabsContent>
-          <TabsContent value="innstillinger" className="animate-fade-in">
+          <TabsContent value="innstillinger" className="animate-fade-in space-y-4">
             <SettingsTab />
+            <TripletexInnstillinger kanEndre={isSuperAdmin} />
           </TabsContent>
         </Tabs>
       </main>

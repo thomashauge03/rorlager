@@ -110,6 +110,9 @@ const stengde = [
   ["pipe_order_emails", "hvem som har fått e-post, og adressene"],
   ["pipe_suggestions", "forslagene fra «Annet», med navn"],
   ["pipe_revisjon", "hvem som endret hva"],
+  ["pipe_tripletex_ko", "ordrene i Tripletex"],
+  ["pipe_tripletex_innstilling", "bryteren for Tripletex"],
+  ["pipe_tripletex_kunde", "kundenumrene i Tripletex"],
   ["projects", null],
   ["project_members", null],
   ["project_orders", null],
@@ -227,6 +230,11 @@ await stengtForAnon("pipe_bytt_vare", {
   p_line_id: "00000000-0000-0000-0000-000000000000",
   p_pipe_type_id: "00000000-0000-0000-0000-000000000000",
 });
+// 20261028100000: Tripletex. Ta og utfall er berre for edge-funksjonen (service_role)
+await stengtForAnon("pipe_tripletex_ta", { p_invoice_id: "00000000-0000-0000-0000-000000000000" });
+await stengtForAnon("pipe_tripletex_utfall", { p_ko_id: "00000000-0000-0000-0000-000000000000", p_status: "sendt" });
+await stengtForAnon("pipe_tripletex_vedlegg_ta", { p_invoice_id: "00000000-0000-0000-0000-000000000000" });
+await stengtForAnon("pipe_tripletex_kontrollert", { p_invoice_id: "00000000-0000-0000-0000-000000000000", p_fant: true });
 await stengtForAnon("pipe_annet_linje", {
   p_order_id: "00000000-0000-0000-0000-000000000000",
   p_line: {},

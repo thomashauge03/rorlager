@@ -366,6 +366,55 @@ export type PipeSuggestionRow = {
   handled_by: string | null;
 };
 
+/** Sjå 20261028100000_tripletex.sql for kva kvart ord tyder */
+export type TripletexStatus =
+  | "venter"
+  | "under_sending"
+  | "sendt"
+  | "mangler_kunde"
+  | "feilet"
+  | "ukjent_utfall"
+  | "kontrollert"
+  | "sletta_grunnlag";
+
+export type TripletexVedleggStatus = "laster_opp" | "lagt_ved" | "feilet" | "ukjent";
+
+export type PipeTripletexKoRow = {
+  id: string;
+  invoice_id: string | null;
+  grunnlag_nr: number;
+  status: TripletexStatus;
+  intern: boolean;
+  forsok: number;
+  siste_feil: string | null;
+  tripletex_ordre_id: number | null;
+  vedlegg_status: TripletexVedleggStatus | null;
+  vedlegg_feil: string | null;
+  vedlegg_endret: string | null;
+  kontrollert_av: string | null;
+  kontrollert_at: string | null;
+  bestilling_ider: string[] | null;
+  opprettet: string;
+  endret: string;
+};
+
+export type PipeTripletexInnstillingRow = {
+  id: boolean;
+  fra_dato: string | null;
+  produkt_nr: string | null;
+  felleskunde_nr: number | null;
+  forfall_dagar: number;
+  endret: string | null;
+  endret_av: string | null;
+};
+
+export type PipeTripletexKundeRow = {
+  kunde_nokkel: string;
+  kundenr: number;
+  koblet_av: string | null;
+  koblet_at: string;
+};
+
 type Table<Row, Insert = Partial<Row>, Update = Partial<Row>> = {
   Row: Row;
   Insert: Insert;
@@ -401,6 +450,9 @@ export type Database = {
       pipe_suggestions: Table<PipeSuggestionRow>;
       pipe_revisjon: Table<PipeRevisjonRow>;
       pipe_prishendingar: Table<PipePrishendingRow>;
+      pipe_tripletex_ko: Table<PipeTripletexKoRow>;
+      pipe_tripletex_innstilling: Table<PipeTripletexInnstillingRow>;
+      pipe_tripletex_kunde: Table<PipeTripletexKundeRow>;
     };
     Views: {
       pipe_catalog: View<PipeCatalogRow>;
@@ -466,6 +518,7 @@ export type Database = {
         Returns: PipeInvoiceRow;
       };
       pipe_delete_invoice: { Args: { p_id: string }; Returns: void };
+      pipe_tripletex_kontrollert: { Args: { p_invoice_id: string; p_fant: boolean }; Returns: string };
       is_super_admin: { Args: Record<string, never>; Returns: boolean };
 
       // Vaktene. hm_har_tilgang er eit alias for hm_er_kontor – sjå

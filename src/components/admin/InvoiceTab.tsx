@@ -32,13 +32,32 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 
+import { TripletexRad } from "@/components/admin/TripletexRad";
 import { useToast } from "@/hooks/use-toast";
 import { fakturadetaljar, fakturakunde } from "@/lib/fakturakunde";
 import { isoDate, kr, krShort, num, pipeLabel, shortDate } from "@/lib/format";
 import { QK, createInvoice, deleteInvoice, fetchInvoices, fetchOrders } from "@/lib/orders";
-import { buildInvoicePDF, downloadInvoicePDF, type InvoiceDoc } from "@/lib/invoice-pdf";
+import {
+  buildInvoicePDF,
+  downloadInvoicePDF,
+  invoiceFilnavn,
+  invoicePdfBase64,
+  type InvoiceDoc,
+  type InvoiceOptions,
+} from "@/lib/invoice-pdf";
 import type { CompanyInfo } from "@/lib/order-pdf";
 import { useSettings } from "@/lib/settings";
+import {
+  QK_TRIPLETEX,
+  erInterntGrunnlag,
+  fetchTripletexKo,
+  forklarSvar,
+  leggVedPdf,
+  sendTilTripletex,
+  tripletexKontrollert,
+  visTripletex,
+  type TripletexSvar,
+} from "@/lib/tripletex";
 import type { OrderWithLines, PipeInvoiceRow, PipePublicSettingsRow } from "@/lib/types";
 
 /** Bestillingar er tidsstempla, men perioden er datoar – lokal dato, ikkje UTC. */
@@ -109,6 +128,9 @@ export function InvoiceTab() {
   });
 
   const invoices = useQuery({ queryKey: QK.invoices, queryFn: fetchInvoices });
+
+  // Før migrasjonen finst ikkje tabellen. Då er det ingen Tripletex-linjer, og resten av fana står som før
+  const tripletexKo = useQuery({ queryKey: QK_TRIPLETEX.ko, queryFn: fetchTripletexKo, retry: false });
 
   // Ei bestilling som ventar, eller som er avvist, har ingen rør på seg å
   // fakturere. Basen nektar henne uansett (pipe_create_invoice); her blir ho
@@ -258,16 +280,24 @@ export function InvoiceTab() {
         vatRate: settings?.vat_rate ?? 0,
       };
       downloadInvoicePDF(doc, pdfOptions);
-      return inv;
+      // Same PDF og same ordrar som nedlastinga. Uttak til eigne jobbar blir ikkje
+      // sende av seg sjølv: admin vel «Internt – felleskonto» på grunnlaget
+      const tripletex = erInterntGrunnlag(selected)
+        ? null
+        : { doc, opts: { ...pdfOptions }, kundeNokkel: customerKey };
+      return { inv, tripletex };
     },
-    onSuccess: (inv) => {
+    onSuccess: ({ inv, tripletex }) => {
       toast({
         title: `Fakturagrunnlag nr. ${inv.invoice_number}`,
         description: `${selected.length} ${selected.length === 1 ? "bestilling er" : "bestillinger er"} knyttet til grunnlaget. Statusen på dem står som før. PDF-en lastes ned nå.`,
       });
       qc.invalidateQueries({ queryKey: QK.orders });
       qc.invalidateQueries({ queryKey: QK.invoices });
+      qc.invalidateQueries({ queryKey: QK_TRIPLETEX.ko });
       resetCustomer();
+      // Grunnlaget er laga, same kva Tripletex svarar. Køen hugsar det som ikkje kom fram
+      if (tripletex) void sendOgVis(inv, tripletex.doc, tripletex.opts, { kundeNokkel: tripletex.kundeNokkel });
     },
     onError: (e: unknown) =>
       toast({
@@ -280,36 +310,39 @@ export function InvoiceTab() {
   /* ---------------- Tidlegare grunnlag ---------------- */
 
   const [busyInvoice, setBusyInvoice] = useState<string | null>(null);
+  const [tripletexBusy, setTripletexBusy] = useState<string | null>(null);
+  /** Grunnlaget som må stadfestast før det blir sendt: bestillingane stod på eit angra grunnlag med ordre */
+  const [overlapp, setOverlapp] = useState<{ inv: PipeInvoiceRow; grunnlag: number[]; kundenr?: number; intern?: boolean } | null>(null);
+
+  /**
+   * Bestillingane og PDF-dokumentet til eit lagra grunnlag. Fakturerte bestillingar
+   * ligg ikkje i lista over ufakturerte, så dei må hentast på nytt – rett på
+   * invoice_id. Å hente alt og plukke ut gav «fant ingen» på gamle grunnlag så
+   * snart det var over 1000 ordrar.
+   */
+  const byggDoc = async (inv: PipeInvoiceRow): Promise<{ doc: InvoiceDoc; rows: OrderWithLines[] }> => {
+    const rows = await fetchOrders({ invoiceId: inv.id });
+    if (rows.length === 0) throw new Error("Grunnlaget peker ikke lenger på noen bestillinger.");
+    return {
+      rows,
+      doc: {
+        invoice_number: inv.invoice_number,
+        customer_name: inv.customer_name,
+        customer_details: fakturadetaljar(rows),
+        period_from: inv.period_from,
+        period_to: inv.period_to,
+        total: Number(inv.total ?? 0),
+        orders: toPdfOrders(rows),
+        company: companyFrom(settings),
+        vatRate: settings?.vat_rate ?? 0,
+      },
+    };
+  };
 
   const rebuild = async (inv: PipeInvoiceRow) => {
     setBusyInvoice(inv.id);
     try {
-      // Fakturerte bestillingar ligg ikkje i lista over ufakturerte, så dei må
-      // hentast på nytt – rett på invoice_id. Å hente alt og plukke ut gav
-      // «fant ingen» på gamle grunnlag så snart det var over 1000 ordrar.
-      const rows = await fetchOrders({ invoiceId: inv.id });
-      if (rows.length === 0) {
-        toast({
-          title: "Fant ingen bestillinger",
-          description: "Grunnlaget peker ikke lenger på noen bestillinger.",
-          variant: "destructive",
-        });
-        return;
-      }
-      downloadInvoicePDF(
-        {
-          invoice_number: inv.invoice_number,
-          customer_name: inv.customer_name,
-          customer_details: fakturadetaljar(rows),
-          period_from: inv.period_from,
-          period_to: inv.period_to,
-          total: Number(inv.total ?? 0),
-          orders: toPdfOrders(rows),
-          company: companyFrom(settings),
-          vatRate: settings?.vat_rate ?? 0,
-        },
-        pdfOptions,
-      );
+      downloadInvoicePDF((await byggDoc(inv)).doc, pdfOptions);
     } catch (e) {
       toast({
         title: "Klarte ikke å lage PDF-en",
@@ -318,6 +351,91 @@ export function InvoiceTab() {
       });
     } finally {
       setBusyInvoice(null);
+    }
+  };
+
+  /* ---------------- Tripletex ---------------- */
+
+  const visSvar = (inv: PipeInvoiceRow, s: TripletexSvar, val: { kundenr?: number; intern?: boolean }) => {
+    if (s.grunn === "overlapp") {
+      setOverlapp({ inv, grunnlag: s.grunnlag ?? [], ...val });
+      return;
+    }
+    const t = forklarSvar(s);
+    if (t) toast({ title: `Grunnlag nr. ${inv.invoice_number}: ${t.tittel}`, description: t.tekst, variant: t.feil ? "destructive" : undefined });
+  };
+
+  /** Sender grunnlaget med PDF-en. Feil blir viste, aldri kasta: grunnlaget står uansett */
+  const sendOgVis = async (
+    inv: PipeInvoiceRow,
+    doc: InvoiceDoc,
+    opts: InvoiceOptions,
+    val: { kundeNokkel: string | null; kundenr?: number; intern?: boolean; overlappBekreftet?: boolean },
+  ) => {
+    setTripletexBusy(inv.id);
+    try {
+      const s = await sendTilTripletex({
+        invoiceId: inv.id,
+        pdf: invoicePdfBase64(doc, opts),
+        filnavn: invoiceFilnavn(doc, opts),
+        ...val,
+      });
+      visSvar(inv, s, { kundenr: val.kundenr, intern: val.intern });
+    } catch (e) {
+      toast({
+        title: `Grunnlag nr. ${inv.invoice_number} ble ikke sendt til Tripletex`,
+        description: e instanceof Error ? e.message : "Ukjent feil",
+        variant: "destructive",
+      });
+    } finally {
+      setTripletexBusy(null);
+      qc.invalidateQueries({ queryKey: QK_TRIPLETEX.ko });
+    }
+  };
+
+  const sendFraLista = async (inv: PipeInvoiceRow, val: { kundenr?: number; intern?: boolean; overlappBekreftet?: boolean }) => {
+    setTripletexBusy(inv.id);
+    try {
+      const { doc, rows } = await byggDoc(inv);
+      await sendOgVis(inv, doc, pdfOptions, { kundeNokkel: fakturakunde(rows[0]).key || null, ...val });
+    } catch (e) {
+      setTripletexBusy(null);
+      toast({ title: "Klarte ikke å lage PDF-en", description: e instanceof Error ? e.message : "Ukjent feil", variant: "destructive" });
+    }
+  };
+
+  const leggVed = async (inv: PipeInvoiceRow, overta: boolean) => {
+    setTripletexBusy(inv.id);
+    try {
+      const { doc } = await byggDoc(inv);
+      const s = await leggVedPdf({
+        invoiceId: inv.id,
+        pdf: invoicePdfBase64(doc, pdfOptions),
+        filnavn: invoiceFilnavn(doc, pdfOptions),
+        overta,
+      });
+      visSvar(inv, s, {});
+    } catch (e) {
+      toast({ title: "PDF-en ble ikke lagt ved", description: e instanceof Error ? e.message : "Ukjent feil", variant: "destructive" });
+    } finally {
+      setTripletexBusy(null);
+      qc.invalidateQueries({ queryKey: QK_TRIPLETEX.ko });
+    }
+  };
+
+  const kontrollert = async (inv: PipeInvoiceRow, fant: boolean) => {
+    setTripletexBusy(inv.id);
+    try {
+      await tripletexKontrollert(inv.id, fant);
+      toast({
+        title: fant ? "Merket som funnet i Tripletex" : "Klar til å sendes på nytt",
+        description: fant ? "Grunnlaget blir aldri sendt igjen." : "Trykk «Send til Tripletex» når du er klar.",
+      });
+    } catch (e) {
+      toast({ title: "Klarte ikke å lagre kontrollen", description: e instanceof Error ? e.message : "Ukjent feil", variant: "destructive" });
+    } finally {
+      setTripletexBusy(null);
+      qc.invalidateQueries({ queryKey: QK_TRIPLETEX.ko });
     }
   };
 
@@ -662,7 +780,10 @@ export function InvoiceTab() {
             <p className="text-sm text-muted-foreground">Ingen fakturagrunnlag er laget ennå.</p>
           ) : (
             <div className="divide-y divide-border rounded-lg border border-border overflow-hidden">
-              {(invoices.data ?? []).map((inv) => (
+              {(invoices.data ?? []).map((inv) => {
+                const ko = tripletexKo.data?.get(inv.id);
+                const harOrdre = ko ? visTripletex(ko).harOrdre : false;
+                return (
                 <div key={inv.id} className="flex flex-wrap items-center gap-3 px-3 py-2.5">
                   <span className="w-12 shrink-0 text-sm font-semibold text-foreground tabular">
                     #{inv.invoice_number}
@@ -712,6 +833,13 @@ export function InvoiceTab() {
                           står som den er, og lageret blir ikke rørt. Selve PDF-en du allerede har lastet ned
                           blir ikke slettet.
                         </AlertDialogDescription>
+                        {harOrdre ? (
+                          <p className="rounded-md border border-warning/60 bg-warning/10 px-3 py-2 text-sm text-warning-ink">
+                            Grunnlaget har (eller kan ha) en ordre i Tripletex. Den blir ikke slettet der. Rett eller
+                            slett ordren i Tripletex selv, ellers blir kunden fakturert to ganger når bestillingene
+                            kommer på et nytt grunnlag.
+                          </p>
+                        ) : null}
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Avbryt</AlertDialogCancel>
@@ -719,12 +847,51 @@ export function InvoiceTab() {
                       </AlertDialogFooter>
                     </AlertDialogContent>
                   </AlertDialog>
+
+                  {ko ? (
+                    <TripletexRad
+                      ko={ko}
+                      grunnlagNr={inv.invoice_number}
+                      opptatt={tripletexBusy === inv.id}
+                      onSend={(val) => void sendFraLista(inv, val)}
+                      onLeggVed={(overta) => void leggVed(inv, overta)}
+                      onKontrollert={(fant) => void kontrollert(inv, fant)}
+                    />
+                  ) : null}
                 </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={overlapp !== null} onOpenChange={(open) => !open && setOverlapp(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Kan bli fakturert to ganger</AlertDialogTitle>
+            <AlertDialogDescription>
+              Bestillingene på grunnlag nr. {overlapp?.inv.invoice_number} sto på{" "}
+              {overlapp && overlapp.grunnlag.length === 1 ? "grunnlag" : "grunnlagene"} nr.{" "}
+              {overlapp?.grunnlag.join(", ")}, som ble angret etter at det kom en ordre i Tripletex. Ingenting er sendt.
+              Slett eller rett den gamle ordren i Tripletex først, og send så likevel.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Avbryt</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (!overlapp) return;
+                const { inv, kundenr, intern } = overlapp;
+                setOverlapp(null);
+                void sendFraLista(inv, { kundenr, intern, overlappBekreftet: true });
+              }}
+            >
+              Send likevel
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
